@@ -1,56 +1,97 @@
 import { drizzle } from "drizzle-orm/postgres-js"
+import type { PgTransaction } from "drizzle-orm/pg-core"
+import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js"
+import type { ExtractTablesWithRelations } from "drizzle-orm"
 import postgres from "postgres"
 import { sql } from "drizzle-orm"
+import * as schema from "./schema"
 
 // CRITICAL: prepare: false required for Supabase transaction-mode pooler (Supavisor).
 // The pooler does not support prepared statements. Direct connection (port 5432)
 // supports them, but the app always connects through the pooler for scalability.
 const client = postgres(process.env.DATABASE_URL!, { prepare: false })
-const baseDb = drizzle({ client })
+
+export const adminDb = drizzle({ client, schema })
 
 export type SupabaseToken = {
   sub: string
   role?: string
-  org_id?: string
   user_role?: string
+  org_id?: string
   email?: string
   aud?: string
   [key: string]: unknown
 }
 
 /**
- * createDrizzleClient — RLS-aware Drizzle transaction wrapper.
+ * withRls — RLS-aware Drizzle transaction wrapper.
  *
- * Wraps every query in a PostgreSQL transaction that sets JWT claims
- * before executing. This enables RLS policies to see the authenticated
- * user's role and org_id via auth.jwt().
+ * Wraps every user query in a PostgreSQL transaction that sets JWT claims
+ * before executing. This enables RLS policies to read the authenticated
+ * user's org_id and user_role via auth.jwt().
  *
  * USAGE:
- *   const supabase = await createClient()
- *   const { data: { user } } = await supabase.auth.getClaims()
- *   const db = await createDrizzleClient(user.app_metadata)
- *   const results = await db.select().from(stops).where(...)
+ *   const results = await withRls(token, (db) => db.select().from(profiles))
  *
- * WARNING: Never use baseDb directly for user-facing queries. It runs as
- * the Postgres superuser, bypassing RLS entirely.
- */
-export async function createDrizzleClient(token: SupabaseToken) {
-  return baseDb.transaction(async (tx) => {
-    await tx.execute(sql`
-      select
-        set_config('request.jwt.claims', ${JSON.stringify(token)}, TRUE),
-        set_config('request.jwt.claim.sub', ${token.sub}, TRUE),
-        set_config('request.jwt.claim.role', ${token.user_role ?? token.role ?? "anon"}, TRUE)
-    `)
-    await tx.execute(sql`set local role authenticated`)
-    return tx
-  })
-}
-
-/**
- * adminDb — Bypasses RLS. Use ONLY in:
+ * The token is typically the decoded Supabase JWT from getClaims():
+ *   const { data: claimsData } = await supabase.auth.getClaims()
+ *   const results = await withRls(claimsData.claims, (db) => ...)
+ *
+ * WARNING: Never use adminDb directly for user-facing queries. It runs as
+ * the Postgres superuser, bypassing RLS entirely. adminDb is for:
  * - Invite handlers (service role context)
  * - Webhook handlers (system-level operations)
  * - Admin-only Server Actions with explicit service role validation
  */
-export const adminDb = baseDb
+// Type alias for the Drizzle transaction object — used in withRls callback signature
+type DrizzleTx = PgTransaction<
+  PostgresJsQueryResultHKT,
+  typeof schema,
+  ExtractTablesWithRelations<typeof schema>
+>
+
+export async function withRls<T>(
+  token: SupabaseToken,
+  fn: (db: DrizzleTx) => Promise<T>
+): Promise<T> {
+  return adminDb.transaction(async (tx) => {
+    // Set JWT claims so auth.jwt() returns the correct values inside this transaction.
+    // This is required when using Drizzle directly (bypassing Supabase's own PostgREST
+    // layer). The RLS policies read these settings via auth.jwt().
+    await tx.execute(sql`
+      SELECT
+        set_config('request.jwt.claims', ${JSON.stringify(token)}, TRUE),
+        set_config('request.jwt.claim.sub', ${token.sub}, TRUE),
+        set_config('request.jwt.claim.role', ${token.user_role ?? token.role ?? "authenticated"}, TRUE),
+        set_config('request.jwt.claim.org_id', ${token.org_id ?? ""}, TRUE)
+    `)
+    // Switch to the authenticated role so RLS policies are enforced.
+    await tx.execute(sql`SET LOCAL ROLE authenticated`)
+    return fn(tx)
+  })
+}
+
+/**
+ * createRlsClient — returns a transaction with RLS context set.
+ *
+ * Lower-level alternative to withRls for cases where you need to pass the
+ * transaction around rather than using a callback pattern.
+ *
+ * NOTE: Prefer withRls for most use cases. This function returns a transaction
+ * that is already in progress — the caller must not try to commit or rollback.
+ *
+ * @deprecated Use withRls instead for cleaner callback-based API
+ */
+export async function createRlsClient(token: SupabaseToken) {
+  return adminDb.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT
+        set_config('request.jwt.claims', ${JSON.stringify(token)}, TRUE),
+        set_config('request.jwt.claim.sub', ${token.sub}, TRUE),
+        set_config('request.jwt.claim.role', ${token.user_role ?? token.role ?? "authenticated"}, TRUE),
+        set_config('request.jwt.claim.org_id', ${token.org_id ?? ""}, TRUE)
+    `)
+    await tx.execute(sql`SET LOCAL ROLE authenticated`)
+    return tx
+  })
+}
