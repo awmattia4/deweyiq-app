@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 1 of 10 (Foundation)
 Plan: 4 of 6 in current phase
 Status: Executing
-Last activity: 2026-03-03 — Plan 01-04 complete (offline-first infrastructure)
+Last activity: 2026-03-03 — Plan 01-02 complete (database schema and RLS)
 
 Progress: [██░░░░░░░░] 7%
 
@@ -30,7 +30,7 @@ Progress: [██░░░░░░░░] 7%
 | 01-foundation | 2/6 | 13 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (10 min), 01-04 (3 min)
+- Last 5 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min)
 - Trend: Improving
 
 *Updated after each plan completion*
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 - [01-04]: MAX_RETRIES=5 with exponential backoff (baseDelay 1s, maxDelay 60s) — ~2min retry window before alerting user
 - [01-04]: enqueueWrite pattern established — all write mutations use this instead of direct fetch() calls
 - [01-04]: prefetchTodayRoutes stub in sync.ts ready for Phase 3 route API activation
+- [Phase 01-02]: pgPolicy to/for fields: 'to' takes PgRole object (authenticatedRole), 'for' takes string literals — both required for correct migration
+- [Phase 01-02]: (select auth.jwt()) subquery wrapping prevents per-row re-evaluation of auth.jwt() — required for performance at scale
+- [Phase 01-02]: user_role claim name (not role) avoids collision with Supabase reserved 'role' JWT claim that is always 'authenticated'
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 01-04-PLAN.md. Next: Plan 01-05 (app shell layout).
+Stopped at: Completed 01-02-PLAN.md. Next: Plan 01-03 (auth pages and flows).
 Resume file: None
