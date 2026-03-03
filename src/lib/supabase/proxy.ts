@@ -2,19 +2,30 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 /**
- * updateSession — JWT refresh helper for the Next.js 16 proxy.
+ * updateSession — JWT refresh helper with full role-based routing.
  *
  * Runs on every request matching proxy.ts config. Refreshes the Supabase
- * session cookie when the access token is about to expire, and redirects
- * unauthenticated users to the correct login page based on path:
- *   - /portal/* users → /portal/login
- *   - all other users → /login
+ * session cookie when the access token is about to expire, and enforces
+ * role-based routing:
  *
- * Also redirects already-authenticated users away from login pages.
+ * AUTH-05 route guard logic:
+ *
+ *   Unauthenticated:
+ *   - /portal/* (except /portal/login)  → redirect to /portal/login
+ *   - Any other protected path          → redirect to /login
+ *
+ *   Authenticated — landing redirects (already-authed users hitting login):
+ *   - owner/office hitting /login or /signup → redirect to /dashboard
+ *   - tech hitting /login or /signup         → redirect to /routes
+ *   - customer hitting /login or /signup     → redirect to /portal
+ *
+ *   Authenticated — role-based access enforcement:
+ *   - customer hitting /(app)/* (staff routes) → redirect to /portal
+ *   - (Further staff role restrictions — e.g. tech hitting /dashboard — are
+ *     handled at the layout/page level for fine-grained control.)
  *
  * SECURITY: Uses getClaims() to validate JWT signature locally (does not
- * trust the cookie blindly). Falls back to getUser() for cookie refresh.
- * See: https://supabase.com/docs/guides/auth/server-side/nextjs
+ * trust the cookie blindly). See: https://supabase.com/docs/guides/auth/server-side/nextjs
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -42,32 +53,83 @@ export async function updateSession(request: NextRequest) {
 
   // Validate JWT signature via getClaims() — does not trust cookie blindly.
   // getSession() would trust cookie without cryptographic verification.
-  // If getClaims returns null (expired/invalid), user is not authenticated.
   const { data: claimsData } = await supabase.auth.getClaims()
   const isAuthenticated = claimsData !== null && claimsData.claims !== null
 
   const { pathname } = request.nextUrl
 
-  // Determine if this is a portal or staff request
-  const isPortalPath = pathname.startsWith("/portal")
+  // ─── Path classification ───────────────────────────────────────────────────
 
-  // Public paths — allow unauthenticated access
-  // Auth routes (/login, /signup, /reset-password, /auth/*) are always public.
-  // Portal login is public. All other portal paths require auth (redirect to /portal/login).
-  const isPublicPath =
+  const isPortalPath = pathname.startsWith("/portal")
+  const isPortalLoginPath =
+    pathname === "/portal/login" || pathname.startsWith("/portal/login/")
+  const isStaffLoginPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/reset-password") ||
-    pathname.startsWith("/auth") ||
-    pathname === "/portal/login" ||
-    pathname.startsWith("/portal/login/")
+    pathname.startsWith("/auth")
 
-  if (!isAuthenticated && !isPublicPath) {
+  // ─── Unauthenticated users ─────────────────────────────────────────────────
+
+  if (!isAuthenticated) {
+    // Portal paths (except portal login) require portal auth
+    if (isPortalPath && !isPortalLoginPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/portal/login"
+      return NextResponse.redirect(url)
+    }
+
+    // All other protected paths (staff app) require staff auth
+    if (!isPortalPath && !isStaffLoginPath) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/login"
+      return NextResponse.redirect(url)
+    }
+
+    // Auth pages — allow through
+    return supabaseResponse
+  }
+
+  // ─── Authenticated users ───────────────────────────────────────────────────
+
+  const user_role = claimsData?.claims?.["user_role"] as
+    | "owner"
+    | "office"
+    | "tech"
+    | "customer"
+    | undefined
+
+  // Redirect authenticated users away from login/signup (already authed)
+  if (isStaffLoginPath) {
     const url = request.nextUrl.clone()
-    // Portal unauthenticated users → portal login; staff → staff login
-    url.pathname = isPortalPath ? "/portal/login" : "/login"
+    if (user_role === "tech") {
+      url.pathname = "/routes"
+    } else if (user_role === "customer") {
+      url.pathname = "/portal"
+    } else {
+      // owner, office
+      url.pathname = "/dashboard"
+    }
     return NextResponse.redirect(url)
   }
+
+  // Redirect authenticated customers away from portal login
+  if (isPortalLoginPath && user_role === "customer") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/portal"
+    return NextResponse.redirect(url)
+  }
+
+  // Customers should not access staff routes
+  if (!isPortalPath && user_role === "customer") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/portal"
+    return NextResponse.redirect(url)
+  }
+
+  // Staff (non-customers) should not access portal routes (except portal login)
+  // Exception: staff CAN visit portal as a support/admin action — omit this redirect
+  // to keep the proxy simple. Page-level auth handles further restrictions.
 
   return supabaseResponse
 }
