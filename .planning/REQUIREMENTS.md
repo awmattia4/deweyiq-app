@@ -145,13 +145,79 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be populated by roadmapper) | | |
+| AUTH-01 | Phase 1 — Foundation | Pending |
+| AUTH-02 | Phase 1 — Foundation | Pending |
+| AUTH-03 | Phase 1 — Foundation | Pending |
+| AUTH-04 | Phase 1 — Foundation | Pending |
+| AUTH-05 | Phase 1 — Foundation | Pending |
+| AUTH-06 | Phase 1 — Foundation | Pending |
+| CUST-01 | Phase 2 — Customer & Pool Data Model | Pending |
+| CUST-02 | Phase 2 — Customer & Pool Data Model | Pending |
+| CUST-03 | Phase 2 — Customer & Pool Data Model | Pending |
+| CUST-04 | Phase 2 — Customer & Pool Data Model | Pending |
+| CUST-05 | Phase 2 — Customer & Pool Data Model | Pending |
+| CUST-06 | Phase 2 — Customer & Pool Data Model | Pending |
+| FIELD-01 | Phase 3 — Field Tech App | Pending |
+| FIELD-02 | Phase 3 — Field Tech App | Pending |
+| FIELD-03 | Phase 3 — Field Tech App | Pending |
+| FIELD-04 | Phase 3 — Field Tech App | Pending |
+| FIELD-05 | Phase 3 — Field Tech App | Pending |
+| FIELD-06 | Phase 3 — Field Tech App | Pending |
+| FIELD-07 | Phase 3 — Field Tech App | Pending |
+| FIELD-08 | Phase 3 — Field Tech App | Pending |
+| FIELD-09 | Phase 3 — Field Tech App | Pending |
+| FIELD-10 | Phase 3 — Field Tech App | Pending |
+| FIELD-11 | Phase 3 — Field Tech App | Pending |
+| FIELD-12 | Phase 3 — Field Tech App | Pending |
+| FIELD-13 | Phase 3 — Field Tech App | Pending |
+| SCHED-01 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-02 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-03 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-04 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-05 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-06 | Phase 4 — Scheduling & Routing | Pending |
+| SCHED-07 | Phase 10 — Smart Features & AI | Pending |
+| SCHED-08 | Phase 10 — Smart Features & AI | Pending |
+| NOTIF-01 | Phase 5 — Office Operations & Dispatch | Pending |
+| NOTIF-02 | Phase 5 — Office Operations & Dispatch | Pending |
+| NOTIF-03 | Phase 5 — Office Operations & Dispatch | Pending |
+| NOTIF-04 | Phase 5 — Office Operations & Dispatch | Pending |
+| BILL-01 | Phase 7 — Billing & Payments | Pending |
+| BILL-02 | Phase 7 — Billing & Payments | Pending |
+| BILL-03 | Phase 7 — Billing & Payments | Pending |
+| BILL-04 | Phase 7 — Billing & Payments | Pending |
+| BILL-05 | Phase 7 — Billing & Payments | Pending |
+| BILL-06 | Phase 7 — Billing & Payments | Pending |
+| BILL-07 | Phase 7 — Billing & Payments | Pending |
+| BILL-08 | Phase 7 — Billing & Payments | Pending |
+| BILL-09 | Phase 7 — Billing & Payments | Pending |
+| PORT-01 | Phase 8 — Customer Portal | Pending |
+| PORT-02 | Phase 8 — Customer Portal | Pending |
+| PORT-03 | Phase 8 — Customer Portal | Pending |
+| PORT-04 | Phase 8 — Customer Portal | Pending |
+| PORT-05 | Phase 8 — Customer Portal | Pending |
+| PORT-06 | Phase 8 — Customer Portal | Pending |
+| WORK-01 | Phase 6 — Work Orders & Quoting | Pending |
+| WORK-02 | Phase 6 — Work Orders & Quoting | Pending |
+| WORK-03 | Phase 6 — Work Orders & Quoting | Pending |
+| WORK-04 | Phase 6 — Work Orders & Quoting | Pending |
+| WORK-05 | Phase 6 — Work Orders & Quoting | Pending |
+| WORK-06 | Phase 6 — Work Orders & Quoting | Pending |
+| REPT-01 | Phase 9 — Reporting & Team Analytics | Pending |
+| REPT-02 | Phase 9 — Reporting & Team Analytics | Pending |
+| REPT-03 | Phase 9 — Reporting & Team Analytics | Pending |
+| REPT-04 | Phase 9 — Reporting & Team Analytics | Pending |
+| REPT-05 | Phase 9 — Reporting & Team Analytics | Pending |
+| REPT-06 | Phase 9 — Reporting & Team Analytics | Pending |
+| SMART-01 | Phase 10 — Smart Features & AI | Pending |
+| SMART-02 | Phase 10 — Smart Features & AI | Pending |
+| SMART-03 | Phase 10 — Smart Features & AI | Pending |
 
 **Coverage:**
 - v1 requirements: 56 total
-- Mapped to phases: 0
-- Unmapped: 56 (awaiting roadmap)
+- Mapped to phases: 56
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-03*
-*Last updated: 2026-03-03 after initial definition*
+*Last updated: 2026-03-03 after roadmap creation — all 56 requirements mapped*
