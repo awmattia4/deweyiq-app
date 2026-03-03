@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 1 of 10 (Foundation)
-Plan: 5 of 6 in current phase
+Plan: 6 of 6 in current phase
 Status: Executing
-Last activity: 2026-03-03 — Plan 01-03 complete (auth system)
+Last activity: 2026-03-03 — Plan 01-05 complete (app shell + role-based routing)
 
-Progress: [███░░░░░░░] 10%
+Progress: [████░░░░░░] 13%
 
 ## Performance Metrics
 
@@ -27,10 +27,10 @@ Progress: [███░░░░░░░] 10%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 3/6 | 17 min | 6 min |
+| 01-foundation | 4/6 | 24 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min), 01-03 (4 min)
+- Last 5 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min), 01-03 (4 min), 01-05 (7 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -60,6 +60,9 @@ Recent decisions affecting current work:
 - [Phase 01-03]: Auth callback single handler for OAuth, invite, and recovery — inviteUserByEmail uses one-time token (not PKCE) by Supabase design; exchangeCodeForSession handles all three transparently
 - [Phase 01-03]: getCurrentUser() calls getUser() alongside getClaims() — email/full_name not in JWT claims by default in Supabase, fetched via getUser() on demand
 - [Phase 01-03]: inviteTeamMember pre-creates profile row with adminDb — RLS requires profile to exist before invited user's first login
+- [Phase 01-foundation]: Portal route group pattern: (portal) route group excludes login from auth-guarded layout; login stays at /portal level with no auth guard to prevent circular redirects
+- [Phase 01-foundation]: SyncInitializer render-null client component: useEffect-based browser init (initSyncListener + prefetchTodayRoutes) in a server-component layout requires a render-null client component wrapper
+- [Phase 01-foundation]: Future nav items hidden (not disabled): app-sidebar.tsx shows only Phase 1 items; future items (Billing Phase 7, Reports Phase 9, Schedule Phase 4) are commented with phase activation notes
 
 ### Pending Todos
 
@@ -75,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 01-03-PLAN.md. Next: Plan 01-04 (app shell layout).
+Stopped at: Completed 01-05-PLAN.md. Next: Plan 01-06 (PWA testing + skeleton screens).
 Resume file: None
