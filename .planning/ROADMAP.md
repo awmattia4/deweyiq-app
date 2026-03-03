@@ -35,14 +35,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. An owner can invite a team member and assign them a role (office, tech, customer); that user receives an invite email and can activate their account
   4. Each role sees only what it is permitted to see — a tech cannot access the office dashboard, a customer cannot see another customer's data, and cross-org resource access returns 403
   5. The app is installable as a PWA on an iPhone and Android device, loads the shell offline, and queues any writes made without connectivity for automatic sync on reconnect
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 01-01: Project scaffolding — Next.js 15/16, TypeScript, Tailwind v4, shadcn/ui, Vercel deployment
-- [ ] 01-02: Supabase project — Postgres schema with org_id on all tables, RLS policies, multi-tenant isolation tests
-- [ ] 01-03: Auth system — Supabase Auth, JWT multi-role middleware, invite flow, password reset
-- [ ] 01-04: PWA offline shell — Serwist service worker, Dexie.js IndexedDB schema, Background Sync outbound queue
-- [ ] 01-05: Role-based routing — Next.js App Router route groups for tech, office, portal, and protected middleware
+- [ ] 01-01-PLAN.md — Project scaffolding: Next.js 16, Tailwind v4 design system, shadcn/ui, Serwist PWA config, Drizzle ORM, Supabase client utilities
+- [ ] 01-02-PLAN.md — Database schema: Drizzle schema with multi-tenant RLS policies, .rls() transaction wrapper, Custom Access Token Hook, org-creation trigger
+- [ ] 01-03-PLAN.md — Auth system: sign-up with org creation, login, Google OAuth, password reset, team invite flow, customer portal login
+- [ ] 01-04-PLAN.md — Offline infrastructure: Dexie IndexedDB schema, sync queue with retry/backoff, online status hooks, offline banner, sync status icon
+- [ ] 01-05-PLAN.md — Role-based app shell: proxy.ts route guards, role-aware sidebar, landing pages with real data, skeleton screens, portal shell
 
 ### Phase 2: Customer & Pool Data Model
 **Goal**: Office staff can create and manage the full customer record — contact info, pool profiles, equipment, and access notes — which becomes the shared data backbone for every downstream phase
@@ -221,7 +221,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/5 | Not started | - |
+| 1. Foundation | 0/5 | Planned | - |
 | 2. Customer & Pool Data Model | 0/4 | Not started | - |
 | 3. Field Tech App | 0/8 | Not started | - |
 | 4. Scheduling & Routing | 0/4 | Not started | - |
