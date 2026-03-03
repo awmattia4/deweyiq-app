@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 1 of 10 (Foundation)
-Plan: 1 of 6 in current phase
+Plan: 4 of 6 in current phase
 Status: Executing
-Last activity: 2026-03-03 — Plan 01-01 complete (project scaffold and foundation)
+Last activity: 2026-03-03 — Plan 01-04 complete (offline-first infrastructure)
 
-Progress: [█░░░░░░░░░] 2%
+Progress: [██░░░░░░░░] 7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 10 min
+- Total plans completed: 2
+- Average duration: 7 min
 - Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 1/6 | 10 min | 10 min |
+| 01-foundation | 2/6 | 13 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (10 min)
-- Trend: Baseline established
+- Last 5 plans: 01-01 (10 min), 01-04 (3 min)
+- Trend: Improving
 
 *Updated after each plan completion*
 
@@ -51,6 +51,9 @@ Recent decisions affecting current work:
 - [01-01]: getClaims() returns { claims, header, signature } not { user } — proxy checks claimsData !== null for auth
 - [01-01]: Dark-first design system — html class=dark in layout, brand palette is the dark theme
 - [01-01]: prepare:false required for Supabase transaction-mode pooler — all Drizzle postgres client instances must use this
+- [01-04]: MAX_RETRIES=5 with exponential backoff (baseDelay 1s, maxDelay 60s) — ~2min retry window before alerting user
+- [01-04]: enqueueWrite pattern established — all write mutations use this instead of direct fetch() calls
+- [01-04]: prefetchTodayRoutes stub in sync.ts ready for Phase 3 route API activation
 
 ### Pending Todos
 
@@ -66,5 +69,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Plan 01-01 complete. Next: Plan 01-02 (database schema and RLS).
+Stopped at: Completed 01-04-PLAN.md. Next: Plan 01-05 (app shell layout).
 Resume file: None
