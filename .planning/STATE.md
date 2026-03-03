@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 1 of 10 (Foundation)
-Plan: 0 of 5 in current phase
-Status: Ready to plan
-Last activity: 2026-03-03 — Roadmap created, 56 requirements mapped to 10 phases
+Plan: 1 of 6 in current phase
+Status: Executing
+Last activity: 2026-03-03 — Plan 01-01 complete (project scaffold and foundation)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 2%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 10 min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-foundation | 1/6 | 10 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
-- Trend: -
+- Last 5 plans: 01-01 (10 min)
+- Trend: Baseline established
 
 *Updated after each plan completion*
 
@@ -47,10 +47,14 @@ Recent decisions affecting current work:
 - [Roadmap]: Drizzle ORM over Prisma — edge/serverless native, better Supabase pooler compatibility
 - [Roadmap]: Offline-first architecture required from Phase 1 — Dexie.js + Background Sync, not retrofit
 - [Roadmap]: Multi-tenant RLS must be in Postgres schema from day one — cannot add post-hoc
+- [01-01]: Serwist uses new class-based API (new Serwist()) — legacy installSerwist() in serwist/legacy subpath only
+- [01-01]: getClaims() returns { claims, header, signature } not { user } — proxy checks claimsData !== null for auth
+- [01-01]: Dark-first design system — html class=dark in layout, brand palette is the dark theme
+- [01-01]: prepare:false required for Supabase transaction-mode pooler — all Drizzle postgres client instances must use this
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
@@ -62,5 +66,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Roadmap created and written to disk. REQUIREMENTS.md traceability table populated.
+Stopped at: Plan 01-01 complete. Next: Plan 01-02 (database schema and RLS).
 Resume file: None
