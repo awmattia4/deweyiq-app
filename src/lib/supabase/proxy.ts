@@ -6,7 +6,11 @@ import { NextResponse, type NextRequest } from "next/server"
  *
  * Runs on every request matching proxy.ts config. Refreshes the Supabase
  * session cookie when the access token is about to expire, and redirects
- * unauthenticated users to /login.
+ * unauthenticated users to the correct login page based on path:
+ *   - /portal/* users → /portal/login
+ *   - all other users → /login
+ *
+ * Also redirects already-authenticated users away from login pages.
  *
  * SECURITY: Uses getClaims() to validate JWT signature locally (does not
  * trust the cookie blindly). Falls back to getUser() for cookie refresh.
@@ -44,17 +48,24 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Determine if this is a portal or staff request
+  const isPortalPath = pathname.startsWith("/portal")
+
   // Public paths — allow unauthenticated access
+  // Auth routes (/login, /signup, /reset-password, /auth/*) are always public.
+  // Portal login is public. All other portal paths require auth (redirect to /portal/login).
   const isPublicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/portal/login")
+    pathname === "/portal/login" ||
+    pathname.startsWith("/portal/login/")
 
   if (!isAuthenticated && !isPublicPath) {
     const url = request.nextUrl.clone()
-    url.pathname = "/login"
+    // Portal unauthenticated users → portal login; staff → staff login
+    url.pathname = isPortalPath ? "/portal/login" : "/login"
     return NextResponse.redirect(url)
   }
 
