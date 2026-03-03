@@ -1,7 +1,7 @@
-// Schema barrel export — domain schemas are added in Plan 02 (database schema & RLS).
-// Each domain gets its own file (orgs.ts, profiles.ts, stops.ts, etc.)
-// and is re-exported from here.
+// Schema barrel export — all domain schemas are exported from here.
+// Drizzle Kit reads this file as the schema source (see drizzle.config.ts).
+// Plan 02: orgs and profiles (core multi-tenant tables)
+// Future plans: stops, customers, pools, invoices, etc.
 
-// Example (added in Plan 02):
-// export * from "./orgs"
-// export * from "./profiles"
+export * from "./orgs"
+export * from "./profiles"
