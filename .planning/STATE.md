@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 1 of 10 (Foundation)
 Plan: 6 of 6 in current phase
-Status: Executing
-Last activity: 2026-03-03 — Plan 01-05 complete (app shell + role-based routing)
+Status: Checkpoint — awaiting human verification
+Last activity: 2026-03-03 — Plan 01-06 Task 1 complete; stopped at Task 2 (human-verify Phase 1)
 
-Progress: [████░░░░░░] 13%
+Progress: [████░░░░░░] 14%
 
 ## Performance Metrics
 
@@ -27,7 +27,7 @@ Progress: [████░░░░░░] 13%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 4/6 | 24 min | 6 min |
+| 01-foundation | 4.5/6 | ~36 min | ~7 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min), 01-03 (4 min), 01-05 (7 min)
@@ -63,6 +63,9 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: Portal route group pattern: (portal) route group excludes login from auth-guarded layout; login stays at /portal level with no auth guard to prevent circular redirects
 - [Phase 01-foundation]: SyncInitializer render-null client component: useEffect-based browser init (initSyncListener + prefetchTodayRoutes) in a server-component layout requires a render-null client component wrapper
 - [Phase 01-foundation]: Future nav items hidden (not disabled): app-sidebar.tsx shows only Phase 1 items; future items (Billing Phase 7, Reports Phase 9, Schedule Phase 4) are commented with phase activation notes
+- [Phase 01-06]: updateProfile uses adminDb: profiles_update_policy RLS allows own-row updates; adminDb pragmatic for Phase 1; withRls() preferred in later phases for consistency
+- [Phase 01-06]: InviteDialog owner-only: invite button shown only for owner role — matches server action enforcement; office cannot invite
+- [Phase 01-06]: Portal page at (portal)/page.tsx: plan referenced /portal/page.tsx but route group architecture from Plan 05 requires /portal/(portal)/page.tsx — correct file updated
 
 ### Pending Todos
 
@@ -78,5 +81,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 01-05-PLAN.md. Next: Plan 01-06 (PWA testing + skeleton screens).
+Stopped at: 01-06-PLAN.md Task 2 checkpoint (human-verify complete Phase 1 Foundation). Task 1 committed f8368a4. Awaiting user to verify all 14 Phase 1 criteria.
 Resume file: None
