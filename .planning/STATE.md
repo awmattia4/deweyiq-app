@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 2 of 10 (Customer & Pool Data Model) — IN PROGRESS
-Plan: 1 of 4 complete (02-01 schema foundation done; 02-02 through 02-04 pending)
-Status: Ready — 02-01 executed; proceed to 02-02 (customer list page)
-Last activity: 2026-03-05 — Plan 02-01 complete; schema + frontend deps installed
+Plan: 2 of 4 complete (02-01 schema + 02-02 customer list page done; 02-03 and 02-04 pending)
+Status: Ready — 02-02 executed; proceed to 02-03 (customer detail page)
+Last activity: 2026-03-05 — Plan 02-02 complete; customer list page + TanStack Table + server actions + sidebar nav
 
-Progress: [████░░░░░░] 18%
+Progress: [████░░░░░░] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 6 min
-- Total execution time: 0.3 hours
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
@@ -35,6 +35,7 @@ Progress: [████░░░░░░] 18%
 
 *Updated after each plan completion*
 | Phase 02-customer-pool-data-model P01 | 11 | 2 tasks | 10 files |
+| Phase 02-customer-pool-data-model P02 | 7 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 02-customer-pool-data-model]: service_visits write policy includes tech role from Phase 2 to avoid policy migration when Phase 3 techs write service records
 - [Phase 02-customer-pool-data-model]: equipment type as text not pgEnum — open-ended categories avoid migration per new type; future check constraint if enforcement needed
 - [Phase 02-customer-pool-data-model]: route_name free-text on customers for Phase 2; Phase 4 adds route_id FK and routes table without breaking Phase 2 string-match filter
+- [Phase 02-02]: zod v4 + @hookform/resolvers v5 zodResolver type incompatibility — AddCustomerDialog uses plain React state + inline validation matching InviteDialog pattern; resolver incompatibility must be addressed before using Form component with zod schemas elsewhere
+- [Phase 02-02]: ContactIcon used for Customers sidebar nav item — PersonStandingIcon in sidebar comment does not exist in lucide-react; ContactIcon is visually distinct from Team's UsersIcon
 
 ### Pending Todos
 
@@ -87,5 +90,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 02-01-PLAN.md — customers/pools/equipment/service_visits schema + TanStack Table/react-hook-form/zod/shadcn installed
-Resume file: .planning/phases/02-customer-pool-data-model/02-02-PLAN.md
+Stopped at: Completed 02-02-PLAN.md — customer list page + TanStack Table + server actions + sidebar Customers nav active
+Resume file: .planning/phases/02-customer-pool-data-model/02-03-PLAN.md
