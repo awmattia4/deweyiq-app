@@ -55,13 +55,13 @@ Plans:
   3. Office staff can log equipment per pool (pump, filter, heater — brand, model, install date) and see a full equipment service history
   4. A customer's profile page shows complete service history — every visit, reading, photo, and checklist — in chronological order
   5. Office staff can filter the customer list by name, address, assigned route, or account status and get results in under one second
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: Customer schema and CRM UI — customer model, search, filter, create/edit forms
-- [ ] 02-02: Pool and body-of-water profiles — multi-pool per customer, surface/sanitizer/volume config
-- [ ] 02-03: Equipment tracking — equipment records per pool, install dates, service history log
-- [ ] 02-04: Service history view — unified timeline of all visits, readings, photos per customer profile
+- [ ] 02-01-PLAN.md — Database schema: customers, pools, equipment, service_visits tables with RLS, enums, relations, deps install
+- [ ] 02-02-PLAN.md — Customer list page: TanStack Table with search/filter, Add Customer dialog, sidebar nav activation
+- [ ] 02-03-PLAN.md — Customer profile: tabbed layout (Overview/Pools/Equipment/History), inline edit, pool and equipment CRUD
+- [ ] 02-04-PLAN.md — Service history timeline and Phase 2 end-to-end verification checkpoint
 
 ### Phase 3: Field Tech App
 **Goal**: A field technician can complete an entire service stop — read the route, navigate, log chemistry, check off tasks, take photos, and mark complete — from their phone in 60 seconds for routine stops, even without cell signal
