@@ -6,6 +6,7 @@ import {
   LayoutDashboardIcon,
   MapIcon,
   UsersIcon,
+  ContactIcon,
   CalendarIcon,
   SettingsIcon,
   UserCircleIcon,
@@ -50,7 +51,6 @@ type NavItem = {
  *
  * Items scoped to future phases are hidden entirely (not shown as disabled)
  * to keep the UI clean. Enable them when their phase ships:
- * - Customers (Phase 2): add roles: ["owner", "office"]
  * - Schedule (Phase 4): add roles: ["owner", "office"]
  * - Billing (Phase 7): add roles: ["owner"]
  * - Reports (Phase 9): add roles: ["owner"]
@@ -63,6 +63,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: LayoutDashboardIcon,
     roles: ["owner", "office"],
   },
+  // ── Available in Phase 2 ───────────────────────────────────────────────────
+  {
+    label: "Customers",
+    href: "/customers",
+    icon: ContactIcon,
+    roles: ["owner", "office"],
+  },
+  // ── Available in Phase 1 ───────────────────────────────────────────────────
   {
     label: "Routes",
     href: "/routes",
@@ -81,8 +89,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: SettingsIcon,
     roles: ["owner", "office"],
   },
-  // ── Future phases (Phase 2+) — hidden until ready ─────────────────────────
-  // { label: "Customers",       href: "/customers", icon: PersonStandingIcon,  roles: ["owner", "office"] },        // Phase 2
+  // ── Future phases (Phase 4+) — hidden until ready ─────────────────────────
   // { label: "Schedule",        href: "/schedule",  icon: CalendarIcon,        roles: ["owner", "office"] },        // Phase 4
   // { label: "Billing",         href: "/billing",   icon: CreditCardIcon,      roles: ["owner"] },                  // Phase 7
   // { label: "Reports",         href: "/reports",   icon: BarChartIcon,        roles: ["owner"] },                  // Phase 9
