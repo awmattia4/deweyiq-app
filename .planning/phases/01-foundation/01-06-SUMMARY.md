@@ -78,7 +78,7 @@ requirements-completed:
 
 # Metrics
 duration: ~12min
-completed: 2026-03-03
+completed: 2026-03-05
 ---
 
 # Phase 01 Plan 06: Role Landing Pages Summary
@@ -89,8 +89,8 @@ completed: 2026-03-03
 
 - **Duration:** ~12 min
 - **Started:** 2026-03-03T00:00:00Z
-- **Completed:** 2026-03-03
-- **Tasks:** 1/2 (Task 2 is a human-verify checkpoint — awaiting user)
+- **Completed:** 2026-03-05
+- **Tasks:** 2/2 (Task 1 committed; Task 2 human-verify approved by user)
 - **Files created/modified:** 13 files (10 created, 3 modified)
 
 ## Accomplishments
@@ -106,7 +106,7 @@ completed: 2026-03-03
 ## Task Commits
 
 1. **Task 1: Build role landing pages with real data and skeleton screens** - `f8368a4` (feat)
-2. **Task 2: Verify complete Phase 1 Foundation** - checkpoint:human-verify (awaiting user)
+2. **Task 2: Verify complete Phase 1 Foundation** - checkpoint:human-verify — approved by user 2026-03-05
 
 ## Files Created/Modified
 
@@ -171,12 +171,36 @@ None for this plan — all features are UI + server actions using existing Supab
 
 - **Ready:** Phase 2 (Customers) — dashboard and sidebar are ready; Customers nav item is a one-line uncomment in app-sidebar.tsx
 - **Ready:** Phase 3 (Routes) — routes page has date header in place; empty state has clear "coming in a future update" message; Phase 3 drops in stop-card components
-- **Awaiting:** Task 2 checkpoint — user must verify the complete Phase 1 foundation before marking Phase 1 complete
+- **Ready:** Phase 2 (Customers) — dashboard and sidebar are ready; Customers nav item is a one-line uncomment in `app-sidebar.tsx`
+- **Ready:** Phase 3 (Routes) — routes page has date header in place; empty state has clear "coming in a future update" message; Phase 3 drops in stop-card components
+- **Phase 1 complete** — all 6 plans executed, all AUTH requirements satisfied, user-verified 2026-03-05
+
+## Deferred Items
+
+These are non-blocking UI polish issues noted by the user during Phase 1 verification. Defer to Phase 2 or a dedicated polish pass.
+
+**1. Auth page button spacing**
+- **Observed:** Login and signup page submit buttons are visually smushed against the input fields above them — insufficient margin/padding between input group and button
+- **Location:** `src/app/(auth)/login/page.tsx`, `src/app/(auth)/signup/page.tsx`
+- **Fix:** Add `mt-4` or `mt-6` spacing above the submit button (or review the form layout container)
+- **Priority:** Low — cosmetic only, does not affect functionality
+
+**2. Auth page logo mismatch**
+- **Observed:** The logo shown on login/signup pages does not match the logo displayed in the app dashboard header
+- **Location:** Auth page logo component vs. `AppHeader` or `AppSidebar` logo
+- **Fix:** Audit both logo usages and ensure they reference the same asset or component
+- **Priority:** Low — cosmetic only, does not affect functionality
+
+**3. Future: Company logo upload + white-label branding**
+- **Requested:** Companies should be able to upload their own logo and have the entire app branded with it (name, colors, logo)
+- **Current state:** Portal home (`src/app/portal/(portal)/page.tsx`) already has a "Coming soon" card pattern and placeholder; app shell uses a static logo
+- **Plan:** Phase 8 (Portal) is the natural home for customer-facing branding; white-label for the staff app (sidebar logo, dashboard header) could be a Phase 8 or Phase 9 enhancement
+- **Scope:** Requires: file upload (Supabase Storage), `orgs` table branding columns (`logo_url`, `brand_color`), dynamic logo rendering in `AppSidebar`/`AppHeader` and `PortalShell`
 
 ---
 *Phase: 01-foundation*
-*Completed: 2026-03-03*
+*Completed: 2026-03-05*
 
 ## Self-Check: PASSED
 
-All 13 key files verified present. Task commit f8368a4 confirmed in git history. `npx tsc --noEmit` passes. `npm run build` succeeds.
+All 13 key files verified present. Task commit f8368a4 confirmed in git history. `npx tsc --noEmit` passes. `npm run build` succeeds. Task 2 human-verify approved by user 2026-03-05.

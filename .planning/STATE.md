@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 1 of 10 (Foundation)
-Plan: 6 of 6 in current phase
-Status: Checkpoint — awaiting human verification
-Last activity: 2026-03-03 — Plan 01-06 Task 1 complete; stopped at Task 2 (human-verify Phase 1)
+Phase: 1 of 10 (Foundation) — COMPLETE
+Plan: Phase 1 complete — advance to Phase 2 (Customers)
+Status: Ready — Phase 1 all 6 plans executed and user-verified
+Last activity: 2026-03-05 — Plan 01-06 Task 2 approved by user; Phase 1 Foundation complete
 
-Progress: [████░░░░░░] 14%
+Progress: [████░░░░░░] 16%
 
 ## Performance Metrics
 
@@ -27,10 +27,10 @@ Progress: [████░░░░░░] 14%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 4.5/6 | ~36 min | ~7 min |
+| 01-foundation | 6/6 COMPLETE | ~48 min | ~8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min), 01-03 (4 min), 01-05 (7 min)
+- Last 6 plans: 01-01 (10 min), 01-02 (3 min), 01-04 (3 min), 01-03 (4 min), 01-05 (7 min), 01-06 (12 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -66,6 +66,7 @@ Recent decisions affecting current work:
 - [Phase 01-06]: updateProfile uses adminDb: profiles_update_policy RLS allows own-row updates; adminDb pragmatic for Phase 1; withRls() preferred in later phases for consistency
 - [Phase 01-06]: InviteDialog owner-only: invite button shown only for owner role — matches server action enforcement; office cannot invite
 - [Phase 01-06]: Portal page at (portal)/page.tsx: plan referenced /portal/page.tsx but route group architecture from Plan 05 requires /portal/(portal)/page.tsx — correct file updated
+- [Phase 01-06]: Phase 1 user-verified 2026-03-05 — signup, login, dashboard, team invite, tech role restrictions, and PWA install all confirmed working; two minor UI defers noted (auth page button spacing, logo mismatch) — non-blocking
 
 ### Pending Todos
 
@@ -80,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03
-Stopped at: 01-06-PLAN.md Task 2 checkpoint (human-verify complete Phase 1 Foundation). Task 1 committed f8368a4. Awaiting user to verify all 14 Phase 1 criteria.
+Last session: 2026-03-05
+Stopped at: Phase 1 Foundation complete. 01-06-PLAN.md all tasks done. User verified Phase 1 on 2026-03-05. Ready to begin Phase 2 (Customers).
 Resume file: None
