@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 1 — Foundation
+**Current focus:** Phase 2 — Customer & Pool Data Model
 
 ## Current Position
 
-Phase: 1 of 10 (Foundation) — COMPLETE
-Plan: Phase 1 complete — advance to Phase 2 (Customers)
-Status: Ready — Phase 1 all 6 plans executed and user-verified
-Last activity: 2026-03-05 — Plan 01-06 Task 2 approved by user; Phase 1 Foundation complete
+Phase: 2 of 10 (Customer & Pool Data Model) — IN PROGRESS
+Plan: 1 of 4 complete (02-01 schema foundation done; 02-02 through 02-04 pending)
+Status: Ready — 02-01 executed; proceed to 02-02 (customer list page)
+Last activity: 2026-03-05 — Plan 02-01 complete; schema + frontend deps installed
 
-Progress: [████░░░░░░] 16%
+Progress: [████░░░░░░] 18%
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [████░░░░░░] 16%
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 02-customer-pool-data-model P01 | 11 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,10 @@ Recent decisions affecting current work:
 - [Phase 01-06]: InviteDialog owner-only: invite button shown only for owner role — matches server action enforcement; office cannot invite
 - [Phase 01-06]: Portal page at (portal)/page.tsx: plan referenced /portal/page.tsx but route group architecture from Plan 05 requires /portal/(portal)/page.tsx — correct file updated
 - [Phase 01-06]: Phase 1 user-verified 2026-03-05 — signup, login, dashboard, team invite, tech role restrictions, and PWA install all confirmed working; two minor UI defers noted (auth page button spacing, logo mismatch) — non-blocking
+- [Phase 02-customer-pool-data-model]: relations.ts dedicated file: Drizzle v1 relations in single file to eliminate circular ESM imports between customers<->pools<->equipment
+- [Phase 02-customer-pool-data-model]: service_visits write policy includes tech role from Phase 2 to avoid policy migration when Phase 3 techs write service records
+- [Phase 02-customer-pool-data-model]: equipment type as text not pgEnum — open-ended categories avoid migration per new type; future check constraint if enforcement needed
+- [Phase 02-customer-pool-data-model]: route_name free-text on customers for Phase 2; Phase 4 adds route_id FK and routes table without breaking Phase 2 string-match filter
 
 ### Pending Todos
 
@@ -82,5 +87,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Phase 2 context gathered. Ready for /gsd:plan-phase 2.
-Resume file: .planning/phases/02-customer-pool-data-model/02-CONTEXT.md
+Stopped at: Completed 02-01-PLAN.md — customers/pools/equipment/service_visits schema + TanStack Table/react-hook-form/zod/shadcn installed
+Resume file: .planning/phases/02-customer-pool-data-model/02-02-PLAN.md
