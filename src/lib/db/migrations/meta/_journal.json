@@ -8,6 +8,13 @@
       "when": 1772578622148,
       "tag": "0000_bizarre_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772744478208,
+      "tag": "0001_even_yellow_claw",
+      "breakpoints": true
     }
   ]
 }
