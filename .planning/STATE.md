@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 4 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow complete)
-Status: In Progress — Stop workflow with chemistry grid, live CSI, and product-aware dosing complete; 03-05 tasks tab next
-Last activity: 2026-03-06 — 03-04 stop workflow complete
+Plan: 5 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist complete)
+Status: In Progress — Tasks tab with checklist, mark-all-complete, and per-task notes complete; 03-06 photos tab next
+Last activity: 2026-03-06 — 03-05 service checklist complete
 
 Progress: [████░░░░░░] 44%
 
@@ -43,6 +43,7 @@ Progress: [████░░░░░░] 44%
 | Phase 03-field-tech-app P02 | 10 | 3 tasks | 7 files |
 | Phase 03-field-tech-app P03 | 6 | 2 tasks | 8 files |
 | Phase 03 P04 | 6 | 2 tasks | 7 files |
+| Phase 03-field-tech-app P05 | 2 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Chemistry tab default: Chemistry is the default active tab as it is the primary tech action each stop
 - [Phase 03]: Temperature has no TargetRanges key — ChemParam.key=null skips classifyReading, treated as 'ok'
 - [Phase 03]: Pool volume default 15000 gallons when volume_gallons is null — prevents zero-division in dosing
+- [Phase 03-05]: Checkbox UI component created manually (not via CLI) — @radix-ui/react-checkbox already installed
+- [Phase 03-05]: TaskRow manages its own notesOpen state — avoids lifting N textarea open booleans to parent
+- [Phase 03-05]: Notes textarea auto-expands on task uncheck — supports exception documentation flow
 
 ### Pending Todos
 
@@ -123,5 +127,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-04-PLAN.md — stop workflow page with chemistry grid, live CSI, and product-aware dosing; 7 files; FIELD-03, FIELD-04, FIELD-05, FIELD-11 complete
-Resume file: .planning/phases/03-field-tech-app/ (03-05 next — tasks tab implementation)
+Stopped at: Completed 03-05-PLAN.md — service checklist with mark-all-complete, per-task notes, Dexie offline persistence; 3 files; FIELD-06, FIELD-11 complete
+Resume file: .planning/phases/03-field-tech-app/ (03-06 next — photos tab implementation)
