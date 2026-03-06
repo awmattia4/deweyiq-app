@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 6 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist + 03-06 photos/notes complete)
-Status: In Progress — Photos tab (camera, compression, offline queue, Supabase Storage) and Notes tab complete; 03-07 visit completion sync next
-Last activity: 2026-03-06 — 03-06 photo capture and notes complete
+Plan: 7 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist + 03-06 photos/notes + 03-07 stop completion complete)
+Status: In Progress — Stop completion flow with summary modal, service report HTML, email Edge Function, and offline sync complete; Phase 3 field tech core workflow DONE
+Last activity: 2026-03-06 — 03-07 stop completion + service report + email delivery
 
 Progress: [█████░░░░░] 55%
 
@@ -45,6 +45,7 @@ Progress: [█████░░░░░] 55%
 | Phase 03 P04 | 6 | 2 tasks | 7 files |
 | Phase 03-field-tech-app P05 | 2 | 1 tasks | 3 files |
 | Phase 03-field-tech-app P06 | 15 | 2 tasks | 7 files |
+| Phase 03-field-tech-app P07 | 76 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,10 @@ Recent decisions affecting current work:
 - [Phase 03-06]: No custom Web Speech API — NotesField uses system keyboard dictation hint; Web Speech API broken in PWA standalone mode (per research)
 - [Phase 03-06]: processAllPendingPhotos in sync.ts — global connectivity handler retries all pending photos on app-open and visibilitychange; not just current stop session
 - [Phase 03-06]: visit-photos Supabase Storage bucket requires manual creation with RLS policy: storage.foldername(name)[1] = auth.jwt()->>'org_id'
+- [Phase 03-07]: completeStop uses onConflictDoUpdate — same visitId can be submitted multiple times safely (offline sync idempotency)
+- [Phase 03-07]: sonner installed for toast notifications — root layout Toaster with dark theme; completion feedback is critical UX
+- [Phase 03-07]: supabase/functions excluded from Node.js tsconfig — Deno Edge Function files cannot be type-checked by Node.js TypeScript compiler
+- [Phase 03-07]: email_reports deferred to Phase 4 — customers table lacks toggle; Phase 7 sends to any customer with email (best-effort)
 
 ### Pending Todos
 
@@ -133,5 +138,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-06-PLAN.md — photo capture with WebP compression + Dexie offline blob queue + Supabase Storage, and notes textarea with keyboard dictation hint; 7 files; FIELD-07, FIELD-08, FIELD-10 complete
-Resume file: .planning/phases/03-field-tech-app/ (03-07 next — visit completion sync to Supabase)
+Stopped at: Completed 03-07-PLAN.md — stop completion flow (CompletionModal, SkipStopDialog, completeStop/skipStop server actions), generateServiceReport HTML template, send-service-report Supabase Edge Function, POST /api/visits/complete; 10 files; FIELD-09, FIELD-12, FIELD-13 complete
+Resume file: .planning/phases/03-field-tech-app/ (Phase 3 core field workflow complete — next plans cover polish/testing or proceed to Phase 4)
