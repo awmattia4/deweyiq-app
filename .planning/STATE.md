@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 2 — Customer & Pool Data Model
+**Current focus:** Phase 3 — Field Tech App (Phase 2 complete)
 
 ## Current Position
 
-Phase: 2 of 10 (Customer & Pool Data Model) — IN PROGRESS
-Plan: 3 of 4 complete + 02-04 at checkpoint (02-01 schema + 02-02 customer list + 02-03 profile + 02-04 task 1 done; awaiting human verify)
-Status: Checkpoint — 02-04 task 1 executed; awaiting human verification of Phase 2 complete CRM flow
-Last activity: 2026-03-06 — Plan 02-04 task 1 complete; service history timeline built
+Phase: 2 of 10 (Customer & Pool Data Model) — COMPLETE
+Plan: 4 of 4 complete (02-01 schema + 02-02 customer list + 02-03 profile + 02-04 timeline + verification)
+Status: Complete — all CUST-01 through CUST-06 verified by user; Phase 3 ready
+Last activity: 2026-03-06 — Phase 2 complete; human verification approved
 
-Progress: [█████░░░░░] 27%
+Progress: [██████░░░░] 30%
 
 ## Performance Metrics
 
@@ -38,6 +38,7 @@ Progress: [█████░░░░░] 27%
 | Phase 02-customer-pool-data-model P02 | 7 | 2 tasks | 7 files |
 | Phase 02 P03 | 15 | 2 tasks | 10 files |
 | Phase 02-customer-pool-data-model P04 | 8 | 1 tasks | 2 files |
+| Phase 02-customer-pool-data-model P04 | 12 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,10 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: Portal route group pattern: (portal) route group excludes login from auth-guarded layout; login stays at /portal level with no auth guard to prevent circular redirects
 - [Phase 01-foundation]: SyncInitializer render-null client component: useEffect-based browser init (initSyncListener + prefetchTodayRoutes) in a server-component layout requires a render-null client component wrapper
 - [Phase 01-foundation]: Future nav items hidden (not disabled): app-sidebar.tsx shows only Phase 1 items; future items (Billing Phase 7, Reports Phase 9, Schedule Phase 4) are commented with phase activation notes
+- [Phase 02-01]: CRITICAL — drizzle-kit push creates RLS policies with NULL USING/WITH CHECK expressions. After any migration, verify policies with `SELECT policyname, qual, with_check FROM pg_catalog.pg_policies WHERE tablename = 'X'`. If NULL, recreate from migration SQL.
+- [Phase 02-02]: CRITICAL — correlated SQL subqueries on RLS-protected tables return wrong results inside withRls transactions. Always use LEFT JOIN + GROUP BY + count() instead of `(SELECT COUNT(*) FROM table WHERE ...)` subqueries.
+- [Phase 02-02]: zodResolver from @hookform/resolvers@5 incompatible with zod@4 — use plain React state + inline validation (matches InviteDialog pattern from Phase 1)
+- [Phase 02-03]: Relations in dedicated relations.ts file to avoid customers ↔ pools circular ESM import
 - [Phase 01-06]: updateProfile uses adminDb: profiles_update_policy RLS allows own-row updates; adminDb pragmatic for Phase 1; withRls() preferred in later phases for consistency
 - [Phase 01-06]: InviteDialog owner-only: invite button shown only for owner role — matches server action enforcement; office cannot invite
 - [Phase 01-06]: Portal page at (portal)/page.tsx: plan referenced /portal/page.tsx but route group architecture from Plan 05 requires /portal/(portal)/page.tsx — correct file updated
@@ -81,10 +86,15 @@ Recent decisions affecting current work:
 - [Phase 02-03]: AddPoolDialog uses plain useState + inline validation — matches locked codebase pattern from 02-02 zod/hookform incompatibility decision
 - [Phase 02-04]: tech field null in allVisits flatMap — serviceVisits relational query omits tech relation; Phase 3 adds with: { tech: true } when visits have real data
 - [Phase 02-04]: ServiceHistoryTimeline filter chips use plain button with cn() conditionals — no zod/hookform, matches codebase pattern established in 02-02
+- [Phase 02-customer-pool-data-model]: drizzle-kit push creates RLS policies with NULL conditions — verify pg_catalog.pg_policies after every migration and recreate policies if qual/with_check are NULL
+- [Phase 02-customer-pool-data-model]: Correlated SQL subqueries on RLS-protected tables return wrong results inside withRls — always use LEFT JOIN + GROUP BY + count() for aggregate counts on RLS tables
+- [Phase 02-customer-pool-data-model]: Server actions that mutate data visible on a list page must revalidatePath both the detail page AND the list page — addPool/deletePool now revalidate /customers in addition to /customers/[id]
 
 ### Pending Todos
 
-None.
+- [UI Polish]: cursor-pointer missing on some interactive elements (buttons, cards, clickable rows) — add `cursor-pointer` class
+- [UI Polish]: Low-contrast hover states on dark theme — some hover effects barely visible; review and increase contrast
+- [UI Polish]: Auth page button spacing and logo mismatch (deferred from Phase 1)
 
 ### Blockers/Concerns
 
@@ -96,5 +106,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Checkpoint in 02-04-PLAN.md — Task 1 complete (service history timeline built); awaiting human verification of complete Phase 2 CRM flow (Task 2)
-Resume file: .planning/phases/02-customer-pool-data-model/02-04-PLAN.md
+Stopped at: Completed 02-04-PLAN.md — Phase 2 Customer & Pool Data Model complete; all CUST-01 through CUST-06 verified by user
+Resume file: .planning/phases/03-field-tech-app/ (next phase)
