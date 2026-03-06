@@ -296,25 +296,58 @@ export async function getSyncQueueStatus(): Promise<{
 /**
  * prefetchTodayRoutes — Pre-cache today's route data for offline use.
  *
- * Stub function establishing the pre-caching architecture per locked decision:
- * "cache today's full route data when app opens with connectivity"
+ * Fetches today's route from /api/routes/today and writes each stop to
+ * offlineDb.routeCache with a 24-hour TTL. Called on app open when online.
  *
- * Phase 3 will activate this by fetching from /api/routes/today and writing
- * each stop to offlineDb.routeCache. The cache pattern is documented here
- * for when the route API is available.
+ * Per locked decision: "cache today's full route data when app opens with connectivity"
  *
- * Called on app open when online (in initSyncListener or a separate effect).
+ * Phase 4 note: when persistent reordering is added, this prefetch will also
+ * apply any local reorder state on top of the server data.
  */
 export async function prefetchTodayRoutes(): Promise<void> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return
 
-  // TODO(Phase 3): Fetch today's route from /api/routes/today
-  // and write each stop to offlineDb.routeCache with:
-  //   offlineDb.routeCache.bulkPut(stops.map(s => ({
-  //     id: s.id,
-  //     data: s,
-  //     cachedAt: Date.now(),
-  //     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-  //   })))
-  console.debug("[prefetch] Route API not available yet — activates in Phase 3")
+  try {
+    const response = await fetch("/api/routes/today", {
+      // Bypass service worker cache for freshness — we ARE the cache
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        // Not authenticated or no access — skip silently (user may be logged out)
+        console.debug("[prefetch] Not authenticated — skipping route prefetch")
+        return
+      }
+      console.warn(`[prefetch] Route fetch failed: HTTP ${response.status}`)
+      return
+    }
+
+    const stops = await response.json()
+
+    if (!Array.isArray(stops) || stops.length === 0) {
+      console.debug("[prefetch] No stops for today — routeCache cleared")
+      // Clear stale cache entries from a previous day
+      await offlineDb.routeCache.clear()
+      return
+    }
+
+    const now = Date.now()
+    const ttl = 24 * 60 * 60 * 1000 // 24 hours
+
+    // Write each stop to Dexie routeCache — id = "stop-{stopIndex}" for stable keys
+    await offlineDb.routeCache.bulkPut(
+      stops.map((stop: { stopIndex: number }) => ({
+        id: `stop-${stop.stopIndex}`,
+        data: stop,
+        cachedAt: now,
+        expiresAt: now + ttl,
+      }))
+    )
+
+    console.debug(`[prefetch] Cached ${stops.length} route stops for offline use`)
+  } catch (error) {
+    // Network error — silent fail, offline mode will use whatever is in Dexie
+    console.debug("[prefetch] Route prefetch error (likely offline):", error)
+  }
 }
