@@ -16,6 +16,7 @@ export type CustomerRow = {
   route_name: string | null
   status: "active" | "paused" | "cancelled"
   pool_count: number
+  assigned_tech_id: string | null
 }
 
 // ─── Status badge helpers ──────────────────────────────────────────────────────
@@ -190,5 +191,14 @@ export const customerColumns: ColumnDef<CustomerRow>[] = [
       </span>
     ),
     enableSorting: true,
+  },
+
+  // Hidden: assigned_tech_id — used for tech dropdown filter, not displayed
+  {
+    accessorKey: "assigned_tech_id",
+    header: () => null,
+    cell: () => null,
+    filterFn: "equals",
+    enableHiding: true,
   },
 ]

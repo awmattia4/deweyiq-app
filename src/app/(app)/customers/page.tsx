@@ -35,7 +35,7 @@ export default async function CustomersPage() {
 
   const token = claimsData.claims as Parameters<typeof withRls>[0]
 
-  // Fetch customers with pool count subquery
+  // Fetch customers with pool count via LEFT JOIN
   let customerRows: Array<{
     id: string
     full_name: string
@@ -44,6 +44,7 @@ export default async function CustomersPage() {
     route_name: string | null
     status: "active" | "paused" | "cancelled"
     pool_count: number
+    assigned_tech_id: string | null
   }> = []
 
   let techs: Array<{ id: string; full_name: string | null }> = []
@@ -61,6 +62,7 @@ export default async function CustomersPage() {
             route_name: customers.route_name,
             status: customers.status,
             pool_count: count(pools.id),
+            assigned_tech_id: customers.assigned_tech_id,
           })
           .from(customers)
           .leftJoin(pools, eq(pools.customer_id, customers.id))

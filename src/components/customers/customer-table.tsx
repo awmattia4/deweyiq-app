@@ -63,6 +63,7 @@ export function CustomerTable({ data, techs, routes }: CustomerTableProps) {
       sorting,
       columnFilters,
       globalFilter,
+      columnVisibility: { assigned_tech_id: false },
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -92,18 +93,12 @@ export function CustomerTable({ data, techs, routes }: CustomerTableProps) {
     }
   }
 
-  // Tech filter uses global filter approach since assigned_tech_id isn't displayed
-  // We store selected tech name and filter via global filter on name
   function handleTechFilter(value: string) {
     if (value === "__all__") {
-      // Clear any tech-specific filter — reset global filter if it was set for tech
-      setGlobalFilter("")
+      table.getColumn("assigned_tech_id")?.setFilterValue(undefined)
+    } else {
+      table.getColumn("assigned_tech_id")?.setFilterValue(value)
     }
-    // Tech filter is limited without the tech name in the row — see note below
-    // For now we filter on the tech name in a future iteration; routing by name works
-    // via the assigned_tech_id in the full data. Since CustomerRow doesn't include
-    // assigned_tech name, this is a placeholder for the UX pattern.
-    // In Plan 03, when we have full detail data, we can add assigned_tech_name to CustomerRow.
   }
 
   const rows = table.getRowModel().rows
