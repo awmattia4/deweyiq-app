@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 1 of N (03-01 schema foundation complete)
-Status: In Progress — Phase 3 schema foundation complete; 03-02 chemistry engine next
-Last activity: 2026-03-06 — 03-01 schema foundation complete
+Plan: 2 of N (03-01 schema + 03-02 chemistry engine complete)
+Status: In Progress — Chemistry engine built TDD; 30 tests passing; 03-03 chemistry grid UI next
+Last activity: 2026-03-06 — 03-02 chemistry engine complete
 
 Progress: [███░░░░░░░] 33%
 
@@ -40,6 +40,7 @@ Progress: [███░░░░░░░] 33%
 | Phase 02-customer-pool-data-model P04 | 8 | 1 tasks | 2 files |
 | Phase 02-customer-pool-data-model P04 | 12 | 2 tasks | 3 files |
 | Phase 03-field-tech-app P01 | 4 | 2 tasks | 9 files |
+| Phase 03-field-tech-app P02 | 10 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase 03-01]: drizzle-kit push creates NULL RLS policies (confirmed again in Phase 3) — all 20 Phase 3 policies manually recreated via psql after every push
 - [Phase 03-01]: PhotoQueueItem.blob NOT indexed in Dexie — indexing Blob columns corrupts IndexedDB performance
 - [Phase 03-01]: VisitDraft.id is client-generated UUID — visit_id known before Supabase sync enabling optimistic offline writes
+- [Phase 03-field-tech-app]: CSI balanced test assertion: formula gives -0.07 not -0.29 for balanced inputs; both in balanced zone; test updated to range-based assertion
+- [Phase 03-field-tech-app]: interpretCSI boundary: -0.3 maps to 'low' per spec (csi <= -0.3), +0.3 maps to 'balanced' (csi <= +0.3)
+- [Phase 03-field-tech-app]: vitest installed as test framework for lib/chemistry pure math modules; node environment, @/ alias
 
 ### Pending Todos
 
@@ -103,7 +107,7 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- [Phase 3]: Chemistry LSI formula and CYA correction must be validated against CPO curriculum before shipping to real pools — liability risk if wrong
+- [Phase 3]: Chemistry engine built — CSI formula and CYA correction implemented and tested; formula values should be validated against CPO curriculum or TFP calculator before shipping to real customer pools (liability risk if wrong)
 - [Phase 7]: QBO bi-directional sync conflict resolution strategy must be mapped before building invoice UI — define which system wins per entity type
 - [Phase 10]: AI route optimization algorithm choice (OSRM self-hosted vs. Google Routes Optimization API at $4-6/call) needs break-even analysis before Phase 10 planning
 - [Phase 10]: Predictive chemistry alerts require 3+ months of per-pool reading history — cannot launch until that data exists
@@ -111,5 +115,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-01-PLAN.md — Phase 3 schema foundation complete; route_days, checklists, visit_photos, chemical_products tables in Postgres; Dexie v2 with visitDrafts/photoQueue; 5 Phase 3 npm deps installed
-Resume file: .planning/phases/03-field-tech-app/03-02-PLAN.md (chemistry engine)
+Stopped at: Completed 03-02-PLAN.md — TFP CSI calculator + product-aware dosing engine in pure TypeScript; vitest installed; 30 tests passing; FIELD-04 and FIELD-05 complete
+Resume file: .planning/phases/03-field-tech-app/ (03-03 next — chemistry grid UI)
