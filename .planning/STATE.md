@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 2 of 10 (Customer & Pool Data Model) — IN PROGRESS
-Plan: 3 of 4 complete (02-01 schema + 02-02 customer list + 02-03 customer profile page done; 02-04 pending)
-Status: Ready — 02-03 executed; proceed to 02-04 (service history timeline)
-Last activity: 2026-03-05 — Plan 02-03 complete; customer profile page + pool/equipment management
+Plan: 3 of 4 complete + 02-04 at checkpoint (02-01 schema + 02-02 customer list + 02-03 profile + 02-04 task 1 done; awaiting human verify)
+Status: Checkpoint — 02-04 task 1 executed; awaiting human verification of Phase 2 complete CRM flow
+Last activity: 2026-03-06 — Plan 02-04 task 1 complete; service history timeline built
 
 Progress: [█████░░░░░] 27%
 
@@ -37,6 +37,7 @@ Progress: [█████░░░░░] 27%
 | Phase 02-customer-pool-data-model P01 | 11 | 2 tasks | 10 files |
 | Phase 02-customer-pool-data-model P02 | 7 | 2 tasks | 7 files |
 | Phase 02 P03 | 15 | 2 tasks | 10 files |
+| Phase 02-customer-pool-data-model P04 | 8 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 02-02]: ContactIcon used for Customers sidebar nav item — PersonStandingIcon in sidebar comment does not exist in lucide-react; ContactIcon is visually distinct from Team's UsersIcon
 - [Phase 02-03]: History tab placeholder div — ServiceHistoryTimeline imported in Plan 02-04 only to avoid build-time missing-module error
 - [Phase 02-03]: AddPoolDialog uses plain useState + inline validation — matches locked codebase pattern from 02-02 zod/hookform incompatibility decision
+- [Phase 02-04]: tech field null in allVisits flatMap — serviceVisits relational query omits tech relation; Phase 3 adds with: { tech: true } when visits have real data
+- [Phase 02-04]: ServiceHistoryTimeline filter chips use plain button with cn() conditionals — no zod/hookform, matches codebase pattern established in 02-02
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-05
-Stopped at: Completed 02-03-PLAN.md — customer profile page + inline edit + pool/equipment management
+Last session: 2026-03-06
+Stopped at: Checkpoint in 02-04-PLAN.md — Task 1 complete (service history timeline built); awaiting human verification of complete Phase 2 CRM flow (Task 2)
 Resume file: .planning/phases/02-customer-pool-data-model/02-04-PLAN.md
