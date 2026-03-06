@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { ChemistryGrid } from "@/components/field/chemistry-grid"
 import { ChemistryDosing } from "@/components/field/chemistry-dosing"
+import { Checklist } from "@/components/field/checklist"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
 import type { StopContext } from "@/actions/visits"
 import type { FullChemistryReadings } from "@/lib/chemistry/dosing"
@@ -39,6 +40,10 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
   const { draft, updateChemistry, updateChecklist, updateNotes, completeDraft } =
     useVisitDraft(stopId, context.customerId, context.poolId, visitId)
+
+  // Wrap updateChecklist to match the Checklist component's onUpdate signature
+  const handleChecklistUpdate = (taskId: string, completed: boolean, notes: string) =>
+    updateChecklist(taskId, completed, notes)
 
   // Derive chemistry readings in the format used by the dosing engine
   const chemistryReadings = useMemo((): FullChemistryReadings => {
@@ -146,15 +151,22 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           />
         </TabsContent>
 
-        {/* ── Tasks tab — placeholder ─────────────────────────────────────────── */}
+        {/* ── Tasks tab ──────────────────────────────────────────────────────── */}
         <TabsContent value="tasks" className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28">
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
-            <ClipboardListIcon className="h-10 w-10 text-muted-foreground/40" />
-            <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium text-muted-foreground">Tasks tab coming in Plan 03-05</p>
-              <p className="text-xs text-muted-foreground/60">Checklist items will appear here</p>
+          {draft ? (
+            <Checklist
+              tasks={context.checklistTasks}
+              draft={draft}
+              onUpdate={handleChecklistUpdate}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
+              <ClipboardListIcon className="h-10 w-10 text-muted-foreground/40" />
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium text-muted-foreground">Loading tasks...</p>
+              </div>
             </div>
-          </div>
+          )}
         </TabsContent>
 
         {/* ── Photos tab — placeholder ────────────────────────────────────────── */}
