@@ -88,7 +88,7 @@ export interface DosingRecommendation {
   product: ChemicalProduct
   amount: number
   unit: string
-  /** "add" for raising a parameter, "add" for dosing acids/reducers too */
+  /** Action to take — always "add" (acids/reducers are still added to the water) */
   action: "add"
   reason: string
 }

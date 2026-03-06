@@ -32,7 +32,7 @@ export interface TargetRanges {
 
 export interface ReadingClassification {
   status: ReadingStatus
-  color: "red" | "green" | "red"
+  color: "red" | "green"
 }
 
 /**
