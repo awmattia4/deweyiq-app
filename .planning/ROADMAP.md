@@ -74,17 +74,17 @@ Plans:
   4. A tech can complete a per-customer service checklist (skim, brush, vacuum, empty baskets, backwash) and capture photos with one-handed taps optimized for wet hands in bright sunlight
   5. A tech can mark a stop complete with one tap and the branded service report is auto-generated and queued for delivery — the entire routine stop workflow takes no more than 60 seconds of app interaction
   6. All data entered without signal is saved locally and syncs to the server automatically when connectivity returns — no data is lost if the app is closed or the phone dies mid-route
-**Plans**: TBD
+**Plans**: 8 plans
 
 Plans:
-- [ ] 03-01: Tech route view — daily stop list, ordered stops, map view, navigation link
-- [ ] 03-02: Chemistry readings form — all parameters, LSI calculator with CYA correction, sanitizer-type-aware validation
-- [ ] 03-03: Chemical dosing engine — dosing recommendations by reading, pool volume, sanitizer type, and target ranges
-- [ ] 03-04: Service checklist — customizable per customer/service type, one-handed UX
-- [ ] 03-05: Photo and notes capture — camera integration, client-side compression, Supabase Storage upload
-- [ ] 03-06: Stop completion flow — one-tap complete, service report auto-generation, auto-email trigger
-- [ ] 03-07: Offline-first sync — Dexie.js write queue, Serwist Background Sync, idempotent server merge
-- [ ] 03-08: Field UX polish — 44px tap targets, high-contrast OKLCH palette, 3-tap rule for most-common actions
+- [ ] 03-01-PLAN.md — Schema foundation: extend service_visits, create route_days/checklists/visit_photos/chemical_products tables, Dexie v2, npm deps
+- [ ] 03-02-PLAN.md — Chemistry engine (TDD): CSI/LSI calculator with CYA correction, product-aware dosing engine, target ranges by sanitizer type
+- [ ] 03-03-PLAN.md — Route view: daily stop list with info cards, progress bar, drag-to-reorder, map navigation, offline prefetch
+- [ ] 03-04-PLAN.md — Stop workflow + chemistry tab: tabbed page shell, chemistry grid with live LSI/dosing, visit draft management
+- [ ] 03-05-PLAN.md — Service checklist tab: template + customer overrides, mark-all-complete, per-task notes
+- [ ] 03-06-PLAN.md — Photos + notes tabs: camera capture with compression, offline blob queue, Supabase Storage upload, notes textarea
+- [ ] 03-07-PLAN.md — Stop completion: summary confirmation modal, completeStop action, service report HTML, Resend email Edge Function
+- [ ] 03-08-PLAN.md — Field UX polish: 44px tap targets, high-contrast OKLCH, 3-tap rule, tech settings, end-to-end verification
 
 ### Phase 4: Scheduling & Routing
 **Goal**: Office staff can build routes, set recurring service schedules, and optimize route order in one click — while seeing real-time tech progress on a live map
