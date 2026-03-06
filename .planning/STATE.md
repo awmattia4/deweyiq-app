@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 5 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist complete)
-Status: In Progress — Tasks tab with checklist, mark-all-complete, and per-task notes complete; 03-06 photos tab next
-Last activity: 2026-03-06 — 03-05 service checklist complete
+Plan: 6 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist + 03-06 photos/notes complete)
+Status: In Progress — Photos tab (camera, compression, offline queue, Supabase Storage) and Notes tab complete; 03-07 visit completion sync next
+Last activity: 2026-03-06 — 03-06 photo capture and notes complete
 
-Progress: [████░░░░░░] 44%
+Progress: [█████░░░░░] 55%
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Progress: [████░░░░░░] 44%
 | Phase 03-field-tech-app P03 | 6 | 2 tasks | 8 files |
 | Phase 03 P04 | 6 | 2 tasks | 7 files |
 | Phase 03-field-tech-app P05 | 2 | 1 tasks | 3 files |
+| Phase 03-field-tech-app P06 | 15 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,11 @@ Recent decisions affecting current work:
 - [Phase 03-05]: Checkbox UI component created manually (not via CLI) — @radix-ui/react-checkbox already installed
 - [Phase 03-05]: TaskRow manages its own notesOpen state — avoids lifting N textarea open booleans to parent
 - [Phase 03-05]: Notes textarea auto-expands on task uncheck — supports exception documentation flow
+- [Phase 03-06]: PhotoQueueItem.orgId added (Dexie v3) — global photo sync processor in sync.ts needs orgId to construct org-scoped storage path without live session context
+- [Phase 03-06]: Blob-first architecture confirmed — compressed blob written to Dexie before any upload attempt; photo never lost even if app closes mid-upload
+- [Phase 03-06]: No custom Web Speech API — NotesField uses system keyboard dictation hint; Web Speech API broken in PWA standalone mode (per research)
+- [Phase 03-06]: processAllPendingPhotos in sync.ts — global connectivity handler retries all pending photos on app-open and visibilitychange; not just current stop session
+- [Phase 03-06]: visit-photos Supabase Storage bucket requires manual creation with RLS policy: storage.foldername(name)[1] = auth.jwt()->>'org_id'
 
 ### Pending Todos
 
@@ -127,5 +133,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-05-PLAN.md — service checklist with mark-all-complete, per-task notes, Dexie offline persistence; 3 files; FIELD-06, FIELD-11 complete
-Resume file: .planning/phases/03-field-tech-app/ (03-06 next — photos tab implementation)
+Stopped at: Completed 03-06-PLAN.md — photo capture with WebP compression + Dexie offline blob queue + Supabase Storage, and notes textarea with keyboard dictation hint; 7 files; FIELD-07, FIELD-08, FIELD-10 complete
+Resume file: .planning/phases/03-field-tech-app/ (03-07 next — visit completion sync to Supabase)
