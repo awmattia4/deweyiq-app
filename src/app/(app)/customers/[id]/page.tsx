@@ -10,7 +10,7 @@ import { CustomerHeader } from "@/components/customers/customer-header"
 import { CustomerInlineEdit } from "@/components/customers/customer-inline-edit"
 import { PoolList } from "@/components/customers/pool-list"
 import { EquipmentList } from "@/components/customers/equipment-list"
-import { ClipboardList } from "lucide-react"
+import { ServiceHistoryTimeline } from "@/components/customers/service-history-timeline"
 
 export const metadata: Metadata = {
   title: "Customer Profile",
@@ -61,6 +61,21 @@ export default async function CustomerProfilePage({
     notFound()
   }
 
+  // Flatten service visits from all pools into a single list for the timeline.
+  // Each visit gets the pool context attached so the timeline can show pool name.
+  const allVisits = customer.pools.flatMap((pool) =>
+    (pool.serviceVisits ?? []).map((sv) => ({
+      id: sv.id,
+      visit_type: sv.visit_type,
+      visited_at: sv.visited_at instanceof Date
+        ? sv.visited_at.toISOString()
+        : String(sv.visited_at),
+      notes: sv.notes,
+      pool: { id: pool.id, name: pool.name },
+      tech: null as { id: string; full_name: string | null } | null,
+    }))
+  )
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Always-visible customer header ────────────────────────────────── */}
@@ -90,15 +105,9 @@ export default async function CustomerProfilePage({
           <EquipmentList pools={customer.pools} />
         </TabsContent>
 
-        {/* History — placeholder (Plan 02-04 will replace with ServiceHistoryTimeline) */}
+        {/* History — vertical timeline of service visits (Phase 3 populates with real data) */}
         <TabsContent value="history" className="mt-6">
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <ClipboardList className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm font-medium text-muted-foreground">No service history yet</p>
-            <p className="text-xs text-muted-foreground/70 max-w-xs">
-              Service records will appear here automatically as technicians complete stops.
-            </p>
-          </div>
+          <ServiceHistoryTimeline visits={allVisits} />
         </TabsContent>
       </Tabs>
     </div>

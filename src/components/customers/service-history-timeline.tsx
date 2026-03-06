@@ -1,0 +1,280 @@
+"use client"
+
+import { useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { ClipboardList } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type ServiceVisit = {
+  id: string
+  visit_type: string | null  // "routine" | "repair" | "one_off"
+  visited_at: string         // ISO date string
+  notes: string | null
+  pool?: { id: string; name: string } | null
+  tech?: { id: string; full_name: string | null } | null
+  // Phase 3 will add: chemistry_readings, checklist_items, photos
+}
+
+interface ServiceHistoryTimelineProps {
+  visits: ServiceVisit[]
+}
+
+// ─── Filter chip types ─────────────────────────────────────────────────────────
+
+type FilterValue = "all" | "routine" | "repair" | "one_off"
+
+const FILTER_CHIPS: Array<{ value: FilterValue; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "routine", label: "Routine" },
+  { value: "repair", label: "Repair" },
+  { value: "one_off", label: "One-off" },
+]
+
+// ─── Visit type badge helpers ──────────────────────────────────────────────────
+
+const VISIT_TYPE_CONFIG: Record<
+  string,
+  { label: string; className: string; dotClass: string }
+> = {
+  routine: {
+    label: "Routine",
+    className: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+    dotClass: "bg-blue-400",
+  },
+  repair: {
+    label: "Repair",
+    className: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+    dotClass: "bg-orange-400",
+  },
+  one_off: {
+    label: "One-off",
+    className: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+    dotClass: "bg-purple-400",
+  },
+}
+
+const DEFAULT_TYPE_CONFIG = {
+  label: "Service",
+  className: "bg-muted text-muted-foreground border-border",
+  dotClass: "bg-muted-foreground",
+}
+
+function getTypeConfig(visitType: string | null) {
+  if (!visitType) return DEFAULT_TYPE_CONFIG
+  return VISIT_TYPE_CONFIG[visitType] ?? DEFAULT_TYPE_CONFIG
+}
+
+// ─── Date formatting ───────────────────────────────────────────────────────────
+
+function formatVisitDate(isoDate: string): string {
+  const date = new Date(isoDate)
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function getDateKey(isoDate: string): string {
+  const date = new Date(isoDate)
+  return date.toISOString().split("T")[0]
+}
+
+// ─── Timeline card ─────────────────────────────────────────────────────────────
+
+function TimelineCard({ visit }: { visit: ServiceVisit }) {
+  const typeConfig = getTypeConfig(visit.visit_type)
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+      {/* Card header — type badge + pool + tech */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={cn("text-xs font-medium border", typeConfig.className)}
+        >
+          {typeConfig.label}
+        </Badge>
+
+        {visit.pool && (
+          <span className="text-xs text-muted-foreground">
+            {visit.pool.name}
+          </span>
+        )}
+
+        {visit.tech?.full_name && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {visit.tech.full_name}
+          </span>
+        )}
+      </div>
+
+      {/* Notes */}
+      {visit.notes && (
+        <p className="text-sm text-foreground/80">{visit.notes}</p>
+      )}
+
+      {/* Chemistry readings area — inline (Phase 3 will populate with real data) */}
+      <div className="flex flex-wrap gap-4 rounded-md bg-muted/40 px-3 py-2">
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">pH</span>
+          <span className="text-xs font-medium text-muted-foreground">--</span>
+        </div>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Cl</span>
+          <span className="text-xs font-medium text-muted-foreground">--</span>
+        </div>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Alk</span>
+          <span className="text-xs font-medium text-muted-foreground">--</span>
+        </div>
+        <span className="text-[10px] text-muted-foreground/50 self-center ml-1">
+          Chemistry readings recorded during service
+        </span>
+      </div>
+
+      {/* Photo thumbnail strip — Phase 3 will render visit.photos here */}
+      {/* Intentionally empty in Phase 2 — no photos yet */}
+    </div>
+  )
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
+/**
+ * ServiceHistoryTimeline — Vertical timeline of service visits for a customer.
+ *
+ * Shows a vertical line on the left with cards positioned to the right.
+ * Date markers appear as section headers when the date changes.
+ * Filter chips at the top allow filtering by visit type.
+ *
+ * Phase 3 will populate chemistry readings and photo thumbnails by passing
+ * enriched ServiceVisit objects — no UI changes required.
+ */
+export function ServiceHistoryTimeline({ visits }: ServiceHistoryTimelineProps) {
+  const [activeFilter, setActiveFilter] = useState<FilterValue>("all")
+
+  // Filter visits based on active filter chip
+  const filteredVisits = activeFilter === "all"
+    ? visits
+    : visits.filter((v) => v.visit_type === activeFilter)
+
+  // Sort visits by date descending (most recent first)
+  const sortedVisits = [...filteredVisits].sort(
+    (a, b) => new Date(b.visited_at).getTime() - new Date(a.visited_at).getTime()
+  )
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+  if (visits.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        {/* Filter chips — visible even for empty state so UI shape is clear */}
+        <FilterChips active={activeFilter} onChange={setActiveFilter} />
+
+        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+          <ClipboardList className="h-10 w-10 text-muted-foreground/50" />
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">No service history yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
+              Service records will appear here automatically as technicians complete stops.
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground/50 max-w-xs">
+            Records include chemistry readings, service checklists, photos, and notes.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Timeline ─────────────────────────────────────────────────────────────────
+  // Group visits by date key so we can render date section headers
+  let lastDateKey = ""
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Filter chips */}
+      <FilterChips active={activeFilter} onChange={setActiveFilter} />
+
+      {/* Filtered empty state */}
+      {sortedVisits.length === 0 && (
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <p className="text-sm text-muted-foreground">
+            No {FILTER_CHIPS.find((c) => c.value === activeFilter)?.label.toLowerCase()} visits found.
+          </p>
+        </div>
+      )}
+
+      {/* Vertical timeline */}
+      <div className="relative pl-8">
+        {/* Vertical line running down the left */}
+        <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+
+        <div className="flex flex-col gap-0">
+          {sortedVisits.map((visit) => {
+            const dateKey = getDateKey(visit.visited_at)
+            const showDateHeader = dateKey !== lastDateKey
+            lastDateKey = dateKey
+
+            return (
+              <div key={visit.id} className="relative">
+                {/* Date section header */}
+                {showDateHeader && (
+                  <div className="mb-3 mt-5 first:mt-0">
+                    <span className="inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      {formatVisitDate(visit.visited_at)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Timeline dot on the vertical line */}
+                <div
+                  className={cn(
+                    "absolute -left-5 top-4 h-2.5 w-2.5 rounded-full border-2 border-background",
+                    getTypeConfig(visit.visit_type).dotClass
+                  )}
+                />
+
+                {/* Card */}
+                <div className="mb-4">
+                  <TimelineCard visit={visit} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Filter chips sub-component ────────────────────────────────────────────────
+
+function FilterChips({
+  active,
+  onChange,
+}: {
+  active: FilterValue
+  onChange: (v: FilterValue) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {FILTER_CHIPS.map((chip) => (
+        <button
+          key={chip.value}
+          onClick={() => onChange(chip.value)}
+          className={cn(
+            "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            active === chip.value
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-muted text-muted-foreground hover:bg-muted/80"
+          )}
+        >
+          {chip.label}
+        </button>
+      ))}
+    </div>
+  )
+}
