@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 2 of 10 (Customer & Pool Data Model) — IN PROGRESS
-Plan: 2 of 4 complete (02-01 schema + 02-02 customer list page done; 02-03 and 02-04 pending)
-Status: Ready — 02-02 executed; proceed to 02-03 (customer detail page)
-Last activity: 2026-03-05 — Plan 02-02 complete; customer list page + TanStack Table + server actions + sidebar nav
+Plan: 3 of 4 complete (02-01 schema + 02-02 customer list + 02-03 customer profile page done; 02-04 pending)
+Status: Ready — 02-03 executed; proceed to 02-04 (service history timeline)
+Last activity: 2026-03-05 — Plan 02-03 complete; customer profile page + pool/equipment management
 
-Progress: [████░░░░░░] 22%
+Progress: [█████░░░░░] 27%
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Progress: [████░░░░░░] 22%
 *Updated after each plan completion*
 | Phase 02-customer-pool-data-model P01 | 11 | 2 tasks | 10 files |
 | Phase 02-customer-pool-data-model P02 | 7 | 2 tasks | 7 files |
+| Phase 02 P03 | 15 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 02-customer-pool-data-model]: route_name free-text on customers for Phase 2; Phase 4 adds route_id FK and routes table without breaking Phase 2 string-match filter
 - [Phase 02-02]: zod v4 + @hookform/resolvers v5 zodResolver type incompatibility — AddCustomerDialog uses plain React state + inline validation matching InviteDialog pattern; resolver incompatibility must be addressed before using Form component with zod schemas elsewhere
 - [Phase 02-02]: ContactIcon used for Customers sidebar nav item — PersonStandingIcon in sidebar comment does not exist in lucide-react; ContactIcon is visually distinct from Team's UsersIcon
+- [Phase 02-03]: History tab placeholder div — ServiceHistoryTimeline imported in Plan 02-04 only to avoid build-time missing-module error
+- [Phase 02-03]: AddPoolDialog uses plain useState + inline validation — matches locked codebase pattern from 02-02 zod/hookform incompatibility decision
 
 ### Pending Todos
 
@@ -90,5 +93,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 02-02-PLAN.md — customer list page + TanStack Table + server actions + sidebar Customers nav active
-Resume file: .planning/phases/02-customer-pool-data-model/02-03-PLAN.md
+Stopped at: Completed 02-03-PLAN.md — customer profile page + inline edit + pool/equipment management
+Resume file: .planning/phases/02-customer-pool-data-model/02-04-PLAN.md
