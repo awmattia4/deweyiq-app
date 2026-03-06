@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 3 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view complete)
-Status: In Progress — Route view built; SSR stop list, drag-to-reorder, map navigation, Dexie offline cache; 03-04 chemistry grid UI next
-Last activity: 2026-03-06 — 03-03 route view complete
+Plan: 4 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow complete)
+Status: In Progress — Stop workflow with chemistry grid, live CSI, and product-aware dosing complete; 03-05 tasks tab next
+Last activity: 2026-03-06 — 03-04 stop workflow complete
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
@@ -123,5 +123,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-03-PLAN.md — route view with SSR stop list, drag-to-reorder (@dnd-kit), map navigation deep links, Dexie routeCache offline prefetch; FIELD-01, FIELD-02, FIELD-11 complete
-Resume file: .planning/phases/03-field-tech-app/ (03-04 next — chemistry grid UI)
+Stopped at: Completed 03-04-PLAN.md — stop workflow page with chemistry grid, live CSI, and product-aware dosing; 7 files; FIELD-03, FIELD-04, FIELD-05, FIELD-11 complete
+Resume file: .planning/phases/03-field-tech-app/ (03-05 next — tasks tab implementation)
