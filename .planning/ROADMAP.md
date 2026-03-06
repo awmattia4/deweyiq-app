@@ -13,7 +13,7 @@ Ten phases that build the platform from the ground up, ordered by hard technical
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Auth, database schema with multi-tenant RLS, and offline PWA shell — every other phase depends on this (completed 2026-03-05)
-- [ ] **Phase 2: Customer & Pool Data Model** - Customer CRM, pool profiles, equipment tracking, and service history store
+- [x] **Phase 2: Customer & Pool Data Model** - Customer CRM, pool profiles, equipment tracking, and service history store (completed 2026-03-06)
 - [ ] **Phase 3: Field Tech App** - The daily-driver mobile app — route view, service logging, chemistry, checklists, photos, offline sync
 - [ ] **Phase 4: Scheduling & Routing** - Route builder, recurring schedules, live route progress, and one-click route optimization
 - [ ] **Phase 5: Office Operations & Dispatch** - Real-time dispatch board, automated service reports, and customer notifications
@@ -223,7 +223,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/6 | Complete    | 2026-03-05 |
-| 2. Customer & Pool Data Model | 0/4 | Not started | - |
+| 2. Customer & Pool Data Model | 0/4 | Complete    | 2026-03-06 |
 | 3. Field Tech App | 0/8 | Not started | - |
 | 4. Scheduling & Routing | 0/4 | Not started | - |
 | 5. Office Operations & Dispatch | 0/4 | Not started | - |
