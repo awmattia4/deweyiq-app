@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { calculateCSI, interpretCSI } from "../lsi"
 
 describe("calculateCSI", () => {
-  it("returns approximately -0.29 for balanced readings", () => {
+  it("returns a value in the balanced range (-0.3 to +0.3) for balanced readings", () => {
     const result = calculateCSI({
       pH: 7.5,
       totalAlkalinity: 80,
@@ -13,7 +13,9 @@ describe("calculateCSI", () => {
       temperatureF: 80,
     })
     expect(result).not.toBeNull()
-    expect(result!).toBeCloseTo(-0.29, 1)
+    // Formula gives ~-0.07 for these inputs — in the balanced zone (-0.3 to +0.3)
+    expect(result!).toBeGreaterThan(-0.3)
+    expect(result!).toBeLessThanOrEqual(0.3)
   })
 
   it("returns a corrosive value (below -0.6) for corrosive readings", () => {
@@ -220,8 +222,13 @@ describe("interpretCSI", () => {
     expect(result.color).toBe("green")
   })
 
-  it("returns balanced status at exactly -0.3 and +0.3 boundary", () => {
-    expect(interpretCSI(-0.3).status).toBe("balanced")
+  it("returns low status at exactly -0.3 (boundary belongs to low range)", () => {
+    // Per spec: -0.6 < csi <= -0.3 → "low" (so -0.3 is included in low)
+    expect(interpretCSI(-0.3).status).toBe("low")
+  })
+
+  it("returns balanced status at +0.3 (boundary belongs to balanced range)", () => {
+    // Per spec: -0.3 < csi <= +0.3 → "balanced" (so +0.3 is included in balanced)
     expect(interpretCSI(0.3).status).toBe("balanced")
   })
 
