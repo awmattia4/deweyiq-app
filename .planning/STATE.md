@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 2 of 10 (Customer & Pool Data Model) — COMPLETE
-Plan: 4 of 4 complete (02-01 schema + 02-02 customer list + 02-03 profile + 02-04 timeline + verification)
-Status: Complete — all CUST-01 through CUST-06 verified by user; Phase 3 ready
-Last activity: 2026-03-06 — Phase 2 complete; human verification approved
+Phase: 3 of 10 (Field Tech App) — IN PROGRESS
+Plan: 1 of N (03-01 schema foundation complete)
+Status: In Progress — Phase 3 schema foundation complete; 03-02 chemistry engine next
+Last activity: 2026-03-06 — 03-01 schema foundation complete
 
-Progress: [██████░░░░] 30%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [██████░░░░] 30%
 | Phase 02 P03 | 15 | 2 tasks | 10 files |
 | Phase 02-customer-pool-data-model P04 | 8 | 1 tasks | 2 files |
 | Phase 02-customer-pool-data-model P04 | 12 | 2 tasks | 3 files |
+| Phase 03-field-tech-app P01 | 4 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,10 @@ Recent decisions affecting current work:
 - [Phase 02-customer-pool-data-model]: drizzle-kit push creates RLS policies with NULL conditions — verify pg_catalog.pg_policies after every migration and recreate policies if qual/with_check are NULL
 - [Phase 02-customer-pool-data-model]: Correlated SQL subqueries on RLS-protected tables return wrong results inside withRls — always use LEFT JOIN + GROUP BY + count() for aggregate counts on RLS tables
 - [Phase 02-customer-pool-data-model]: Server actions that mutate data visible on a list page must revalidatePath both the detail page AND the list page — addPool/deletePool now revalidate /customers in addition to /customers/[id]
+- [Phase 03-01]: route_days.stop_order as JSONB array — minimal Phase 3 approach; Phase 4 replaces with relational stop rows without breaking Phase 3 data
+- [Phase 03-01]: drizzle-kit push creates NULL RLS policies (confirmed again in Phase 3) — all 20 Phase 3 policies manually recreated via psql after every push
+- [Phase 03-01]: PhotoQueueItem.blob NOT indexed in Dexie — indexing Blob columns corrupts IndexedDB performance
+- [Phase 03-01]: VisitDraft.id is client-generated UUID — visit_id known before Supabase sync enabling optimistic offline writes
 
 ### Pending Todos
 
@@ -106,5 +111,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 02-04-PLAN.md — Phase 2 Customer & Pool Data Model complete; all CUST-01 through CUST-06 verified by user
-Resume file: .planning/phases/03-field-tech-app/ (next phase)
+Stopped at: Completed 03-01-PLAN.md — Phase 3 schema foundation complete; route_days, checklists, visit_photos, chemical_products tables in Postgres; Dexie v2 with visitDrafts/photoQueue; 5 Phase 3 npm deps installed
+Resume file: .planning/phases/03-field-tech-app/03-02-PLAN.md (chemistry engine)
