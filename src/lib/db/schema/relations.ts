@@ -15,6 +15,10 @@ import { customers } from "./customers"
 import { pools } from "./pools"
 import { equipment } from "./equipment"
 import { serviceVisits } from "./service-visits"
+import { routeDays } from "./route-days"
+import { checklistTemplates, checklistTasks } from "./checklists"
+import { visitPhotos } from "./visit-photos"
+import { chemicalProducts } from "./chemical-products"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -25,6 +29,7 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   }),
   pools: many(pools),
   serviceVisits: many(serviceVisits),
+  checklistTasks: many(checklistTasks),
 }))
 
 export const poolsRelations = relations(pools, ({ one, many }) => ({
@@ -39,9 +44,44 @@ export const equipmentRelations = relations(equipment, ({ one }) => ({
   pool: one(pools, { fields: [equipment.pool_id], references: [pools.id] }),
 }))
 
-export const serviceVisitsRelations = relations(serviceVisits, ({ one }) => ({
+export const serviceVisitsRelations = relations(serviceVisits, ({ one, many }) => ({
   org: one(orgs, { fields: [serviceVisits.org_id], references: [orgs.id] }),
   customer: one(customers, { fields: [serviceVisits.customer_id], references: [customers.id] }),
   pool: one(pools, { fields: [serviceVisits.pool_id], references: [pools.id] }),
   tech: one(profiles, { fields: [serviceVisits.tech_id], references: [profiles.id] }),
+  // Phase 3: visit photos stored separately for storage path tracking
+  photos: many(visitPhotos),
+}))
+
+// Phase 3 relations
+
+export const routeDaysRelations = relations(routeDays, ({ one }) => ({
+  org: one(orgs, { fields: [routeDays.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [routeDays.tech_id], references: [profiles.id] }),
+}))
+
+export const checklistTemplatesRelations = relations(checklistTemplates, ({ one, many }) => ({
+  org: one(orgs, { fields: [checklistTemplates.org_id], references: [orgs.id] }),
+  tasks: many(checklistTasks),
+}))
+
+export const checklistTasksRelations = relations(checklistTasks, ({ one }) => ({
+  org: one(orgs, { fields: [checklistTasks.org_id], references: [orgs.id] }),
+  template: one(checklistTemplates, {
+    fields: [checklistTasks.template_id],
+    references: [checklistTemplates.id],
+  }),
+  customer: one(customers, {
+    fields: [checklistTasks.customer_id],
+    references: [customers.id],
+  }),
+}))
+
+export const visitPhotosRelations = relations(visitPhotos, ({ one }) => ({
+  org: one(orgs, { fields: [visitPhotos.org_id], references: [orgs.id] }),
+  visit: one(serviceVisits, { fields: [visitPhotos.visit_id], references: [serviceVisits.id] }),
+}))
+
+export const chemicalProductsRelations = relations(chemicalProducts, ({ one }) => ({
+  org: one(orgs, { fields: [chemicalProducts.org_id], references: [orgs.id] }),
 }))

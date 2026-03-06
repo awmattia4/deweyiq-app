@@ -2,6 +2,7 @@
 // Drizzle Kit reads this file as the schema source (see drizzle.config.ts).
 // Phase 01: orgs and profiles (core multi-tenant tables)
 // Phase 02: customers, pools, equipment, service_visits (CRM data model)
+// Phase 03: route_days, checklist_templates, checklist_tasks, visit_photos, chemical_products
 
 export * from "./orgs"
 export * from "./profiles"
@@ -12,7 +13,13 @@ export * from "./pools"
 export * from "./equipment"
 export * from "./service-visits"
 
-// Phase 02 relational definitions (all cross-table relations in one place)
+// Phase 03 tables
+export * from "./route-days"
+export * from "./checklists"
+export * from "./visit-photos"
+export * from "./chemical-products"
+
+// Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.
 export * from "./relations"

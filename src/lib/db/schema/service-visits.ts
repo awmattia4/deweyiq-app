@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -33,6 +33,21 @@ export const serviceVisits = pgTable(
     visited_at: timestamp("visited_at", { withTimezone: true }).notNull(),
     notes: text("notes"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+
+    // Phase 3 columns — added to existing stub table
+    // All nullable so visits created before Phase 3 remain valid
+    chemistry_readings: jsonb("chemistry_readings"),
+    checklist_completion: jsonb("checklist_completion"),
+    photo_urls: jsonb("photo_urls").$type<string[]>(),
+    // "scheduled" | "in_progress" | "complete" | "skipped"
+    status: text("status"),
+    // Required when status = "skipped"
+    skip_reason: text("skip_reason"),
+    // Generated HTML service report (for email and customer portal)
+    report_html: text("report_html"),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+    // When the post-visit report email was sent
+    email_sent_at: timestamp("email_sent_at", { withTimezone: true }),
   },
   (table) => [
     index("service_visits_org_id_idx").on(table.org_id),
