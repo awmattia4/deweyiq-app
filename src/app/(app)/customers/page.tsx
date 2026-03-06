@@ -5,7 +5,7 @@ import { withRls } from "@/lib/db"
 import { customers, profiles } from "@/lib/db/schema"
 import { pools } from "@/lib/db/schema/pools"
 import { createClient } from "@/lib/supabase/server"
-import { sql, asc, eq } from "drizzle-orm"
+import { asc, eq, count } from "drizzle-orm"
 import { CustomerTable } from "@/components/customers/customer-table"
 
 export const metadata: Metadata = {
@@ -60,9 +60,11 @@ export default async function CustomersPage() {
             phone: customers.phone,
             route_name: customers.route_name,
             status: customers.status,
-            pool_count: sql<number>`(SELECT COUNT(*) FROM pools WHERE pools.customer_id = ${customers.id})`.as("pool_count"),
+            pool_count: count(pools.id),
           })
           .from(customers)
+          .leftJoin(pools, eq(pools.customer_id, customers.id))
+          .groupBy(customers.id)
           .orderBy(asc(customers.full_name))
       ),
       withRls(token, (db) =>
@@ -73,7 +75,7 @@ export default async function CustomersPage() {
       ),
     ])
 
-    customerRows = customersResult as typeof customerRows
+    customerRows = customersResult.map((r) => ({ ...r, pool_count: Number(r.pool_count) }))
     techs = techsResult
 
     // Extract distinct route names (non-null only)

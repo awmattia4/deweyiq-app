@@ -96,6 +96,7 @@ export async function addPool(
     )
 
     revalidatePath(`/customers/${input.customer_id}`)
+    revalidatePath("/customers")
 
     return { success: true, poolId: result[0]?.id }
   } catch (err) {
@@ -191,6 +192,7 @@ export async function deletePool(
     )
 
     revalidatePath(`/customers/${input.customer_id}`)
+    revalidatePath("/customers")
 
     return { success: true }
   } catch (err) {
