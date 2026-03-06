@@ -23,6 +23,8 @@ import type { SanitizerType } from "@/lib/chemistry/targets"
 export interface StopContext {
   customerId: string
   poolId: string
+  /** Organization ID — needed for photo storage path scoping */
+  orgId: string
   customerName: string
   poolName: string
   poolVolumeGallons: number | null
@@ -222,6 +224,7 @@ export async function getStopContext(
       return {
         customerId: poolRow.customerId ?? customerId,
         poolId: poolRow.poolId,
+        orgId: orgId as string,
         customerName: poolRow.customerName ?? "Unknown Customer",
         poolName: poolRow.poolName,
         poolVolumeGallons: poolRow.volumeGallons,

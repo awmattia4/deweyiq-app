@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { ChemistryGrid } from "@/components/field/chemistry-grid"
 import { ChemistryDosing } from "@/components/field/chemistry-dosing"
 import { Checklist } from "@/components/field/checklist"
+import { PhotoCapture } from "@/components/field/photo-capture"
+import { NotesField } from "@/components/field/notes-field"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
 import type { StopContext } from "@/actions/visits"
 import type { FullChemistryReadings } from "@/lib/chemistry/dosing"
@@ -169,29 +171,23 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           )}
         </TabsContent>
 
-        {/* ── Photos tab — placeholder ────────────────────────────────────────── */}
+        {/* ── Photos tab ─────────────────────────────────────────────────────── */}
         <TabsContent value="photos" className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28">
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
-            <CameraIcon className="h-10 w-10 text-muted-foreground/40" />
-            <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium text-muted-foreground">Photos tab coming in Plan 03-06</p>
-              <p className="text-xs text-muted-foreground/60">Before/after photos will appear here</p>
-            </div>
-          </div>
+          <PhotoCapture
+            visitId={visitId}
+            orgId={context.orgId}
+          />
         </TabsContent>
 
-        {/* ── Notes tab — placeholder ─────────────────────────────────────────── */}
+        {/* ── Notes tab ───────────────────────────────────────────────────────── */}
         <TabsContent value="notes" className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28">
-          <div className="flex flex-col gap-3">
-            <label className="text-sm font-medium text-foreground">Visit Notes</label>
-            <textarea
-              className="min-h-[160px] w-full rounded-lg border border-input bg-background px-3 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-              placeholder="Add any notes for this visit..."
-              value={draft?.notes ?? ""}
-              onChange={(e) => updateNotes(e.target.value)}
-              rows={6}
-            />
-          </div>
+          {draft ? (
+            <NotesField draft={draft} onUpdate={updateNotes} />
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

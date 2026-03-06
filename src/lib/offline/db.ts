@@ -42,12 +42,16 @@ export interface VisitDraft {
  * Photo queue item — compressed images staged for Supabase Storage upload.
  *
  * CRITICAL: blob is NOT indexed — indexing Blob columns corrupts IDB performance.
- * Only visitId, status, and createdAt are indexed for queue management queries.
+ * Only visitId, orgId, status, and createdAt are indexed for queue management queries.
  * storagePath is filled after a successful upload and used to update service_visits.photo_urls.
+ *
+ * orgId is stored here (not only in visitDraft) so the global photo sync processor
+ * in sync.ts can construct the correct storage path without needing live session context.
  */
 export interface PhotoQueueItem {
   id?: number                   // auto-increment
   visitId: string               // FK to visitDrafts.id
+  orgId: string                 // org scope for storage path + RLS
   blob: Blob                    // raw compressed image — NOT base64, NOT indexed
   tag?: "before" | "after" | "issue" | "equipment"
   status: "pending" | "uploaded" | "failed"
@@ -82,6 +86,17 @@ class OfflineDB extends Dexie {
       visitDrafts: "id, stopId, updatedAt, status",
       // ++id auto-increment; blob is NOT indexed (critical — indexing blobs corrupts IDB perf)
       photoQueue: "++id, visitId, status, createdAt",
+    })
+
+    // v3: Phase 3-06 — add orgId to photoQueue for global sync processor
+    // orgId is needed to construct the storage path without live session context.
+    // NEVER MODIFY older versions — Dexie immutable versioning.
+    this.version(3).stores({
+      syncQueue: "++id, createdAt, retries, status",
+      routeCache: "id, cachedAt, expiresAt",
+      visitDrafts: "id, stopId, updatedAt, status",
+      // orgId added as indexed field for global photo sync processor
+      photoQueue: "++id, visitId, orgId, status, createdAt",
     })
   }
 }

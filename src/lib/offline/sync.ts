@@ -16,6 +16,7 @@
  */
 
 import { offlineDb, type SyncQueueItem } from "./db"
+import { createPhotoUploadUrl } from "@/actions/storage"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -227,15 +228,17 @@ export function initSyncListener(): () => void {
 
   // 1. Online event: primary cross-platform sync trigger
   const handleOnline = () => {
-    console.debug("[sync] Device came online — processing sync queue")
+    console.debug("[sync] Device came online — processing sync queue + photo queue")
     void processSyncQueue()
+    void processAllPendingPhotos()
   }
 
   // 2. Visibility change: catches cases where device reconnected while backgrounded
   const handleVisibilityChange = () => {
     if (document.visibilityState === "visible" && navigator.onLine) {
-      console.debug("[sync] App became visible and online — processing sync queue")
+      console.debug("[sync] App became visible and online — processing sync queue + photo queue")
       void processSyncQueue()
+      void processAllPendingPhotos()
     }
   }
 
@@ -262,6 +265,7 @@ export function initSyncListener(): () => void {
   // Attempt sync on initial mount in case items were queued in a previous session
   if (navigator.onLine) {
     void processSyncQueue()
+    void processAllPendingPhotos()
   }
 
   return () => {
@@ -291,6 +295,64 @@ export async function getSyncQueueStatus(): Promise<{
   ])
 
   return { pending, processing, failed }
+}
+
+/**
+ * processAllPendingPhotos — upload all pending photos across all visits.
+ *
+ * Called from initSyncListener on connectivity return and app foreground.
+ * Separate from the text enqueueWrite queue because blobs cannot be JSON-serialized.
+ *
+ * Each PhotoQueueItem stores orgId so this function can construct the storage
+ * path without needing live session context. createPhotoUploadUrl handles its
+ * own auth check via server-side getClaims().
+ *
+ * On failure: marks item as "failed" and logs. Retried on next connectivity event.
+ */
+export async function processAllPendingPhotos(): Promise<void> {
+  const pending = await offlineDb.photoQueue
+    .where("status")
+    .equals("pending")
+    .toArray()
+
+  if (pending.length === 0) return
+
+  console.debug(`[photos] Processing ${pending.length} pending photos`)
+
+  for (const item of pending) {
+    if (!item.id) continue
+
+    try {
+      const fileName = `photo-${item.id}-${Date.now()}.webp`
+      const result = await createPhotoUploadUrl(item.orgId, item.visitId, fileName)
+
+      if (!result) {
+        console.error("[photos] Failed to get signed URL for photo", item.id)
+        await offlineDb.photoQueue.update(item.id, { status: "failed" })
+        continue
+      }
+
+      const uploadResponse = await fetch(result.signedUrl, {
+        method: "PUT",
+        body: item.blob,
+        headers: { "Content-Type": "image/webp" },
+      })
+
+      if (uploadResponse.ok) {
+        await offlineDb.photoQueue.update(item.id, {
+          status: "uploaded",
+          storagePath: result.path,
+        })
+        console.debug("[photos] Uploaded photo", item.id, "to", result.path)
+      } else {
+        console.error("[photos] Upload failed", item.id, uploadResponse.status)
+        await offlineDb.photoQueue.update(item.id, { status: "failed" })
+      }
+    } catch (err) {
+      console.error("[photos] Upload error", item.id, err)
+      await offlineDb.photoQueue.update(item.id, { status: "failed" })
+    }
+  }
 }
 
 /**
