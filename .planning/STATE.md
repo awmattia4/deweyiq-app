@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 2 of N (03-01 schema + 03-02 chemistry engine complete)
-Status: In Progress — Chemistry engine built TDD; 30 tests passing; 03-03 chemistry grid UI next
-Last activity: 2026-03-06 — 03-02 chemistry engine complete
+Plan: 3 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view complete)
+Status: In Progress — Route view built; SSR stop list, drag-to-reorder, map navigation, Dexie offline cache; 03-04 chemistry grid UI next
+Last activity: 2026-03-06 — 03-03 route view complete
 
 Progress: [███░░░░░░░] 33%
 
@@ -41,6 +41,8 @@ Progress: [███░░░░░░░] 33%
 | Phase 02-customer-pool-data-model P04 | 12 | 2 tasks | 3 files |
 | Phase 03-field-tech-app P01 | 4 | 2 tasks | 9 files |
 | Phase 03-field-tech-app P02 | 10 | 3 tasks | 7 files |
+| Phase 03-field-tech-app P03 | 6 | 2 tasks | 8 files |
+| Phase 03 P04 | 6 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -98,6 +100,12 @@ Recent decisions affecting current work:
 - [Phase 03-field-tech-app]: CSI balanced test assertion: formula gives -0.07 not -0.29 for balanced inputs; both in balanced zone; test updated to range-based assertion
 - [Phase 03-field-tech-app]: interpretCSI boundary: -0.3 maps to 'low' per spec (csi <= -0.3), +0.3 maps to 'balanced' (csi <= +0.3)
 - [Phase 03-field-tech-app]: vitest installed as test framework for lib/chemistry pure math modules; node environment, @/ alias
+- [Phase 03-03]: Tech reorder client-only (Dexie) — route_days UPDATE policy is owner+office only; Phase 4 adds persistent tech reordering
+- [Phase 03-03]: prefetchTodayRoutes clears routeCache on empty response — prevents stale day-prior routes
+- [Phase 03-03]: openInMaps uses https:// URLs (not app:// deep links) — more reliable in PWA standalone mode
+- [Phase 03]: Chemistry tab default: Chemistry is the default active tab as it is the primary tech action each stop
+- [Phase 03]: Temperature has no TargetRanges key — ChemParam.key=null skips classifyReading, treated as 'ok'
+- [Phase 03]: Pool volume default 15000 gallons when volume_gallons is null — prevents zero-division in dosing
 
 ### Pending Todos
 
@@ -115,5 +123,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 03-02-PLAN.md — TFP CSI calculator + product-aware dosing engine in pure TypeScript; vitest installed; 30 tests passing; FIELD-04 and FIELD-05 complete
-Resume file: .planning/phases/03-field-tech-app/ (03-03 next — chemistry grid UI)
+Stopped at: Completed 03-03-PLAN.md — route view with SSR stop list, drag-to-reorder (@dnd-kit), map navigation deep links, Dexie routeCache offline prefetch; FIELD-01, FIELD-02, FIELD-11 complete
+Resume file: .planning/phases/03-field-tech-app/ (03-04 next — chemistry grid UI)
