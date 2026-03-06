@@ -1,7 +1,10 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
+import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
-import { CalendarDaysIcon, MapPinIcon } from "lucide-react"
+import { getTodayStops } from "@/actions/routes"
+import { StopList } from "@/components/field/stop-list"
+import { RouteProgress } from "@/components/field/route-progress"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -10,14 +13,16 @@ export const metadata: Metadata = {
 /**
  * Routes — Tech landing page (and accessible to office/owner too).
  *
- * Per user decision: "Tech: lands directly on today's route list
- * -- no dashboard in between."
+ * Per locked decision: "Tech: lands directly on today's route list
+ * — no dashboard in between."
  *
- * Per idea: "Tech landing should feel instant — open app, see your
- * route with zero navigation required."
+ * Per locked decision: "Stop list is the primary view when tech opens the app."
  *
- * Phase 1: empty state with clear message. Stop list cards arrive
- * in Phase 3.
+ * Phase 3: Renders real stop list with progress bar and drag-to-reorder.
+ *          Replaces Phase 1 empty state.
+ *
+ * Phase 4: Map view toggle will render an actual map. For now the button
+ *          exists but map view shows a stub.
  *
  * Role guard: customers are redirected to /portal.
  */
@@ -34,8 +39,16 @@ export default async function RoutesPage() {
     day: "numeric",
   })
 
+  // Fetch today's stops server-side for instant render (no loading flicker)
+  const stops = await getTodayStops()
+
+  // Calculate completed stops for the progress bar
+  const completedStops = stops.filter(
+    (s) => s.stopStatus === "complete" || s.stopStatus === "skipped"
+  ).length
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* ── Date header ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
@@ -45,25 +58,36 @@ export default async function RoutesPage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">{dateLabel}</h1>
         </div>
+
+        {/* Map view toggle — stub for Phase 4 */}
+        {stops.length > 0 && (
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors duration-150"
+            title="Map view coming in Phase 4"
+            aria-label="Toggle map view (coming soon)"
+            disabled
+          >
+            <MapIcon className="h-3.5 w-3.5" />
+            Map
+          </button>
+        )}
       </div>
 
-      {/* ── Empty state — Phase 1 ────────────────────────────────────────── */}
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-12 text-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <MapPinIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <div className="flex flex-col gap-1 max-w-sm">
-          <p className="font-medium text-sm">No routes scheduled yet</p>
-          <p className="text-sm text-muted-foreground">
-            Routes will appear here once scheduling is set up. Route management
-            is coming in a future update.
-          </p>
-        </div>
-      </div>
+      {/* ── Progress bar ─────────────────────────────────────────────────── */}
+      {stops.length > 0 && (
+        <RouteProgress
+          completedStops={completedStops}
+          totalStops={stops.length}
+        />
+      )}
 
-      {/* ── User context (helpful for tech role) ─────────────────────────── */}
+      {/* ── Stop list ────────────────────────────────────────────────────── */}
+      <StopList initialStops={stops} />
+
+      {/* ── Tech context footer ──────────────────────────────────────────── */}
       {user.role === "tech" && (
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-xs text-muted-foreground text-center pb-2">
           Logged in as {user.full_name || user.email}
         </p>
       )}
