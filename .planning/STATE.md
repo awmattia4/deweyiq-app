@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 7 of N (03-01 schema + 03-02 chemistry engine + 03-03 route view + 03-04 stop workflow + 03-05 tasks checklist + 03-06 photos/notes + 03-07 stop completion complete)
-Status: In Progress — Stop completion flow with summary modal, service report HTML, email Edge Function, and offline sync complete; Phase 3 field tech core workflow DONE
-Last activity: 2026-03-06 — 03-07 stop completion + service report + email delivery
+Plan: 8 of N (03-01 schema + 03-02 chemistry + 03-03 route view + 03-04 stop workflow + 03-05 tasks + 03-06 photos/notes + 03-07 stop completion + 03-08 UX polish)
+Status: In Progress — UX polish complete (44px targets, OKLCH outdoor colors, stop card link, tech settings); paused at 03-08 Task 2 checkpoint:human-verify (Phase 3 not complete until human verification approved)
+Last activity: 2026-03-07 — 03-08 UX polish + maps preference + OKLCH status colors + tappable stop cards
 
 Progress: [█████░░░░░] 55%
 
@@ -46,6 +46,7 @@ Progress: [█████░░░░░] 55%
 | Phase 03-field-tech-app P05 | 2 | 1 tasks | 3 files |
 | Phase 03-field-tech-app P06 | 15 | 2 tasks | 7 files |
 | Phase 03-field-tech-app P07 | 76 | 2 tasks | 10 files |
+| Phase 03-field-tech-app P08 | 4 | 1 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,9 @@ Recent decisions affecting current work:
 - [Phase 03-07]: sonner installed for toast notifications — root layout Toaster with dark theme; completion feedback is critical UX
 - [Phase 03-07]: supabase/functions excluded from Node.js tsconfig — Deno Edge Function files cannot be type-checked by Node.js TypeScript compiler
 - [Phase 03-07]: email_reports deferred to Phase 4 — customers table lacks toggle; Phase 7 sends to any customer with email (best-effort)
+- [Phase 03-08]: Stop card main area is a Next.js Link to /routes/{customerId}-{poolId}; navigate button uses stopPropagation to prevent link conflict
+- [Phase 03-08]: OKLCH inline CSSProperties for status badge colors — Tailwind v4 arbitrary value oklch() with slash opacity unreliable; inline styles provide exact color values
+- [Phase 03-08]: Chemistry grid: amber=LOW, red=HIGH — amber means reading needs to go up (too low), red means reading needs to come down (too high); directionally intuitive
 
 ### Pending Todos
 
@@ -137,6 +141,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-06
-Stopped at: Completed 03-07-PLAN.md — stop completion flow (CompletionModal, SkipStopDialog, completeStop/skipStop server actions), generateServiceReport HTML template, send-service-report Supabase Edge Function, POST /api/visits/complete; 10 files; FIELD-09, FIELD-12, FIELD-13 complete
-Resume file: .planning/phases/03-field-tech-app/ (Phase 3 core field workflow complete — next plans cover polish/testing or proceed to Phase 4)
+Last session: 2026-03-07
+Stopped at: 03-08 Task 1 complete (UX polish — stop card Link navigation, OKLCH status colors, amber/red LOW/HIGH chemistry badges, tech settings with maps preference); paused at Task 2 checkpoint:human-verify (gate=blocking) — end-to-end field workflow verification required before Phase 3 complete
+Resume file: .planning/phases/03-field-tech-app/03-08-PLAN.md Task 2 — human must verify complete field tech workflow then approve to finalize Phase 3
