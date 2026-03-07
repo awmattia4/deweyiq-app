@@ -10,26 +10,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProfileForm } from "@/components/settings/profile-form"
-import { LogOutIcon, BuildingIcon, UserIcon } from "lucide-react"
+import { MapsPreferenceSetting } from "@/components/settings/maps-preference"
+import { LogOutIcon, BuildingIcon, UserIcon, MapPinIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "Settings",
 }
 
 /**
- * Settings — Profile editing and org info for owner and office roles.
+ * Settings — Profile editing and org info, plus tech-specific preferences.
  *
- * Only accessible to owner and office.
- * Phase 1: basic profile editing. Org settings expand in later phases.
+ * Phase 3: Accessible to all roles (owner, office, tech).
+ * - Tech: sees maps preference + read-only profile
+ * - Owner / office: sees profile editing + org info + maps preference
+ *
+ * Tech redirect removed — tech needs access to set maps preference (FIELD-11).
  */
 export default async function SettingsPage() {
   const user = await getCurrentUser()
 
   if (!user) redirect("/login")
-  if (user.role === "tech") redirect("/routes")
   if (user.role === "customer") redirect("/portal")
 
-  // Fetch org name for display
+  // Fetch org name for display (non-tech roles only, still available for tech read-only)
   let orgName = "Your Organization"
 
   try {
@@ -51,59 +54,104 @@ export default async function SettingsPage() {
     console.error("[SettingsPage] Failed to fetch org data:", err)
   }
 
+  const isTech = user.role === "tech"
+
   return (
     <div className="flex flex-col gap-6 max-w-xl">
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Manage your profile and account settings.
+          {isTech
+            ? "Manage your field preferences."
+            : "Manage your profile and account settings."}
         </p>
       </div>
 
-      {/* ── Profile section ──────────────────────────────────────────────── */}
+      {/* ── Maps app preference — visible to ALL roles (FIELD-11) ─────────── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MapPinIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <CardTitle className="text-base">Navigation</CardTitle>
+          </div>
+          <CardDescription>
+            Choose which maps app opens when you tap the navigate button on a stop.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MapsPreferenceSetting />
+        </CardContent>
+      </Card>
+
+      {/* ── Profile section — read-only for tech, editable for owner/office ── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <CardTitle className="text-base">Your Profile</CardTitle>
           </div>
-          <CardDescription>Update your display name.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ProfileForm
-            userId={user.id}
-            initialName={user.full_name || ""}
-            email={user.email}
-          />
-        </CardContent>
-      </Card>
-
-      {/* ── Organization section ─────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <BuildingIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <CardTitle className="text-base">Organization</CardTitle>
-          </div>
           <CardDescription>
-            Your organization&apos;s details. Org settings expand in later phases.
+            {isTech ? "Your account details." : "Update your display name."}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">{orgName}</p>
-                <p className="text-xs text-muted-foreground">Organization name</p>
+          {isTech ? (
+            /* Tech: read-only profile view */
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <p className="text-sm font-medium">{user.full_name || "—"}</p>
+                  <p className="text-xs text-muted-foreground">Display name</p>
+                </div>
               </div>
-              <Badge variant="outline" className="capitalize">
-                {user.role}
-              </Badge>
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <p className="text-sm font-medium">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">Email</p>
+                </div>
+                <Badge variant="outline" className="capitalize">
+                  {user.role}
+                </Badge>
+              </div>
             </div>
-          </div>
+          ) : (
+            <ProfileForm
+              userId={user.id}
+              initialName={user.full_name || ""}
+              email={user.email}
+            />
+          )}
         </CardContent>
       </Card>
+
+      {/* ── Organization section — owner/office only ───────────────────────── */}
+      {!isTech && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BuildingIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Organization</CardTitle>
+            </div>
+            <CardDescription>
+              Your organization&apos;s details. Org settings expand in later phases.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{orgName}</p>
+                  <p className="text-xs text-muted-foreground">Organization name</p>
+                </div>
+                <Badge variant="outline" className="capitalize">
+                  {user.role}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Sign out ─────────────────────────────────────────────────────── */}
       <Card>
@@ -122,7 +170,7 @@ export default async function SettingsPage() {
               type="submit"
               variant="outline"
               size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30 cursor-pointer"
             >
               <LogOutIcon className="h-4 w-4" aria-hidden="true" />
               Sign out

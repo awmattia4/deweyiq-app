@@ -121,13 +121,20 @@ const CHEMISTRY_PARAMS: ChemParam[] = [
 // Cell border + badge colors based on range classification
 // ---------------------------------------------------------------------------
 
+// High-contrast cell styles for outdoor visibility (FIELD-11)
+// Bright, saturated colors — distinguishable in direct sunlight.
+// LOW = amber/orange (needs adjustment down), HIGH = red (needs adjustment up)
 function getCellStyles(status: "low" | "ok" | "high") {
   switch (status) {
     case "low":
+      return {
+        inputClass: "border-amber-500 bg-amber-950/30 focus-visible:ring-amber-500/60 text-amber-200 font-semibold",
+        badgeClass: "bg-amber-500/25 text-amber-300 border border-amber-500/50 font-bold",
+      }
     case "high":
       return {
-        inputClass: "border-red-500/70 bg-red-950/20 focus-visible:ring-red-500/50",
-        badgeClass: "bg-red-500/15 text-red-400 border border-red-500/20",
+        inputClass: "border-red-500 bg-red-950/30 focus-visible:ring-red-500/60 text-red-200 font-semibold",
+        badgeClass: "bg-red-500/25 text-red-300 border border-red-500/50 font-bold",
       }
     default:
       return {
@@ -239,7 +246,7 @@ export function ChemistryGrid({
           return (
             <div
               key={param.dataKey}
-              className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-4 py-2.5"
+              className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-4 py-2 min-h-[44px]"
             >
               {/* Parameter name + unit */}
               <div className="flex flex-col gap-0.5 min-w-0">

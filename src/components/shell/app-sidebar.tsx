@@ -96,6 +96,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 // Tech-only nav (minimal — just their work)
+// Phase 3: Settings added for tech so they can set maps preference (FIELD-11)
 const TECH_NAV_ITEMS: NavItem[] = [
   {
     label: "My Routes",
@@ -104,9 +105,9 @@ const TECH_NAV_ITEMS: NavItem[] = [
     roles: ["tech"],
   },
   {
-    label: "Profile",
-    href: "/profile",
-    icon: UserCircleIcon,
+    label: "Settings",
+    href: "/settings",
+    icon: SettingsIcon,
     roles: ["tech"],
   },
 ]
@@ -274,20 +275,20 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">
-                    <UserCircleIcon className="h-4 w-4" aria-hidden="true" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
                 {user.role !== "tech" && (
                   <DropdownMenuItem asChild>
-                    <Link href="/settings">
-                      <SettingsIcon className="h-4 w-4" aria-hidden="true" />
-                      Settings
+                    <Link href="/profile">
+                      <UserCircleIcon className="h-4 w-4" aria-hidden="true" />
+                      Profile
                     </Link>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <SettingsIcon className="h-4 w-4" aria-hidden="true" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"

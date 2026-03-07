@@ -1,5 +1,7 @@
 "use client"
 
+import type { CSSProperties } from "react"
+import Link from "next/link"
 import { MapPinIcon, GripVerticalIcon, WavesIcon, FlameIcon, SparklesIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { RouteStop } from "@/actions/routes"
@@ -57,11 +59,34 @@ const STATUS_LABEL: Record<RouteStop["stopStatus"], string> = {
   skipped: "Skipped",
 }
 
+// High-contrast OKLCH colors for outdoor sunlight visibility (FIELD-11)
+// Saturated, bright colors — distinguishable in direct sunlight, not muted pastels
 const STATUS_CLASSES: Record<RouteStop["stopStatus"], string> = {
-  upcoming: "bg-muted text-muted-foreground",
-  in_progress: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
-  complete: "bg-green-500/20 text-green-400 border border-green-500/30",
-  skipped: "bg-amber-500/20 text-amber-400 border border-amber-500/30",
+  upcoming: "bg-muted/80 text-muted-foreground border border-border/40",
+  in_progress: "bg-blue-500/20 text-blue-300 border border-blue-400/60 font-semibold",
+  complete: "bg-green-500/20 text-green-300 border border-green-400/60 font-semibold",
+  skipped: "bg-amber-500/20 text-amber-300 border border-amber-400/60 font-semibold",
+}
+
+// High-contrast inline styles for status badges — OKLCH values per FIELD-11 spec
+// Used alongside STATUS_CLASSES for color precision where Tailwind palette falls short
+const STATUS_STYLES: Record<RouteStop["stopStatus"], CSSProperties> = {
+  upcoming: {},
+  in_progress: {
+    backgroundColor: "oklch(0.70 0.17 250 / 0.22)",
+    color: "oklch(0.78 0.15 250)",
+    borderColor: "oklch(0.70 0.17 250 / 0.50)",
+  },
+  complete: {
+    backgroundColor: "oklch(0.75 0.18 142 / 0.22)",
+    color: "oklch(0.82 0.16 142)",
+    borderColor: "oklch(0.75 0.18 142 / 0.50)",
+  },
+  skipped: {
+    backgroundColor: "oklch(0.75 0.15 85 / 0.22)",
+    color: "oklch(0.82 0.14 85)",
+    borderColor: "oklch(0.75 0.15 85 / 0.50)",
+  },
 }
 
 // ─── Pool type icon ───────────────────────────────────────────────────────────
@@ -116,20 +141,24 @@ export function StopCard({
     .filter(Boolean)
     .join(" · ")
 
+  // Build the stop route: /routes/{customerId}-{poolId}
+  const stopHref = `/routes/${stop.customerId}-${stop.poolId}`
+
   return (
     <div
       className={cn(
         "relative flex items-stretch gap-0 rounded-xl border border-border bg-card overflow-hidden",
-        "transition-shadow duration-150",
+        "transition-all duration-200",
         stop.stopStatus === "complete" && "opacity-70",
         className
       )}
     >
       {/* Drag handle — only visible when reordering is active */}
+      {/* 44px minimum touch target via min-w-[44px] min-h-[44px] (FIELD-11) */}
       {showDragHandle && (
         <button
           className={cn(
-            "flex items-center justify-center w-10 shrink-0",
+            "flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0",
             "text-muted-foreground/40 hover:text-muted-foreground/70",
             "touch-none cursor-grab active:cursor-grabbing",
             "transition-colors duration-150",
@@ -143,14 +172,18 @@ export function StopCard({
       )}
 
       {/* Stop number indicator */}
-      <div className="flex items-center justify-center w-10 shrink-0 pl-4">
+      <div className="flex items-center justify-center w-10 shrink-0 pl-4 pointer-events-none">
         <span className="text-xs font-bold text-muted-foreground/60 tabular-nums">
           {stop.stopIndex + 1}
         </span>
       </div>
 
-      {/* Main content — flex-1 */}
-      <div className="flex flex-1 flex-col py-3 pr-3 pl-2 gap-1 min-w-0">
+      {/* Main content — clickable link to stop workflow */}
+      <Link
+        href={stopHref}
+        className="flex flex-1 flex-col py-3 pr-3 pl-2 gap-1 min-w-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50 hover:bg-muted/10 transition-colors duration-150 active:bg-muted/20"
+        aria-label={`Open stop for ${stop.customerName}`}
+      >
         {/* Row 1: Customer name + status badge */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-sm text-foreground truncate flex-1">
@@ -158,9 +191,10 @@ export function StopCard({
           </span>
           <span
             className={cn(
-              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none",
+              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none transition-colors duration-300",
               STATUS_CLASSES[stop.stopStatus]
             )}
+            style={STATUS_STYLES[stop.stopStatus]}
           >
             {STATUS_LABEL[stop.stopStatus]}
           </span>
@@ -191,19 +225,23 @@ export function StopCard({
             </p>
           </div>
         )}
-      </div>
+      </Link>
 
-      {/* Navigate button */}
+      {/* Navigate button — separate from the card link */}
       <div className="flex items-center pr-3 pl-1 shrink-0">
         <button
           type="button"
-          onClick={() => stop.address && openInMaps(stop.address)}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (stop.address) openInMaps(stop.address)
+          }}
           disabled={!stop.address}
           className={cn(
             "flex h-11 w-11 items-center justify-center rounded-lg",
             "bg-primary/10 hover:bg-primary/20 active:bg-primary/30",
             "text-primary transition-colors duration-150",
-            "disabled:opacity-30 disabled:cursor-not-allowed",
+            "disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           )}
           aria-label={`Navigate to ${stop.customerName}`}

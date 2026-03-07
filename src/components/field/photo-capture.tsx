@@ -359,6 +359,7 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
             <p className="text-sm font-medium text-foreground">Tag this photo</p>
             <span className="ml-auto text-xs text-muted-foreground/60">auto-skip in 3s</span>
           </div>
+          {/* Tag buttons: min-h-[44px] for 44px touch target (FIELD-11) */}
           <div className="flex flex-wrap gap-2">
             {(Object.keys(TAG_LABELS) as PhotoTag[]).map((tag) => (
               <button
@@ -366,7 +367,7 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
                 type="button"
                 onClick={() => handleTagSelect(tagPendingId, tag)}
                 className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-medium transition-all cursor-pointer",
+                  "rounded-full border px-4 min-h-[44px] text-sm font-medium transition-all cursor-pointer",
                   "hover:opacity-80 active:scale-95",
                   TAG_COLORS[tag]
                 )}
@@ -377,7 +378,7 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
             <button
               type="button"
               onClick={() => handleTagSelect(tagPendingId, null)}
-              className="rounded-full border border-border/50 bg-muted/30 px-4 py-2 text-sm font-medium text-muted-foreground transition-all cursor-pointer hover:opacity-80 active:scale-95"
+              className="rounded-full border border-border/50 bg-muted/30 px-4 min-h-[44px] text-sm font-medium text-muted-foreground transition-all cursor-pointer hover:opacity-80 active:scale-95"
             >
               Skip
             </button>
@@ -408,7 +409,7 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
                   key={photo.id}
                   type="button"
                   onClick={() => handleViewPhoto(photo)}
-                  className="relative aspect-square rounded-xl overflow-hidden border border-border/40 bg-muted/20 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="relative aspect-square rounded-xl overflow-hidden border border-border/40 bg-muted/20 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring animate-in fade-in-0 duration-200"
                   aria-label={`View photo${photo.tag ? ` tagged ${photo.tag}` : ""}`}
                 >
                   {/* Thumbnail */}

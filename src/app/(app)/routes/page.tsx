@@ -63,7 +63,7 @@ export default async function RoutesPage() {
         {stops.length > 0 && (
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors duration-150"
+            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3 min-h-[44px] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors duration-150 cursor-not-allowed opacity-60"
             title="Map view coming in Phase 4"
             aria-label="Toggle map view (coming soon)"
             disabled
