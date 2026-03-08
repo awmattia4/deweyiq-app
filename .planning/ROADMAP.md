@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Auth, database schema with multi-tenant RLS, and offline PWA shell — every other phase depends on this (completed 2026-03-05)
 - [x] **Phase 2: Customer & Pool Data Model** - Customer CRM, pool profiles, equipment tracking, and service history store (completed 2026-03-06)
-- [ ] **Phase 3: Field Tech App** - The daily-driver mobile app — route view, service logging, chemistry, checklists, photos, offline sync
+- [x] **Phase 3: Field Tech App** - The daily-driver mobile app — route view, service logging, chemistry, checklists, photos, offline sync (completed 2026-03-08)
 - [ ] **Phase 4: Scheduling & Routing** - Route builder, recurring schedules, live route progress, and one-click route optimization
 - [ ] **Phase 5: Office Operations & Dispatch** - Real-time dispatch board, automated service reports, and customer notifications
 - [ ] **Phase 6: Work Orders & Quoting** - Repair work orders, professional quotes, customer approval, and invoice conversion
@@ -95,13 +95,16 @@ Plans:
   2. Office staff can drag and drop stops to reorder a route and the map updates instantly to reflect the new order
   3. Office staff can click "Optimize Route" and the system reorders stops to minimize drive time using rule-based geographic optimization
   4. Office staff can see a live map showing each tech's current position, which stops are complete, and which are upcoming — updating without page refresh
-**Plans**: TBD
+**Plans**: 7 plans
 
 Plans:
-- [ ] 04-01: Route builder — assign stops to techs, drag-and-drop reorder, calendar view
-- [ ] 04-02: Recurring schedules — frequency rules, auto-generation of future stops via pg_cron/Edge Functions
-- [ ] 04-03: Rule-based route optimizer — one-click geographic stop reordering (Mapbox Optimization API)
-- [ ] 04-04: Live dispatch board — Supabase Realtime WebSocket, tech GPS position polling, stop status overlay on Mapbox map
+- [ ] 04-01-PLAN.md — Schema foundation: route_stops, schedule_rules, holidays tables with RLS, geocoding columns on customers, maplibre-gl + react-map-gl install, tech app API migration to route_stops, sidebar activation
+- [ ] 04-02-PLAN.md — Recurring schedules: schedule rule CRUD, holiday calendar management, rolling 4-week Edge Function generator, placeholder pages
+- [ ] 04-03-PLAN.md — Route builder core: split-view layout (stop list + map), tech tabs, day-of-week picker, drag-and-drop reorder, lock-stop toggle, MapLibre route line
+- [ ] 04-04-PLAN.md — Route builder assignment: unassigned customer panel, multi-container DnD (drag to assign), multi-select bulk assign, copy/duplicate route
+- [ ] 04-05-PLAN.md — Live dispatch map: MapLibre map with tech GPS positions (Supabase Realtime Broadcast), stop markers with popup cards, route lines, tech filter
+- [ ] 04-06-PLAN.md — Route optimization: OpenRouteService API integration, locked-stop support, before/after preview with drive time comparison, apply/cancel
+- [ ] 04-07-PLAN.md — Phase 4 end-to-end human verification checkpoint
 
 ### Phase 5: Office Operations & Dispatch
 **Goal**: The office stays in the loop automatically — service reports are sent to customers the moment a stop completes, pre-arrival notifications go out before techs arrive, and the alerts dashboard surfaces problems that need human attention
@@ -112,6 +115,7 @@ Plans:
   2. A customer receives a branded email with a link to their service report within minutes of stop completion, without office staff doing anything manually
   3. Office staff can see an alerts dashboard that surfaces missed stops, overdue invoices, and declining chemical trends — not every reading, only actionable exceptions
   4. The company owner can configure which alert types are enabled and whether they route to email, in-app notification, or SMS per alert category
+  5. The company owner can configure which chemistry readings and checklist tasks are required for techs, and set minimum data thresholds for stop completion
 **Plans**: TBD
 
 Plans:
@@ -119,6 +123,7 @@ Plans:
 - [ ] 05-02: Post-service report delivery — branded email with service report link, React Email template, Resend send
 - [ ] 05-03: Alerts dashboard — missed stop detection, overdue invoice query, chemical trend flag, in-app alert UI
 - [ ] 05-04: Notification configuration — per-company alert settings, channel routing (email/SMS/in-app), per-customer opt-in
+- [ ] 05-05: Company service settings — configurable required chemistry readings per sanitizer type, required checklist tasks, minimum data threshold for stop completion, tech display name editing
 
 ### Phase 6: Work Orders & Quoting
 **Goal**: Office and field staff can create, quote, approve, and dispatch repair jobs — and completed jobs generate invoices automatically
@@ -224,8 +229,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/6 | Complete    | 2026-03-05 |
 | 2. Customer & Pool Data Model | 0/4 | Complete    | 2026-03-06 |
-| 3. Field Tech App | 0/8 | Not started | - |
-| 4. Scheduling & Routing | 0/4 | Not started | - |
+| 3. Field Tech App | 8/8 | Complete    | 2026-03-08 |
+| 4. Scheduling & Routing | 0/7 | Not started | - |
 | 5. Office Operations & Dispatch | 0/4 | Not started | - |
 | 6. Work Orders & Quoting | 0/5 | Not started | - |
 | 7. Billing & Payments | 0/7 | Not started | - |
