@@ -48,6 +48,7 @@ Progress: [█████░░░░░] 57%
 | Phase 03-field-tech-app P07 | 76 | 2 tasks | 10 files |
 | Phase 03-field-tech-app P08 | 4 | 1 tasks | 8 files |
 | Phase 04-scheduling-routing P02 | 10 | 2 tasks | 8 files |
+| Phase 04-scheduling-routing P01 | 12 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,10 @@ Recent decisions affecting current work:
 - [Phase 04-scheduling-routing]: Destructive frequency change on schedule rules: delete future stops + regenerate rather than diff — simpler, predictable, UI warns user
 - [Phase 04-scheduling-routing]: Holiday bidirectional sync: createHoliday marks scheduled stops as holiday; deleteHoliday resets holiday stops back to scheduled
 - [Phase 04-scheduling-routing]: Edge Function uses jsr:@supabase/supabase-js@2 (not esm.sh from plan template) — matches existing send-service-report pattern in project
+- [Phase 04-01]: route_stops UPDATE policy allows tech role — app layer enforces which fields techs can write (not RLS column-level)
+- [Phase 04-01]: fetchStopsForTech exported from routes.ts — shared between server action and API route; eliminates ~80 lines of duplicated query code
+- [Phase 04-01]: Phase 3 fallback in fetchStopsForTech — route_days JSONB path used when no route_stops exist for the day; logs warning to prompt migration
+- [Phase 04-01]: reorderStops overloaded — detects Phase 4 {id, sortIndex} vs Phase 3 {customer_id, pool_id, sort_index} by shape of first item in newOrder array
 
 ### Pending Todos
 
