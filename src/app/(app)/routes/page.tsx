@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/actions/auth"
 import { getTodayStops } from "@/actions/routes"
 import { StopList } from "@/components/field/stop-list"
 import { RouteProgress } from "@/components/field/route-progress"
+import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -90,6 +91,12 @@ export default async function RoutesPage() {
         <p className="text-xs text-muted-foreground text-center pb-2">
           Logged in as {user.full_name || user.email}
         </p>
+      )}
+
+      {/* ── GPS Broadcaster — activates position sharing while on route ──── */}
+      {/* Render-null component; no visual output. Active only for tech role. */}
+      {user.role === "tech" && (
+        <GpsBroadcaster orgId={user.org_id} techId={user.id} />
       )}
     </div>
   )
