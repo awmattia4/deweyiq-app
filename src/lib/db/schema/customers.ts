@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { doublePrecision, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -38,6 +38,9 @@ export const customers = pgTable(
       onDelete: "set null",
     }),
     route_name: text("route_name"),
+    // Geocoding coordinates — set by Phase 4 geocoding when address is saved
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
     // Timestamps
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

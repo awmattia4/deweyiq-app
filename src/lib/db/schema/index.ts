@@ -19,6 +19,11 @@ export * from "./checklists"
 export * from "./visit-photos"
 export * from "./chemical-products"
 
+// Phase 04 tables
+export * from "./route-stops"
+export * from "./schedule-rules"
+export * from "./holidays"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

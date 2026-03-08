@@ -8,6 +8,7 @@ import {
   UsersIcon,
   ContactIcon,
   CalendarIcon,
+  MapPinIcon,
   SettingsIcon,
   UserCircleIcon,
   LogOutIcon,
@@ -89,8 +90,20 @@ const NAV_ITEMS: NavItem[] = [
     icon: SettingsIcon,
     roles: ["owner", "office"],
   },
-  // ── Future phases (Phase 4+) — hidden until ready ─────────────────────────
-  // { label: "Schedule",        href: "/schedule",  icon: CalendarIcon,        roles: ["owner", "office"] },        // Phase 4
+  // ── Available in Phase 4 ───────────────────────────────────────────────────
+  {
+    label: "Schedule",
+    href: "/schedule",
+    icon: CalendarIcon,
+    roles: ["owner", "office"],
+  },
+  {
+    label: "Dispatch",
+    href: "/dispatch",
+    icon: MapPinIcon,
+    roles: ["owner", "office"],
+  },
+  // ── Future phases (Phase 7+) — hidden until ready ─────────────────────────
   // { label: "Billing",         href: "/billing",   icon: CreditCardIcon,      roles: ["owner"] },                  // Phase 7
   // { label: "Reports",         href: "/reports",   icon: BarChartIcon,        roles: ["owner"] },                  // Phase 9
 ]

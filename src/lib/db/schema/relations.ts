@@ -19,6 +19,9 @@ import { routeDays } from "./route-days"
 import { checklistTemplates, checklistTasks } from "./checklists"
 import { visitPhotos } from "./visit-photos"
 import { chemicalProducts } from "./chemical-products"
+import { routeStops } from "./route-stops"
+import { scheduleRules } from "./schedule-rules"
+import { holidays } from "./holidays"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -30,6 +33,8 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   pools: many(pools),
   serviceVisits: many(serviceVisits),
   checklistTasks: many(checklistTasks),
+  routeStops: many(routeStops),
+  scheduleRules: many(scheduleRules),
 }))
 
 export const poolsRelations = relations(pools, ({ one, many }) => ({
@@ -37,6 +42,8 @@ export const poolsRelations = relations(pools, ({ one, many }) => ({
   customer: one(customers, { fields: [pools.customer_id], references: [customers.id] }),
   equipment: many(equipment),
   serviceVisits: many(serviceVisits),
+  routeStops: many(routeStops),
+  scheduleRules: many(scheduleRules),
 }))
 
 export const equipmentRelations = relations(equipment, ({ one }) => ({
@@ -84,4 +91,29 @@ export const visitPhotosRelations = relations(visitPhotos, ({ one }) => ({
 
 export const chemicalProductsRelations = relations(chemicalProducts, ({ one }) => ({
   org: one(orgs, { fields: [chemicalProducts.org_id], references: [orgs.id] }),
+}))
+
+// Phase 4 relations
+
+export const routeStopsRelations = relations(routeStops, ({ one }) => ({
+  org: one(orgs, { fields: [routeStops.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [routeStops.tech_id], references: [profiles.id] }),
+  customer: one(customers, { fields: [routeStops.customer_id], references: [customers.id] }),
+  pool: one(pools, { fields: [routeStops.pool_id], references: [pools.id] }),
+  scheduleRule: one(scheduleRules, {
+    fields: [routeStops.schedule_rule_id],
+    references: [scheduleRules.id],
+  }),
+}))
+
+export const scheduleRulesRelations = relations(scheduleRules, ({ one, many }) => ({
+  org: one(orgs, { fields: [scheduleRules.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [scheduleRules.customer_id], references: [customers.id] }),
+  pool: one(pools, { fields: [scheduleRules.pool_id], references: [pools.id] }),
+  tech: one(profiles, { fields: [scheduleRules.tech_id], references: [profiles.id] }),
+  routeStops: many(routeStops),
+}))
+
+export const holidaysRelations = relations(holidays, ({ one }) => ({
+  org: one(orgs, { fields: [holidays.org_id], references: [orgs.id] }),
 }))
