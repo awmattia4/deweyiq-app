@@ -896,6 +896,277 @@ export async function removeStopFromRoute(
 }
 
 /**
+ * toggleStopLock — update position_locked on a route_stop.
+ *
+ * Owner/office only. Locked stops are excluded from optimizer.
+ */
+export async function toggleStopLock(
+  routeStopId: string,
+  locked: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(routeStops)
+        .set({ position_locked: locked, updated_at: new Date() })
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("[toggleStopLock] Error:", error)
+    return { success: false, error: "Failed to update stop lock" }
+  }
+}
+
+// ─── Types for unassigned panel ───────────────────────────────────────────────
+
+export interface UnassignedCustomer {
+  id: string
+  name: string
+  address: string | null
+  poolCount: number
+  pools: Array<{ id: string; name: string }>
+}
+
+/**
+ * getUnassignedCustomers — fetch customers without a route_stop for tech+date.
+ *
+ * Uses LEFT JOIN approach per RLS pitfall (no correlated subqueries on RLS tables).
+ * Fetches all org customers, fetches assigned customer_ids for tech+date, filters in JS.
+ * Returns customers with their pool count and pool list.
+ * Owner/office only.
+ */
+export async function getUnassignedCustomers(
+  techId: string,
+  date: string
+): Promise<UnassignedCustomer[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return []
+  if (userRole !== "owner" && userRole !== "office") return []
+
+  try {
+    return await withRls(token, async (db) => {
+      // Fetch all active org customers
+      const allCustomers = await db
+        .select({ id: customers.id, full_name: customers.full_name, address: customers.address })
+        .from(customers)
+        .where(and(eq(customers.org_id, orgId), eq(customers.status, "active")))
+
+      if (allCustomers.length === 0) return []
+
+      // Fetch customer_ids already assigned to this tech+date (LEFT JOIN avoids RLS correlated subquery pitfall)
+      const assignedStops = await db
+        .select({ customer_id: routeStops.customer_id })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, techId),
+            eq(routeStops.scheduled_date, date)
+          )
+        )
+
+      const assignedCustomerIds = new Set(assignedStops.map((s) => s.customer_id))
+
+      // Filter out assigned customers
+      const unassignedCustomers = allCustomers.filter((c) => !assignedCustomerIds.has(c.id))
+      if (unassignedCustomers.length === 0) return []
+
+      const unassignedIds = unassignedCustomers.map((c) => c.id)
+
+      // Fetch pools for unassigned customers
+      const allPools = await db
+        .select({ id: pools.id, name: pools.name, customer_id: pools.customer_id })
+        .from(pools)
+        .where(and(eq(pools.org_id, orgId), inArray(pools.customer_id, unassignedIds)))
+
+      // Group pools by customer_id
+      const poolsByCustomer = new Map<string, Array<{ id: string; name: string }>>()
+      for (const pool of allPools) {
+        const existing = poolsByCustomer.get(pool.customer_id) ?? []
+        existing.push({ id: pool.id, name: pool.name })
+        poolsByCustomer.set(pool.customer_id, existing)
+      }
+
+      return unassignedCustomers.map((c) => ({
+        id: c.id,
+        name: c.full_name,
+        address: c.address,
+        pools: poolsByCustomer.get(c.id) ?? [],
+        poolCount: poolsByCustomer.get(c.id)?.length ?? 0,
+      }))
+    })
+  } catch (error) {
+    console.error("[getUnassignedCustomers] Error:", error)
+    return []
+  }
+}
+
+/**
+ * bulkAssignStops — create route_stop rows for multiple customer/pool pairs.
+ *
+ * Assigns sort_index starting after the last existing stop's sort_index.
+ * Idempotent via onConflictDoNothing.
+ * Owner/office only.
+ */
+export async function bulkAssignStops(
+  customerPoolPairs: Array<{ customerId: string; poolId: string }>,
+  techId: string,
+  date: string
+): Promise<{ success: boolean; count: number; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, count: 0, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, count: 0, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, count: 0, error: "Insufficient permissions" }
+  }
+
+  if (customerPoolPairs.length === 0) return { success: true, count: 0 }
+
+  try {
+    let insertedCount = 0
+
+    await withRls(token, async (db) => {
+      // Find the current max sort_index for tech+date
+      const existingStops = await db
+        .select({ sort_index: routeStops.sort_index })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, techId),
+            eq(routeStops.scheduled_date, date)
+          )
+        )
+
+      const maxSortIndex = existingStops.length > 0
+        ? Math.max(...existingStops.map((s) => s.sort_index))
+        : 0
+
+      // Insert each pair, incrementing sort_index
+      for (let i = 0; i < customerPoolPairs.length; i++) {
+        const pair = customerPoolPairs[i]
+        const result = await db
+          .insert(routeStops)
+          .values({
+            org_id: orgId,
+            customer_id: pair.customerId,
+            pool_id: pair.poolId || null,
+            tech_id: techId,
+            scheduled_date: date,
+            sort_index: maxSortIndex + i + 1,
+            status: "scheduled",
+          })
+          .onConflictDoNothing()
+          .returning({ id: routeStops.id })
+
+        if (result.length > 0) insertedCount++
+      }
+    })
+
+    revalidatePath("/schedule")
+    return { success: true, count: insertedCount }
+  } catch (error) {
+    console.error("[bulkAssignStops] Error:", error)
+    return { success: false, count: 0, error: "Failed to assign stops" }
+  }
+}
+
+/**
+ * copyRoute — copy all route_stops from one tech+date to another.
+ *
+ * Copies sort_index, position_locked, window_start, window_end.
+ * Uses onConflictDoNothing to skip already-assigned customers.
+ * Owner/office only.
+ */
+export async function copyRoute(
+  sourceTechId: string,
+  sourceDate: string,
+  targetTechId: string,
+  targetDate: string
+): Promise<{ success: boolean; count: number; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, count: 0, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, count: 0, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, count: 0, error: "Insufficient permissions" }
+  }
+
+  try {
+    let copiedCount = 0
+
+    await withRls(token, async (db) => {
+      // Fetch all stops for source tech+date
+      const sourceStops = await db
+        .select()
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, sourceTechId),
+            eq(routeStops.scheduled_date, sourceDate)
+          )
+        )
+
+      if (sourceStops.length === 0) return
+
+      // Insert stops for target tech+date (skip duplicates)
+      for (const stop of sourceStops) {
+        const result = await db
+          .insert(routeStops)
+          .values({
+            org_id: orgId,
+            customer_id: stop.customer_id,
+            pool_id: stop.pool_id,
+            tech_id: targetTechId,
+            scheduled_date: targetDate,
+            sort_index: stop.sort_index,
+            position_locked: stop.position_locked,
+            window_start: stop.window_start,
+            window_end: stop.window_end,
+            status: "scheduled",
+          })
+          .onConflictDoNothing()
+          .returning({ id: routeStops.id })
+
+        if (result.length > 0) copiedCount++
+      }
+    })
+
+    revalidatePath("/schedule")
+    return { success: true, count: copiedCount }
+  } catch (error) {
+    console.error("[copyRoute] Error:", error)
+    return { success: false, count: 0, error: "Failed to copy route" }
+  }
+}
+
+/**
  * migrateRouteDaysToRouteStops — one-time migration from route_days JSONB to route_stops.
  *
  * Owner/office only. Reads all route_days for the org and creates route_stops rows.
