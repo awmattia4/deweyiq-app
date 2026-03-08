@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 3 — Field Tech App (Phase 2 complete)
+**Current focus:** Phase 4 — Scheduling & Routing (Phase 3 complete)
 
 ## Current Position
 
-Phase: 3 of 10 (Field Tech App) — COMPLETE
-Plan: 8/8 complete (03-01 schema + 03-02 chemistry + 03-03 route view + 03-04 stop workflow + 03-05 tasks + 03-06 photos/notes + 03-07 stop completion + 03-08 UX polish)
-Status: Complete — human-verified 2026-03-08; all 7 bug fixes applied during verification testing
-Last activity: 2026-03-08 — Phase 3 complete, human verification approved
+Phase: 4 of 10 (Scheduling & Routing) — IN PROGRESS
+Plan: 2/7 complete (04-01 schema foundation + 04-02 schedule rules/holidays/Edge Function)
+Status: In progress — 04-02 complete 2026-03-08; recurring schedule system with stop generation built
+Last activity: 2026-03-08 — Phase 4 plan 02 complete
 
-Progress: [█████░░░░░] 55%
+Progress: [█████░░░░░] 57%
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [█████░░░░░] 55%
 | Phase 03-field-tech-app P06 | 15 | 2 tasks | 7 files |
 | Phase 03-field-tech-app P07 | 76 | 2 tasks | 10 files |
 | Phase 03-field-tech-app P08 | 4 | 1 tasks | 8 files |
+| Phase 04-scheduling-routing P02 | 10 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,10 @@ Recent decisions affecting current work:
 - [Phase 03-08 BUG FIX]: stopStatus always "upcoming" after completing a stop — `fetchStopsForTech` in routes.ts and API route hardcoded `stopStatus: "upcoming"`; fix: added `todayVisitStatusMap` that cross-references `service_visits` for today's date and maps their status per pool_id
 - [Phase 03-08 BUG FIX]: pH decimal input eaten — `parseFloat("7.")` returns `7`; typing "7." immediately flushed as 7 to Dexie, losing the decimal; fix: created `ChemInput` component with local `useState<string>` state, only flushes complete numbers (not ending in "." or "-") to Dexie, with blur handler as safety net
 - [Phase 03-08 KNOWN]: SidebarProvider hydration mismatch — pre-existing shadcn sidebar issue; server renders defaultOpen=true but client cookie state may differ; recoverable error, does not break functionality
+- [Phase 04-scheduling-routing]: generateDatesForRule fast-forward from anchor using modular arithmetic — avoids day-by-day iteration for efficiency with distant anchors
+- [Phase 04-scheduling-routing]: Destructive frequency change on schedule rules: delete future stops + regenerate rather than diff — simpler, predictable, UI warns user
+- [Phase 04-scheduling-routing]: Holiday bidirectional sync: createHoliday marks scheduled stops as holiday; deleteHoliday resets holiday stops back to scheduled
+- [Phase 04-scheduling-routing]: Edge Function uses jsr:@supabase/supabase-js@2 (not esm.sh from plan template) — matches existing send-service-report pattern in project
 
 ### Pending Todos
 
@@ -151,5 +156,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Phase 3 complete — ready to begin Phase 4 (Scheduling & Routing)
+Stopped at: Completed 04-02-PLAN.md — recurring schedule system with Edge Function and placeholder /schedule + /dispatch pages
+Resume file: N/A — start Phase 4 plan 03 (route builder)
 Resume file: N/A — start Phase 4 planning
