@@ -1,19 +1,30 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
+import dynamic from "next/dynamic"
 import { getCurrentUser } from "@/actions/auth"
-import { MapPinIcon } from "lucide-react"
+import { getDispatchData } from "@/actions/dispatch"
+import { DispatchClientShell } from "./dispatch-client-shell"
 
 export const metadata: Metadata = {
   title: "Dispatch",
 }
 
 /**
- * DispatchPage — placeholder for the live dispatch map.
+ * DispatchPage — live dispatch map for office and owner.
  *
- * Phase 4 plan 02: Shows a placeholder div for the map.
- * Phase 4 plan 05 builds the real MapLibre-based dispatch map.
+ * Server component that:
+ * - Guards access: tech → /routes, customer → /portal
+ * - Fetches initial dispatch data (all techs + today's stops) server-side
+ * - Passes data to DispatchClientShell (client component with TechFilter state)
+ * - DispatchMap is loaded via dynamic() with ssr: false (MapLibre needs window)
  *
- * Role guard: owner and office only. Techs are redirected to /routes.
+ * Phase 4 Plan 05: Full MapLibre dispatch map with:
+ * - Live tech positions via Supabase Realtime Broadcast
+ * - Route lines per tech through remaining stops
+ * - Numbered stop markers (colored by tech)
+ * - Completed stops grayed out
+ * - Clickable stop markers → popup card
+ * - Tech filter toggle (all-techs / single-tech)
  */
 export default async function DispatchPage() {
   const user = await getCurrentUser()
@@ -22,29 +33,14 @@ export default async function DispatchPage() {
   if (user.role === "tech") redirect("/routes")
   if (user.role === "customer") redirect("/portal")
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dispatch Map</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Live tech locations and real-time route progress
-        </p>
-      </div>
+  const dispatchData = await getDispatchData()
 
-      {/* ── Map placeholder ───────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-dashed border-border bg-muted/10 flex flex-col items-center justify-center gap-4 min-h-[480px]">
-        <div className="rounded-full bg-muted/30 p-4">
-          <MapPinIcon className="h-10 w-10 text-muted-foreground/40" />
-        </div>
-        <div className="text-center max-w-sm px-4">
-          <p className="text-sm font-medium">Live dispatch map coming soon</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Phase 4 plan 05 will build the full MapLibre dispatch map with live tech
-            tracking, route overlays, and one-click stop reassignment.
-          </p>
-        </div>
-      </div>
+  return (
+    <div className="flex flex-col" style={{ height: "calc(100dvh - 4rem)" }}>
+      <DispatchClientShell
+        initialData={dispatchData}
+        orgId={user.org_id}
+      />
     </div>
   )
 }
