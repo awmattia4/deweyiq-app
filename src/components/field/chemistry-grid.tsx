@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { classifyReading } from "@/lib/chemistry/targets"
 import type { SanitizerType, TargetRanges } from "@/lib/chemistry/targets"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ interface ChemistryGridProps {
   previousChemistry: Record<string, number | null>
   sanitizerType: SanitizerType
   onUpdate: (param: string, value: number | null) => Promise<void>
+  readOnly?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +165,99 @@ function getExtendedStatus(
 }
 
 // ---------------------------------------------------------------------------
+// ChemInput — local string state so intermediate values like "7." are preserved
+// ---------------------------------------------------------------------------
+
+function ChemInput({
+  dataKey,
+  value,
+  placeholder,
+  inputClass,
+  onUpdate,
+  label,
+  unit,
+  readOnly = false,
+}: {
+  dataKey: string
+  value: number | null | undefined
+  placeholder: string
+  inputClass: string
+  onUpdate: (param: string, value: number | null) => Promise<void>
+  label: string
+  unit: string
+  readOnly?: boolean
+}) {
+  const [localValue, setLocalValue] = useState(
+    value !== null && value !== undefined ? String(value) : ""
+  )
+
+  // Sync from parent when Dexie value changes externally
+  useEffect(() => {
+    const externalStr = value !== null && value !== undefined ? String(value) : ""
+    // Only sync if the parsed values differ (don't clobber "7." with "7")
+    const localParsed = localValue === "" ? null : parseFloat(localValue)
+    const externalParsed = value ?? null
+    if (localParsed !== externalParsed && !(localParsed !== null && isNaN(localParsed))) {
+      setLocalValue(externalStr)
+    }
+  }, [value])
+
+  const flush = useCallback((raw: string) => {
+    if (raw === "" || raw === "-") {
+      onUpdate(dataKey, null)
+      return
+    }
+    const parsed = parseFloat(raw)
+    if (!isNaN(parsed)) {
+      onUpdate(dataKey, parsed)
+    }
+  }, [dataKey, onUpdate])
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value
+    // Allow empty, digits, one decimal point, and leading minus
+    if (raw !== "" && !/^-?\d*\.?\d*$/.test(raw)) return
+    setLocalValue(raw)
+    // Flush to Dexie immediately if the value is a complete number (not ending in "." or "-")
+    if (raw === "" || raw === "-") {
+      onUpdate(dataKey, null)
+    } else if (!raw.endsWith(".")) {
+      const parsed = parseFloat(raw)
+      if (!isNaN(parsed)) {
+        onUpdate(dataKey, parsed)
+      }
+    }
+  }
+
+  const handleBlur = () => {
+    flush(localValue)
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      pattern="[0-9]*\.?[0-9]*"
+      className={cn(
+        "flex h-11 w-full rounded-lg border px-3 py-2 text-sm ring-offset-background",
+        "placeholder:text-muted-foreground/50",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+        "transition-colors",
+        inputClass,
+        readOnly && "opacity-70 cursor-default"
+      )}
+      placeholder={placeholder}
+      value={localValue}
+      onChange={readOnly ? undefined : handleChange}
+      onBlur={readOnly ? undefined : handleBlur}
+      readOnly={readOnly}
+      tabIndex={readOnly ? -1 : undefined}
+      aria-label={`${label}${unit ? ` (${unit})` : ""}`}
+    />
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -182,19 +276,8 @@ export function ChemistryGrid({
   previousChemistry,
   sanitizerType,
   onUpdate,
+  readOnly = false,
 }: ChemistryGridProps) {
-  // Track input element refs for focus management (per locked pattern — not react-hook-form)
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-
-  const handleChange = async (dataKey: string, raw: string) => {
-    if (raw === "" || raw === "-") {
-      await onUpdate(dataKey, null)
-      return
-    }
-    const parsed = parseFloat(raw)
-    if (isNaN(parsed)) return
-    await onUpdate(dataKey, parsed)
-  }
 
   return (
     <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
@@ -238,11 +321,6 @@ export function ChemistryGrid({
 
           const { inputClass, badgeClass } = getCellStyles(rangeStatus)
 
-          const displayValue =
-            currentValue !== null && currentValue !== undefined
-              ? String(currentValue)
-              : ""
-
           return (
             <div
               key={param.dataKey}
@@ -276,24 +354,15 @@ export function ChemistryGrid({
                     {rangeStatus === "low" ? "LOW" : "HIGH"}
                   </span>
                 )}
-                <input
-                  ref={(el) => {
-                    inputRefs.current[param.dataKey] = el
-                  }}
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*\.?[0-9]*"
-                  className={cn(
-                    "flex h-11 w-full rounded-lg border px-3 py-2 text-sm ring-offset-background",
-                    "placeholder:text-muted-foreground/50",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                    "transition-colors",
-                    inputClass
-                  )}
+                <ChemInput
+                  dataKey={param.dataKey}
+                  value={currentValue}
                   placeholder={param.placeholder}
-                  value={displayValue}
-                  onChange={(e) => handleChange(param.dataKey, e.target.value)}
-                  aria-label={`${param.label}${param.unit ? ` (${param.unit})` : ""}`}
+                  inputClass={inputClass}
+                  onUpdate={onUpdate}
+                  label={param.label}
+                  unit={param.unit}
+                  readOnly={readOnly}
                 />
               </div>
 

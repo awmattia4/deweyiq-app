@@ -20,6 +20,8 @@ interface ChecklistProps {
   tasks: ChecklistTask[]
   draft: VisitDraft
   onUpdate: (taskId: string, completed: boolean, notes: string) => Promise<void>
+  onMarkAllComplete: (taskIds: string[]) => Promise<void>
+  readOnly?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -32,9 +34,10 @@ interface TaskRowProps {
   notes: string
   onToggle: (completed: boolean) => void
   onNotesChange: (notes: string) => void
+  readOnly?: boolean
 }
 
-function TaskRow({ task, completed, notes, onToggle, onNotesChange }: TaskRowProps) {
+function TaskRow({ task, completed, notes, onToggle, onNotesChange, readOnly = false }: TaskRowProps) {
   const [notesOpen, setNotesOpen] = useState(!!notes)
 
   const handleToggle = (checked: boolean | "indeterminate") => {
@@ -63,9 +66,10 @@ function TaskRow({ task, completed, notes, onToggle, onNotesChange }: TaskRowPro
         <div className="flex items-center justify-center w-11 h-11 -ml-2 shrink-0">
           <Checkbox
             checked={completed}
-            onCheckedChange={handleToggle}
+            onCheckedChange={readOnly ? undefined : handleToggle}
+            disabled={readOnly}
             aria-label={`Mark "${task.label}" as complete`}
-            className="size-6 rounded-md cursor-pointer"
+            className={cn("size-6 rounded-md", readOnly ? "cursor-default opacity-70" : "cursor-pointer")}
           />
         </div>
 
@@ -87,7 +91,7 @@ function TaskRow({ task, completed, notes, onToggle, onNotesChange }: TaskRowPro
         </span>
 
         {/* "Add note" trigger — appears when task is checked, collapses when open */}
-        {completed && !notesOpen && (
+        {completed && !notesOpen && !readOnly && (
           <button
             type="button"
             onClick={() => setNotesOpen(true)}
@@ -109,11 +113,13 @@ function TaskRow({ task, completed, notes, onToggle, onNotesChange }: TaskRowPro
               "px-3 py-2.5 text-sm placeholder:text-muted-foreground/40",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
               "resize-none transition-colors",
-              "text-foreground"
+              "text-foreground",
+              readOnly && "opacity-70 cursor-default"
             )}
             placeholder="Add notes about this task..."
             value={notes}
-            onChange={handleNotesChange}
+            onChange={readOnly ? undefined : handleNotesChange}
+            readOnly={readOnly}
             rows={2}
             aria-label={`Notes for ${task.label}`}
           />
@@ -149,7 +155,7 @@ function TaskRow({ task, completed, notes, onToggle, onNotesChange }: TaskRowPro
  * - Draft entries for known taskIds take priority over defaults
  * - Template tasks not in the draft are initialized as unchecked
  */
-export function Checklist({ tasks, draft, onUpdate }: ChecklistProps) {
+export function Checklist({ tasks, draft, onUpdate, onMarkAllComplete, readOnly = false }: ChecklistProps) {
   // Build a lookup of current checklist state from draft
   const getDraftState = (taskId: string): { completed: boolean; notes: string } => {
     const stored = draft.checklist.find((t) => t.taskId === taskId)
@@ -162,17 +168,8 @@ export function Checklist({ tasks, draft, onUpdate }: ChecklistProps) {
 
   const handleMarkAllComplete = async () => {
     if (allCompleted) return
-    // Fire all updates concurrently — each writes to Dexie immediately
-    await Promise.all(
-      tasks.map((task) => {
-        const current = getDraftState(task.taskId)
-        // Only update tasks that aren't already completed
-        if (!current.completed) {
-          return onUpdate(task.taskId, true, current.notes)
-        }
-        return Promise.resolve()
-      })
-    )
+    // Single bulk write — avoids race condition from concurrent individual updates
+    await onMarkAllComplete(tasks.map((t) => t.taskId))
   }
 
   // ── Empty state ──
@@ -195,21 +192,23 @@ export function Checklist({ tasks, draft, onUpdate }: ChecklistProps) {
   return (
     <div className="flex flex-col gap-3">
       {/* ── Mark All Complete button ── */}
-      <Button
-        type="button"
-        onClick={handleMarkAllComplete}
-        disabled={allCompleted}
-        className={cn(
-          "w-full h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
-          allCompleted
-            ? "bg-green-600/20 text-green-400 border border-green-600/30 cursor-default"
-            : "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
-        )}
-        aria-label={allCompleted ? "All tasks are complete" : "Mark all tasks as complete"}
-      >
-        <CheckSquare2Icon className="h-5 w-5 mr-2" />
-        {allCompleted ? "All Tasks Complete" : "Mark All Complete"}
-      </Button>
+      {!readOnly && (
+        <Button
+          type="button"
+          onClick={handleMarkAllComplete}
+          disabled={allCompleted}
+          className={cn(
+            "w-full h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
+            allCompleted
+              ? "bg-green-600/20 text-green-400 border border-green-600/30 cursor-default"
+              : "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
+          )}
+          aria-label={allCompleted ? "All tasks are complete" : "Mark all tasks as complete"}
+        >
+          <CheckSquare2Icon className="h-5 w-5 mr-2" />
+          {allCompleted ? "All Tasks Complete" : "Mark All Complete"}
+        </Button>
+      )}
 
       {/* ── Task list ── */}
       <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
@@ -235,6 +234,7 @@ export function Checklist({ tasks, draft, onUpdate }: ChecklistProps) {
                 notes={state.notes}
                 onToggle={(completed) => onUpdate(task.taskId, completed, state.notes)}
                 onNotesChange={(notes) => onUpdate(task.taskId, state.completed, notes)}
+                readOnly={readOnly}
               />
             )
           })}

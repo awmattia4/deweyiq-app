@@ -123,12 +123,21 @@ async function fetchStopsForTech(
       .orderBy(desc(serviceVisits.visited_at))
 
     const lastVisitMap = new Map<string, { visited_at: Date; status: string | null }>()
+    // Also track today's visit status per pool for stopStatus
+    const todayVisitStatusMap = new Map<string, string>()
     for (const visit of recentVisits) {
       if (visit.pool_id && !lastVisitMap.has(visit.pool_id)) {
         lastVisitMap.set(visit.pool_id, {
           visited_at: visit.visited_at,
           status: visit.status,
         })
+      }
+      // Check if this visit is from today
+      if (visit.pool_id && !todayVisitStatusMap.has(visit.pool_id)) {
+        const visitDate = visit.visited_at.toISOString().split("T")[0]
+        if (visitDate === date && visit.status) {
+          todayVisitStatusMap.set(visit.pool_id, visit.status)
+        }
       }
     }
 
@@ -156,7 +165,7 @@ async function fetchStopsForTech(
           accessNotes: customer?.access_notes ?? null,
           customerNotes: pool?.notes ?? null,
           lastServiceDate: lastVisit?.visited_at?.toISOString() ?? null,
-          stopStatus: "upcoming",
+          stopStatus: (todayVisitStatusMap.get(stop.pool_id) as RouteStop["stopStatus"]) ?? "upcoming",
         }
       })
   })

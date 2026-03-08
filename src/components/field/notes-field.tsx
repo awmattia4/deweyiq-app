@@ -11,6 +11,7 @@ import type { VisitDraft } from "@/lib/offline/db"
 interface NotesFieldProps {
   draft: VisitDraft
   onUpdate: (notes: string) => void
+  readOnly?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ interface NotesFieldProps {
  * - Keyboard dictation hint below textarea guides techs to system feature
  * - Works fully offline — all persistence is Dexie-only
  */
-export function NotesField({ draft, onUpdate }: NotesFieldProps) {
+export function NotesField({ draft, onUpdate, readOnly = false }: NotesFieldProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const localValueRef = useRef<string>(draft.notes ?? "")
 
@@ -83,7 +84,8 @@ export function NotesField({ draft, onUpdate }: NotesFieldProps) {
           inputMode="text"
           rows={6}
           defaultValue={draft.notes ?? ""}
-          onChange={handleChange}
+          onChange={readOnly ? undefined : handleChange}
+          readOnly={readOnly}
           placeholder="Tap to add notes... Use your keyboard's microphone key for voice input"
           className={[
             "w-full rounded-xl border border-input bg-card/60",
@@ -93,6 +95,7 @@ export function NotesField({ draft, onUpdate }: NotesFieldProps) {
             "resize-none",
             "min-h-[160px]",
             "transition-colors",
+            readOnly ? "opacity-70 cursor-default" : "",
           ].join(" ")}
           aria-label="Visit notes"
           aria-describedby="notes-dictation-hint"
@@ -110,16 +113,18 @@ export function NotesField({ draft, onUpdate }: NotesFieldProps) {
       </div>
 
       {/* ── Keyboard dictation hint ─────────────────────────────────────────── */}
-      <div
-        id="notes-dictation-hint"
-        className="flex items-start gap-2.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3"
-      >
-        <MicIcon className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-0.5" />
-        <p className="text-xs text-muted-foreground/70 leading-relaxed">
-          <span className="font-medium text-muted-foreground">Tip:</span> Tap the microphone
-          icon on your keyboard for voice-to-text. Works hands-free even with wet gloves.
-        </p>
-      </div>
+      {!readOnly && (
+        <div
+          id="notes-dictation-hint"
+          className="flex items-start gap-2.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3"
+        >
+          <MicIcon className="h-4 w-4 text-muted-foreground/60 shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground/70 leading-relaxed">
+            <span className="font-medium text-muted-foreground">Tip:</span> Tap the microphone
+            icon on your keyboard for voice-to-text. Works hands-free even with wet gloves.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

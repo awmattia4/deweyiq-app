@@ -136,12 +136,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
       // Build a map of pool_id -> most recent visit (first entry per pool due to desc sort)
       const lastVisitMap = new Map<string, { visited_at: Date; status: string | null }>()
+      // Track today's visit status per pool for stopStatus
+      const todayVisitStatusMap = new Map<string, string>()
       for (const visit of recentVisits) {
         if (visit.pool_id && !lastVisitMap.has(visit.pool_id)) {
           lastVisitMap.set(visit.pool_id, {
             visited_at: visit.visited_at,
             status: visit.status,
           })
+        }
+        if (visit.pool_id && !todayVisitStatusMap.has(visit.pool_id)) {
+          const visitDate = visit.visited_at.toISOString().split("T")[0]
+          if (visitDate === today && visit.status) {
+            todayVisitStatusMap.set(visit.pool_id, visit.status)
+          }
         }
       }
 
@@ -169,7 +177,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
             accessNotes: customer?.access_notes ?? null,
             customerNotes: pool?.notes ?? null,
             lastServiceDate: lastVisit?.visited_at?.toISOString() ?? null,
-            stopStatus: "upcoming" as const,
+            stopStatus: (todayVisitStatusMap.get(stop.pool_id) as RouteStop["stopStatus"]) ?? "upcoming",
           }
         })
 

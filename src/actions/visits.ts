@@ -319,7 +319,15 @@ export async function completeStop(
       includePhotos: false, // Phase 4: per-customer preference
     })
 
-    // ── 5. Insert the service visit record via withRls ───────────────────────
+    // ── 5. Check if this visit already exists (edit vs first completion) ─────
+    const existingVisit = await adminDb
+      .select({ id: serviceVisits.id })
+      .from(serviceVisits)
+      .where(eq(serviceVisits.id, input.visitId))
+      .limit(1)
+    const isUpdate = existingVisit.length > 0
+
+    // ── 6. Insert or update the service visit record via withRls ─────────────
     await withRls(token, async (db) => {
       await db
         .insert(serviceVisits)
@@ -359,11 +367,10 @@ export async function completeStop(
         })
     })
 
-    // ── 6. Best-effort: send email report via Edge Function ─────────────────
-    // Only send if customer has an email address.
+    // ── 7. Best-effort: send email report via Edge Function ─────────────────
+    // Only send on first completion — edits update the record silently.
     // email_reports preference field: Phase 4 adds per-customer toggle.
-    // For now: send to any customer with an email address (best-effort only).
-    if (customerEmail) {
+    if (customerEmail && !isUpdate) {
       try {
         const supabase = await createClient()
         await supabase.functions.invoke("send-service-report", {

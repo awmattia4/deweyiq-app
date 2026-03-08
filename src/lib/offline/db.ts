@@ -34,7 +34,7 @@ export interface VisitDraft {
   chemistry: Record<string, number | null>  // all reading values keyed by param name
   checklist: Array<{ taskId: string; completed: boolean; notes: string }>
   notes: string
-  status: "draft" | "completed"
+  status: "draft" | "completed" | "editing"
   updatedAt: number             // Date.now()
 }
 

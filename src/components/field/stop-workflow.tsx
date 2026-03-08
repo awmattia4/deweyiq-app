@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback } from "react"
+import { useMemo, useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -10,9 +10,18 @@ import {
   ClipboardListIcon,
   CameraIcon,
   FileTextIcon,
+  PencilIcon,
   SkipForwardIcon,
+  AlertTriangleIcon,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { ChemistryGrid } from "@/components/field/chemistry-grid"
 import { ChemistryDosing } from "@/components/field/chemistry-dosing"
@@ -56,7 +65,7 @@ interface StopWorkflowProps {
 export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
   const router = useRouter()
 
-  const { draft, updateChemistry, updateChecklist, updateNotes, completeDraft } =
+  const { draft, isCompleted, updateChemistry, updateChecklist, markAllChecklistComplete, updateNotes, completeDraft, reopenDraft } =
     useVisitDraft(stopId, context.customerId, context.poolId, visitId)
 
   // ── Modal state ──────────────────────────────────────────────────────────
@@ -64,6 +73,69 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
   const [completionOpen, setCompletionOpen] = useState(false)
   const [skipOpen, setSkipOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
+
+  // Edit mode is derived from Dexie draft status — NOT React state.
+  // This avoids stale closure bugs since useLiveQuery keeps it in sync.
+  const isEditMode = draft?.status === "editing"
+
+  const handleReopenDraft = useCallback(async () => {
+    await reopenDraft() // sets Dexie status to "editing"
+  }, [reopenDraft])
+
+  // Intercept ALL navigation when in edit mode:
+  // 1. Browser back / swipe gesture → popstate
+  // 2. Sidebar links / any <a> click → capture-phase click listener
+  useEffect(() => {
+    if (!isEditMode) return
+
+    // ── Popstate: browser back / swipe gesture ──
+    window.history.pushState({ stopEditing: true }, "")
+
+    const handlePopState = () => {
+      window.history.pushState({ stopEditing: true }, "")
+      setPendingNav("/routes")
+      setDiscardOpen(true)
+    }
+
+    // ── Click capture: intercept all link clicks before Next.js router ──
+    const handleClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest("a")
+      if (!anchor) return
+      const href = anchor.getAttribute("href")
+      if (!href || href.startsWith("#")) return
+      // Don't intercept external links
+      if (href.startsWith("http") && !href.startsWith(window.location.origin)) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingNav(href)
+      setDiscardOpen(true)
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    document.addEventListener("click", handleClick, true) // capture phase
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+      document.removeEventListener("click", handleClick, true)
+    }
+  }, [isEditMode])
+
+  // Discard edits — revert draft to completed and navigate to intended destination
+  const handleDiscardEdits = useCallback(async () => {
+    await completeDraft() // sets status back to "completed"
+    setDiscardOpen(false)
+    const dest = pendingNav ?? "/routes"
+    setPendingNav(null)
+    router.push(dest)
+  }, [completeDraft, router, pendingNav])
+
+  // Keep editing — close dialog and clear pending nav
+  const handleKeepEditing = useCallback(() => {
+    setDiscardOpen(false)
+    setPendingNav(null)
+  }, [])
 
   // ── Wrap updateChecklist to match Checklist component's onUpdate signature ──
 
@@ -129,13 +201,18 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
   const handleConfirmComplete = useCallback(async () => {
     if (!draft) return
+    // Capture before any status changes
+    const wasEditing = draft.status === "editing"
     setIsSubmitting(true)
 
     try {
       const photoStoragePaths = await getUploadedPhotoPaths()
 
+      // Use draft.id (original visitId) so re-completion updates the same
+      // server row via onConflictDoUpdate instead of creating a duplicate.
+      const effectiveVisitId = draft.id ?? visitId
       const completionData = {
-        visitId,
+        visitId: effectiveVisitId,
         customerId: context.customerId,
         poolId: context.poolId,
         chemistry: draft.chemistry,
@@ -161,7 +238,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
       // Clean up uploaded photo queue items (they're now saved to the visit)
       const uploadedPhotos = await offlineDb.photoQueue
         .where("visitId")
-        .equals(visitId)
+        .equals(effectiveVisitId)
         .and((item) => item.status === "uploaded")
         .toArray()
       await offlineDb.photoQueue.bulkDelete(
@@ -170,16 +247,14 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
       setCompletionOpen(false)
 
-      // Per locked decision: "After completing a stop: auto-advance to the next
-      // stop in the route with a success toast"
-      toast.success("Stop completed!", {
+      toast.success(wasEditing ? "Stop updated!" : "Stop completed!", {
         description: `${context.customerName} — ${context.poolName}`,
       })
 
       router.push("/routes")
     } catch (err) {
       console.error("[StopWorkflow] Complete stop error:", err)
-      toast.error("Failed to save stop", {
+      toast.error(wasEditing ? "Failed to update stop" : "Failed to save stop", {
         description:
           err instanceof Error ? err.message : "Please try again.",
       })
@@ -254,7 +329,13 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             variant="ghost"
             size="icon"
             className="h-11 w-11 shrink-0 cursor-pointer"
-            onClick={() => router.push("/routes")}
+            onClick={() => {
+              if (isEditMode) {
+                setDiscardOpen(true)
+              } else {
+                router.push("/routes")
+              }
+            }}
             aria-label="Back to routes"
           >
             <ArrowLeftIcon className="h-5 w-5" />
@@ -268,6 +349,16 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             </p>
           </div>
         </div>
+
+        {/* ── Completed banner ──────────────────────────────────────────── */}
+        {isCompleted && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-green-500/10 border-b border-green-500/20">
+            <CheckCircleIcon className="h-4 w-4 text-green-400 shrink-0" />
+            <span className="text-sm font-medium text-green-400">
+              Stop completed
+            </span>
+          </div>
+        )}
 
         {/* ── Tab shell ──────────────────────────────────────────────────── */}
         <Tabs defaultValue="chemistry" className="flex flex-col flex-1">
@@ -315,6 +406,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
               previousChemistry={context.previousChemistry}
               sanitizerType={context.sanitizerType}
               onUpdate={updateChemistry}
+              readOnly={isCompleted}
             />
             <ChemistryDosing
               readings={chemistryReadings}
@@ -336,6 +428,8 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
                 tasks={context.checklistTasks}
                 draft={draft}
                 onUpdate={handleChecklistUpdate}
+                onMarkAllComplete={markAllChecklistComplete}
+                readOnly={isCompleted}
               />
             ) : (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
@@ -361,7 +455,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150"
           >
             {draft ? (
-              <NotesField draft={draft} onUpdate={updateNotes} />
+              <NotesField draft={draft} onUpdate={updateNotes} readOnly={isCompleted} />
             ) : (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
                 <p className="text-sm text-muted-foreground">Loading...</p>
@@ -372,34 +466,57 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
         {/* ── Always-visible bottom bar ──────────────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t border-border/60 safe-area-inset-bottom">
-          <div className="flex gap-3">
-            {/* Skip button — less prominent */}
-            <Button
-              variant="outline"
-              className="h-12 px-4 rounded-xl border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-pointer"
-              onClick={() => setSkipOpen(true)}
-              disabled={draft?.status === "completed" || isSubmitting}
-              aria-label="Skip this stop"
-            >
-              <SkipForwardIcon className="h-4 w-4" />
-              <span className="ml-1.5 text-sm">Skip</span>
-            </Button>
-
-            {/* Complete button — primary action */}
-            <Button
-              className={cn(
-                "flex-1 h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
-                hasMinimumData
-                  ? "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
+          {isCompleted ? (
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 h-12 text-base font-semibold rounded-xl cursor-pointer"
+                variant="outline"
+                onClick={() => router.push("/routes")}
+              >
+                <ArrowLeftIcon className="h-4 w-4 mr-2" />
+                Back to Route
+              </Button>
+              <Button
+                className="h-12 px-5 rounded-xl cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+                variant="outline"
+                onClick={handleReopenDraft}
+              >
+                <PencilIcon className="h-4 w-4 mr-1.5" />
+                Edit
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              {/* Skip button — only on first completion, not when editing */}
+              {!isEditMode && (
+                <Button
+                  variant="outline"
+                  className="h-12 px-4 rounded-xl border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-pointer"
+                  onClick={() => setSkipOpen(true)}
+                  disabled={isSubmitting}
+                  aria-label="Skip this stop"
+                >
+                  <SkipForwardIcon className="h-4 w-4" />
+                  <span className="ml-1.5 text-sm">Skip</span>
+                </Button>
               )}
-              disabled={!hasMinimumData || draft?.status === "completed" || isSubmitting}
-              onClick={() => setCompletionOpen(true)}
-            >
-              <CheckCircleIcon className="h-5 w-5 mr-2" />
-              {draft?.status === "completed" ? "Stop Completed" : "Complete Stop"}
-            </Button>
-          </div>
+
+              {/* Complete / Save button — primary action */}
+              <Button
+                className={cn(
+                  "flex-1 h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
+                  hasMinimumData
+                    ? "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                )}
+                disabled={!hasMinimumData || isSubmitting}
+                onClick={() => setCompletionOpen(true)}
+              >
+                <CheckCircleIcon className="h-5 w-5 mr-2" />
+                {isEditMode ? "Save Changes" : "Complete Stop"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -413,6 +530,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           context={context}
           photoCount={photoCount ?? 0}
           isSubmitting={isSubmitting}
+          isEdit={isEditMode}
         />
       )}
 
@@ -422,6 +540,37 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
         onConfirm={handleConfirmSkip}
         isSubmitting={isSubmitting}
       />
+
+      {/* ── Discard edits confirmation ─────────────────────────────────────── */}
+      <Sheet open={discardOpen} onOpenChange={(v) => !v && handleKeepEditing()}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[90dvh] pb-safe mx-auto max-w-lg">
+          <SheetHeader className="pb-4 border-b border-border/60">
+            <SheetTitle className="flex items-center gap-2 text-lg text-amber-400">
+              <AlertTriangleIcon className="h-5 w-5" />
+              Unsaved Changes
+            </SheetTitle>
+            <SheetDescription className="text-sm text-muted-foreground">
+              You have unsaved edits. Going back will discard all changes made since reopening this stop.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex flex-col gap-3 px-4 pt-5 pb-4">
+            <Button
+              className="w-full h-12 text-base font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white cursor-pointer"
+              onClick={handleDiscardEdits}
+            >
+              Discard Changes
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full h-11 text-sm rounded-xl cursor-pointer"
+              onClick={handleKeepEditing}
+            >
+              Keep Editing
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   )
 }
