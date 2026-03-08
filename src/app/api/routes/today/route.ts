@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { routeDays, customers, pools, serviceVisits } from "@/lib/db/schema"
-import { and, eq, desc } from "drizzle-orm"
-import type { RouteStop } from "@/actions/routes"
+import { fetchStopsForTech } from "@/actions/routes"
 
 /**
  * GET /api/routes/today
@@ -14,7 +11,10 @@ import type { RouteStop } from "@/actions/routes"
  * Auth: any authenticated org member (tech sees own route, owner/office can
  *       pass optional ?techId= query param to view any tech's route).
  *
- * Response: RouteStop[] (empty array if no route_day for today)
+ * Response: RouteStop[] (empty array if no stops for today)
+ *
+ * Phase 4: delegates to fetchStopsForTech which reads from route_stops
+ * with automatic fallback to route_days for backward compat.
  *
  * This endpoint is called by:
  * - prefetchTodayRoutes() in sync.ts (offline cache on app open)
@@ -51,139 +51,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  // 3. Query for today's route_day
+  // 3. Fetch stops via shared helper (reads route_stops with route_days fallback)
   const today = new Date().toISOString().split("T")[0] // "YYYY-MM-DD"
 
   try {
-    const stops = await withRls(claims, async (db) => {
-      // Find today's route_day for this tech
-      const routeDayRows = await db
-        .select()
-        .from(routeDays)
-        .where(
-          and(
-            eq(routeDays.org_id, orgId),
-            eq(routeDays.tech_id, techId),
-            eq(routeDays.date, today)
-          )
-        )
-        .limit(1)
-
-      if (routeDayRows.length === 0) {
-        return []
-      }
-
-      const routeDay = routeDayRows[0]
-      const stopOrder = routeDay.stop_order // Array<{ customer_id, pool_id, sort_index }>
-
-      if (!stopOrder || stopOrder.length === 0) {
-        return []
-      }
-
-      // 4. Fetch customer and pool data for each stop using LEFT JOIN (not correlated
-      //    subqueries — RLS pitfall documented in MEMORY.md: correlated subqueries on
-      //    RLS-protected tables return wrong results inside withRls transactions).
-      //
-      //    We fetch all needed customers and pools in a single JOIN query, then map.
-
-      const customerIds = stopOrder.map((s) => s.customer_id)
-      const poolIds = stopOrder.map((s) => s.pool_id)
-
-      // Fetch customers
-      const customerRows = await db
-        .select({
-          id: customers.id,
-          full_name: customers.full_name,
-          address: customers.address,
-          phone: customers.phone,
-          gate_code: customers.gate_code,
-          access_notes: customers.access_notes,
-          status: customers.status,
-        })
-        .from(customers)
-        .where(eq(customers.org_id, orgId))
-
-      const customerMap = new Map(customerRows.map((c) => [c.id, c]))
-
-      // Fetch pools
-      const poolRows = await db
-        .select({
-          id: pools.id,
-          name: pools.name,
-          type: pools.type,
-          volume_gallons: pools.volume_gallons,
-          sanitizer_type: pools.sanitizer_type,
-          notes: pools.notes,
-          customer_id: pools.customer_id,
-        })
-        .from(pools)
-        .where(eq(pools.org_id, orgId))
-
-      const poolMap = new Map(poolRows.map((p) => [p.id, p]))
-
-      // 5. Fetch last service_visit for each pool in stopOrder
-      //    Use LEFT JOIN approach: query all recent visits for relevant pools,
-      //    then pick the most recent per pool in JavaScript (safe, no correlated subquery).
-      const recentVisits = await db
-        .select({
-          pool_id: serviceVisits.pool_id,
-          visited_at: serviceVisits.visited_at,
-          status: serviceVisits.status,
-        })
-        .from(serviceVisits)
-        .where(eq(serviceVisits.org_id, orgId))
-        .orderBy(desc(serviceVisits.visited_at))
-
-      // Build a map of pool_id -> most recent visit (first entry per pool due to desc sort)
-      const lastVisitMap = new Map<string, { visited_at: Date; status: string | null }>()
-      // Track today's visit status per pool for stopStatus
-      const todayVisitStatusMap = new Map<string, string>()
-      for (const visit of recentVisits) {
-        if (visit.pool_id && !lastVisitMap.has(visit.pool_id)) {
-          lastVisitMap.set(visit.pool_id, {
-            visited_at: visit.visited_at,
-            status: visit.status,
-          })
-        }
-        if (visit.pool_id && !todayVisitStatusMap.has(visit.pool_id)) {
-          const visitDate = visit.visited_at.toISOString().split("T")[0]
-          if (visitDate === today && visit.status) {
-            todayVisitStatusMap.set(visit.pool_id, visit.status)
-          }
-        }
-      }
-
-      // 6. Build the stop array in stop_order order
-      const result: RouteStop[] = stopOrder
-        .sort((a, b) => a.sort_index - b.sort_index)
-        .map((stop, idx) => {
-          const customer = customerMap.get(stop.customer_id)
-          const pool = poolMap.get(stop.pool_id)
-          const lastVisit = lastVisitMap.get(stop.pool_id)
-
-          return {
-            stopIndex: idx,
-            routeDayId: routeDay.id,
-            customerId: stop.customer_id,
-            poolId: stop.pool_id,
-            customerName: customer?.full_name ?? "Unknown Customer",
-            address: customer?.address ?? null,
-            phone: customer?.phone ?? null,
-            poolName: pool?.name ?? "Pool",
-            poolType: pool?.type ?? "pool",
-            sanitizerType: pool?.sanitizer_type ?? null,
-            volumeGallons: pool?.volume_gallons ?? null,
-            gateCode: customer?.gate_code ?? null,
-            accessNotes: customer?.access_notes ?? null,
-            customerNotes: pool?.notes ?? null,
-            lastServiceDate: lastVisit?.visited_at?.toISOString() ?? null,
-            stopStatus: (todayVisitStatusMap.get(stop.pool_id) as RouteStop["stopStatus"]) ?? "upcoming",
-          }
-        })
-
-      return result
-    })
-
+    const stops = await fetchStopsForTech(claims, orgId, techId, today)
     return NextResponse.json(stops)
   } catch (error) {
     console.error("[api/routes/today] Error:", error)
