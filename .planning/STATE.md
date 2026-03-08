@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 10 (Scheduling & Routing) — IN PROGRESS
-Plan: 2/7 complete (04-01 schema foundation + 04-02 schedule rules/holidays/Edge Function)
-Status: In progress — 04-02 complete 2026-03-08; recurring schedule system with stop generation built
-Last activity: 2026-03-08 — Phase 4 plan 02 complete
+Plan: 5/7 complete (04-01 schema + 04-02 schedule rules + 04-03 route builder + 04-04 + 04-05 dispatch map)
+Status: In progress — 04-05 complete 2026-03-08; live dispatch map with GPS broadcasting built
+Last activity: 2026-03-08 — Phase 4 plan 05 complete
 
-Progress: [█████░░░░░] 57%
+Progress: [██████░░░░] 62%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] 57%
 | Phase 03-field-tech-app P08 | 4 | 1 tasks | 8 files |
 | Phase 04-scheduling-routing P02 | 10 | 2 tasks | 8 files |
 | Phase 04-scheduling-routing P01 | 12 | 2 tasks | 13 files |
+| Phase 04-scheduling-routing P05 | 5 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,9 @@ Recent decisions affecting current work:
 - [Phase 04-01]: fetchStopsForTech exported from routes.ts — shared between server action and API route; eliminates ~80 lines of duplicated query code
 - [Phase 04-01]: Phase 3 fallback in fetchStopsForTech — route_days JSONB path used when no route_stops exist for the day; logs warning to prompt migration
 - [Phase 04-01]: reorderStops overloaded — detects Phase 4 {id, sortIndex} vs Phase 3 {customer_id, pool_id, sort_index} by shape of first item in newOrder array
+- [Phase 04-05]: StopPopup as React overlay (not MapLibre Popup API) — allows Next.js Link and full React rendering without setHTML string
+- [Phase 04-05]: DispatchClientShell pattern: server page SSRs data, client shell owns TechFilter selectedTechId state
+- [Phase 04-05]: OKLCH color palette pre-assigned to techs by index in getDispatchData for consistent colors across markers, route lines, and filter chips
 
 ### Pending Todos
 
@@ -161,6 +165,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Completed 04-02-PLAN.md — recurring schedule system with Edge Function and placeholder /schedule + /dispatch pages
-Resume file: N/A — start Phase 4 plan 03 (route builder)
-Resume file: N/A — start Phase 4 planning
+Stopped at: Completed 04-05-PLAN.md — live dispatch map with GPS broadcasting and real-time tech positions
+Resume file: N/A — start Phase 4 plan 06 (route optimization)
