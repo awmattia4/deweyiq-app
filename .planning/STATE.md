@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 3 of 10 (Field Tech App) — IN PROGRESS
-Plan: 8 of N (03-01 schema + 03-02 chemistry + 03-03 route view + 03-04 stop workflow + 03-05 tasks + 03-06 photos/notes + 03-07 stop completion + 03-08 UX polish)
-Status: In Progress — UX polish complete (44px targets, OKLCH outdoor colors, stop card link, tech settings); paused at 03-08 Task 2 checkpoint:human-verify (Phase 3 not complete until human verification approved)
-Last activity: 2026-03-07 — 03-08 UX polish + maps preference + OKLCH status colors + tappable stop cards
+Phase: 3 of 10 (Field Tech App) — COMPLETE
+Plan: 8/8 complete (03-01 schema + 03-02 chemistry + 03-03 route view + 03-04 stop workflow + 03-05 tasks + 03-06 photos/notes + 03-07 stop completion + 03-08 UX polish)
+Status: Complete — human-verified 2026-03-08; all 7 bug fixes applied during verification testing
+Last activity: 2026-03-08 — Phase 3 complete, human verification approved
 
 Progress: [█████░░░░░] 55%
 
@@ -125,12 +125,21 @@ Recent decisions affecting current work:
 - [Phase 03-08]: Stop card main area is a Next.js Link to /routes/{customerId}-{poolId}; navigate button uses stopPropagation to prevent link conflict
 - [Phase 03-08]: OKLCH inline CSSProperties for status badge colors — Tailwind v4 arbitrary value oklch() with slash opacity unreliable; inline styles provide exact color values
 - [Phase 03-08]: Chemistry grid: amber=LOW, red=HIGH — amber means reading needs to go up (too low), red means reading needs to come down (too high); directionally intuitive
+- [Phase 03-08 BUG FIX]: Dexie useLiveQuery ReadOnlyError — useVisitDraft was writing (.put) inside useLiveQuery callback which uses read-only transactions; fix: moved draft creation to useEffect, liveQuery is read-only
+- [Phase 03-08 BUG FIX]: "Mark All Complete" only marked 1 task — updateChecklist captured stale `draft` in useCallback closure; concurrent Promise.all calls all read same empty checklist array and last-write-wins. Even reading fresh from Dexie inside each callback failed (all reads before any write). Final fix: added `markAllChecklistComplete` that writes all tasks in a single atomic Dexie update.
+- [Phase 03-08 BUG FIX]: CompletionModal/SkipStopDialog too wide on desktop — Sheet (side="bottom") had no max-width; fix: added `max-w-lg mx-auto`
+- [Phase 03-08 BUG FIX]: CompletionModal/SkipStopDialog content smushed against edges on mobile — Sheet base has no padding; content sections (headers, buttons) were flush with edge; fix: added `px-4` to content wrapper div
+- [Phase 03-08 BUG FIX]: stopStatus always "upcoming" after completing a stop — `fetchStopsForTech` in routes.ts and API route hardcoded `stopStatus: "upcoming"`; fix: added `todayVisitStatusMap` that cross-references `service_visits` for today's date and maps their status per pool_id
+- [Phase 03-08 BUG FIX]: pH decimal input eaten — `parseFloat("7.")` returns `7`; typing "7." immediately flushed as 7 to Dexie, losing the decimal; fix: created `ChemInput` component with local `useState<string>` state, only flushes complete numbers (not ending in "." or "-") to Dexie, with blur handler as safety net
+- [Phase 03-08 KNOWN]: SidebarProvider hydration mismatch — pre-existing shadcn sidebar issue; server renders defaultOpen=true but client cookie state may differ; recoverable error, does not break functionality
 
 ### Pending Todos
 
 - [UI Polish]: cursor-pointer missing on some interactive elements (buttons, cards, clickable rows) — add `cursor-pointer` class
 - [UI Polish]: Low-contrast hover states on dark theme — some hover effects barely visible; review and increase contrast
 - [UI Polish]: Auth page button spacing and logo mismatch (deferred from Phase 1)
+- [Phase 4/5]: Team invite dialog should allow setting display name when inviting — currently display name is not editable by the invited user or the inviter; add name field to invite flow and allow techs to edit their own display name in settings
+- [Phase 5]: Customizable tech requirements — owner/office should be able to configure: required chemistry readings per sanitizer type, required checklist tasks, minimum data for stop completion. Currently hardcoded in REQUIRED_PARAMS (completion-modal.tsx) and requiredFor (chemistry-grid.tsx). Added as plan 05-05 in roadmap.
 
 ### Blockers/Concerns
 
@@ -141,6 +150,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-07
-Stopped at: 03-08 Task 1 complete (UX polish — stop card Link navigation, OKLCH status colors, amber/red LOW/HIGH chemistry badges, tech settings with maps preference); paused at Task 2 checkpoint:human-verify (gate=blocking) — end-to-end field workflow verification required before Phase 3 complete
-Resume file: .planning/phases/03-field-tech-app/03-08-PLAN.md Task 2 — human must verify complete field tech workflow then approve to finalize Phase 3
+Last session: 2026-03-08
+Stopped at: Phase 3 complete — ready to begin Phase 4 (Scheduling & Routing)
+Resume file: N/A — start Phase 4 planning
