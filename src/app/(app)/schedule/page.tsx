@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
-import { getScheduleRules, getHolidays, getStopsForDay } from "@/actions/schedule"
+import { getScheduleRules, getHolidays, getStopsForDay, getUnassignedCustomers, type UnassignedCustomer } from "@/actions/schedule"
 import { withRls } from "@/lib/db"
 import { customers, pools, profiles } from "@/lib/db/schema"
 import { createClient } from "@/lib/supabase/server"
@@ -132,14 +132,18 @@ export default async function SchedulePage() {
     console.error("[SchedulePage] Failed to fetch selector data:", err)
   }
 
-  // Fetch initial stops for the first tech + today's day
+  // Fetch initial stops and unassigned customers for the first tech + today's day
   const todayDayIndex = getTodayDayIndexServer()
   const todayDate = dayIndexToDateServer(todayDayIndex)
   const firstTechId = techList[0]?.id ?? ""
+  let initialUnassigned: UnassignedCustomer[] = []
 
   if (firstTechId) {
     try {
-      const rawStops = await getStopsForDay(firstTechId, todayDate)
+      const [rawStops, rawUnassigned] = await Promise.all([
+        getStopsForDay(firstTechId, todayDate),
+        getUnassignedCustomers(firstTechId, todayDate),
+      ])
       initialStops = rawStops.map(
         (s): ScheduleStop => ({
           id: s.id,
@@ -153,6 +157,7 @@ export default async function SchedulePage() {
           lng: s.lng,
         })
       )
+      initialUnassigned = rawUnassigned
     } catch (err) {
       console.error("[SchedulePage] Failed to fetch initial stops:", err)
     }
@@ -335,6 +340,7 @@ export default async function SchedulePage() {
                 techs={techList}
                 initialTechId={firstTechId}
                 initialStops={initialStops}
+                initialUnassigned={initialUnassigned}
               />
             ),
           rules: rulesPanel,
