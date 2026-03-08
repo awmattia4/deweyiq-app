@@ -143,6 +143,10 @@ Recent decisions affecting current work:
 - [Phase 04-01]: fetchStopsForTech exported from routes.ts — shared between server action and API route; eliminates ~80 lines of duplicated query code
 - [Phase 04-01]: Phase 3 fallback in fetchStopsForTech — route_days JSONB path used when no route_stops exist for the day; logs warning to prompt migration
 - [Phase 04-01]: reorderStops overloaded — detects Phase 4 {id, sortIndex} vs Phase 3 {customer_id, pool_id, sort_index} by shape of first item in newOrder array
+- [Phase 04-03]: MapClient uses dynamic import inside useEffect for maplibre-gl — avoids window access during SSR even when component file is imported server-side; consumers use next/dynamic ssr:false as belt-and-suspenders
+- [Phase 04-03]: Locked stops excluded from SortableContext.items array (not just visually disabled) — dnd-kit requires items to be in context to allow dropping onto that position; excluding prevents any drag interaction with locked positions
+- [Phase 04-03]: getStopsForDay extended with address/lat/lng from customers — required for route map marker placement and stop list address display; lat/lng are null until geocoding Phase adds them
+- [Phase 04-03]: ScheduleTabs renders all three panels in DOM with hidden toggle — preserves RouteBuilder React state (selected tech/day/stops) across tab switches without refetching
 - [Phase 04-05]: StopPopup as React overlay (not MapLibre Popup API) — allows Next.js Link and full React rendering without setHTML string
 - [Phase 04-05]: DispatchClientShell pattern: server page SSRs data, client shell owns TechFilter selectedTechId state
 - [Phase 04-05]: OKLCH color palette pre-assigned to techs by index in getDispatchData for consistent colors across markers, route lines, and filter chips
