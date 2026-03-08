@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
-import { getScheduleRules, getHolidays } from "@/actions/schedule"
+import { getScheduleRules, getHolidays, getStopsForDay } from "@/actions/schedule"
 import { withRls } from "@/lib/db"
 import { customers, pools, profiles } from "@/lib/db/schema"
 import { createClient } from "@/lib/supabase/server"
@@ -9,15 +9,43 @@ import { eq, asc } from "drizzle-orm"
 import type { SupabaseToken } from "@/lib/db"
 import { ScheduleRuleDialog } from "@/components/schedule/schedule-rule-dialog"
 import { HolidayCalendar } from "@/components/schedule/holiday-calendar"
+import { RouteBuilder } from "@/components/schedule/route-builder"
+import { ScheduleTabs } from "@/components/schedule/schedule-tabs"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CalendarDaysIcon, UserIcon, RefreshCwIcon } from "lucide-react"
+import type { ScheduleStop } from "@/components/schedule/route-map"
 
 export const metadata: Metadata = {
   title: "Schedule",
 }
 
-// ─── Frequency badge colors ────────────────────────────────────────────────────
+// ─── Day helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Convert a Mon-indexed day number (0=Mon … 4=Fri) to a YYYY-MM-DD string for
+ * the corresponding day of the current ISO week. Matches client-side logic.
+ */
+function dayIndexToDateServer(dayIndex: number): string {
+  const today = new Date()
+  const jsDay = today.getDay() // 0=Sun, 1=Mon ... 6=Sat
+  const daysFromMonday = jsDay === 0 ? -6 : 1 - jsDay
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + daysFromMonday)
+  monday.setHours(0, 0, 0, 0)
+  const target = new Date(monday)
+  target.setDate(monday.getDate() + dayIndex)
+  return target.toISOString().split("T")[0]
+}
+
+function getTodayDayIndexServer(): number {
+  const jsDay = new Date().getDay()
+  if (jsDay === 0) return 4
+  if (jsDay === 6) return 4
+  return jsDay - 1
+}
+
+// ─── Frequency badge ──────────────────────────────────────────────────────────
 
 function FrequencyBadge({ frequency }: { frequency: string }) {
   const labels: Record<string, string> = {
@@ -36,12 +64,14 @@ function FrequencyBadge({ frequency }: { frequency: string }) {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 /**
- * SchedulePage — placeholder for the full scheduling UI.
+ * SchedulePage — scheduling hub for owner/office.
  *
- * Phase 4 plan 02: Shows schedule rules list, "Add Rule" dialog, and holiday
- * calendar section. Full split-view route builder comes in plan 04-03.
+ * Three top-level tabs:
+ * - Routes: split-view route builder (stop list + map)
+ * - Rules: schedule rule management
+ * - Holidays: company holiday calendar
  *
- * Role guard: owner and office only. Techs are redirected to /routes.
+ * Role guard: owner and office only. Techs redirect to /routes.
  */
 export default async function SchedulePage() {
   const user = await getCurrentUser()
@@ -50,16 +80,13 @@ export default async function SchedulePage() {
   if (user.role === "tech") redirect("/routes")
   if (user.role === "customer") redirect("/portal")
 
-  // Fetch data in parallel
-  const [scheduleRules, holidays] = await Promise.all([
-    getScheduleRules(),
-    getHolidays(),
-  ])
+  // ── Fetch all data in parallel ────────────────────────────────────────────
 
-  // Fetch customers, pools, techs for the dialog selectors
+  let techList: { id: string; name: string }[] = []
+  let initialStops: ScheduleStop[] = []
   let customerList: { id: string; full_name: string }[] = []
   let poolList: { id: string; name: string; customer_id: string }[] = []
-  let techList: { id: string; full_name: string }[] = []
+  let techListForDialog: { id: string; full_name: string }[] = []
 
   try {
     const supabase = await createClient()
@@ -85,7 +112,7 @@ export default async function SchedulePage() {
         ),
         withRls(token, (db) =>
           db
-            .select({ id: profiles.id, full_name: profiles.full_name })
+            .select({ id: profiles.id, full_name: profiles.full_name, role: profiles.role })
             .from(profiles)
             .where(eq(profiles.org_id, user.org_id))
             .orderBy(asc(profiles.full_name))
@@ -94,35 +121,70 @@ export default async function SchedulePage() {
 
       customerList = customerRows
       poolList = poolRows
-      // Only include tech role profiles
+      techListForDialog = techRows
+
+      // Tech list for route builder tabs: only 'tech' role profiles
       techList = techRows
+        .filter((p) => p.role === "tech")
+        .map((p) => ({ id: p.id, name: p.full_name ?? "Unknown Tech" }))
     }
   } catch (err) {
     console.error("[SchedulePage] Failed to fetch selector data:", err)
   }
 
+  // Fetch initial stops for the first tech + today's day
+  const todayDayIndex = getTodayDayIndexServer()
+  const todayDate = dayIndexToDateServer(todayDayIndex)
+  const firstTechId = techList[0]?.id ?? ""
+
+  if (firstTechId) {
+    try {
+      const rawStops = await getStopsForDay(firstTechId, todayDate)
+      initialStops = rawStops.map(
+        (s): ScheduleStop => ({
+          id: s.id,
+          customerName: s.customerName,
+          address: s.address,
+          poolName: s.poolName ?? "",
+          sortIndex: s.sortIndex,
+          positionLocked: s.positionLocked,
+          status: s.status,
+          lat: s.lat,
+          lng: s.lng,
+        })
+      )
+    } catch (err) {
+      console.error("[SchedulePage] Failed to fetch initial stops:", err)
+    }
+  }
+
+  // Fetch schedule rules and holidays for Rules + Holidays tabs
+  const [scheduleRules, holidays] = await Promise.all([
+    getScheduleRules(),
+    getHolidays(),
+  ])
+
   const currentYear = new Date().getFullYear()
   const currentYearHolidays = holidays.filter((h) => h.date.startsWith(String(currentYear)))
 
-  return (
+  // ── Rules panel (moved from prior plan 04-02) ─────────────────────────────
+
+  const rulesPanel = (
     <div className="flex flex-col gap-6">
-      {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Schedule</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Recurring service rules &middot; {scheduleRules.length} active rule
-            {scheduleRules.length !== 1 ? "s" : ""}
+          <h2 className="text-base font-semibold">Recurring Service Rules</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {scheduleRules.length} active rule{scheduleRules.length !== 1 ? "s" : ""}
           </p>
         </div>
         <ScheduleRuleDialog
           customers={customerList}
           pools={poolList}
-          techs={techList}
+          techs={techListForDialog}
         />
       </div>
 
-      {/* ── Schedule rules table ──────────────────────────────────────────── */}
       {scheduleRules.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -136,41 +198,26 @@ export default async function SchedulePage() {
             <ScheduleRuleDialog
               customers={customerList}
               pools={poolList}
-              techs={techList}
+              techs={techListForDialog}
             />
           </CardContent>
         </Card>
       ) : (
         <div className="rounded-md border border-border overflow-hidden">
-          {/* Table header */}
           <div className="hidden sm:grid sm:grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-4 px-4 py-2.5 border-b border-border bg-muted/30">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Customer
-            </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Pool
-            </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Tech
-            </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Frequency
-            </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Start Date
-            </span>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider sr-only">
-              Actions
-            </span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pool</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tech</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Frequency</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Start Date</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider sr-only">Actions</span>
           </div>
 
-          {/* Table rows */}
           {scheduleRules.map((rule, idx) => (
             <div
               key={rule.id}
               className={`grid grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_auto] gap-3 sm:gap-4 px-4 py-3.5 items-center ${idx < scheduleRules.length - 1 ? "border-b border-border" : ""}`}
             >
-              {/* Customer + pool (mobile stacked) */}
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{rule.customerName}</p>
                 <p className="text-xs text-muted-foreground truncate sm:hidden">
@@ -185,13 +232,9 @@ export default async function SchedulePage() {
                   )}
                 </p>
               </div>
-
-              {/* Pool (desktop only) */}
               <span className="hidden sm:block text-sm text-muted-foreground truncate">
                 {rule.poolName ?? <span className="italic">All pools</span>}
               </span>
-
-              {/* Tech (desktop only) */}
               <span className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground truncate">
                 {rule.techName ? (
                   <>
@@ -202,18 +245,12 @@ export default async function SchedulePage() {
                   <span className="italic">Unassigned</span>
                 )}
               </span>
-
-              {/* Frequency (desktop only) */}
               <span className="hidden sm:flex">
                 <FrequencyBadge frequency={rule.frequency} />
               </span>
-
-              {/* Anchor date (desktop only) */}
               <span className="hidden sm:block text-sm text-muted-foreground">
                 {rule.anchor_date}
               </span>
-
-              {/* Edit button — mobile shows badge + edit in a row */}
               <div className="flex items-center gap-2 justify-end shrink-0">
                 <span className="sm:hidden">
                   <FrequencyBadge frequency={rule.frequency} />
@@ -221,7 +258,7 @@ export default async function SchedulePage() {
                 <ScheduleRuleDialog
                   customers={customerList}
                   pools={poolList}
-                  techs={techList}
+                  techs={techListForDialog}
                   rule={rule}
                 />
               </div>
@@ -230,26 +267,6 @@ export default async function SchedulePage() {
         </div>
       )}
 
-      {/* ── Holiday calendar section ──────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <CalendarDaysIcon className="h-4 w-4" />
-              Company Holidays
-            </CardTitle>
-            <span className="text-xs text-muted-foreground">
-              {currentYearHolidays.length} holiday
-              {currentYearHolidays.length !== 1 ? "s" : ""} this year
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <HolidayCalendar holidays={holidays} />
-        </CardContent>
-      </Card>
-
-      {/* ── Generation info ───────────────────────────────────────────────── */}
       <div className="flex items-start gap-2 rounded-md border border-border bg-muted/20 px-4 py-3">
         <RefreshCwIcon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div>
@@ -261,6 +278,69 @@ export default async function SchedulePage() {
           </p>
         </div>
       </div>
+    </div>
+  )
+
+  // ── Holidays panel ────────────────────────────────────────────────────────
+
+  const holidaysPanel = (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarDaysIcon className="h-4 w-4" />
+            Company Holidays
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">
+            {currentYearHolidays.length} holiday{currentYearHolidays.length !== 1 ? "s" : ""} this year
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <HolidayCalendar holidays={holidays} />
+      </CardContent>
+    </Card>
+  )
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* ── Page header ──────────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Schedule</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Build routes, manage recurring rules, and set company holidays
+        </p>
+      </div>
+
+      {/* ── Tabbed content ────────────────────────────────────────────────── */}
+      <ScheduleTabs>
+        {{
+          routes:
+            techList.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/60 p-12 text-center">
+                <UserIcon className="h-10 w-10 text-muted-foreground/40" />
+                <div>
+                  <p className="text-sm font-medium">No technicians found</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Invite technicians from the{" "}
+                    <a href="/team" className="underline underline-offset-2">
+                      Team page
+                    </a>{" "}
+                    to start building routes.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <RouteBuilder
+                techs={techList}
+                initialTechId={firstTechId}
+                initialStops={initialStops}
+              />
+            ),
+          rules: rulesPanel,
+          holidays: holidaysPanel,
+        }}
+      </ScheduleTabs>
     </div>
   )
 }

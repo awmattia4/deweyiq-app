@@ -708,6 +708,12 @@ export async function getStopsForDay(
     status: string
     customerName: string
     poolName: string | null
+    /** Customer address for display in stop list */
+    address: string | null
+    /** Customer geocoded latitude — for map markers */
+    lat: number | null
+    /** Customer geocoded longitude — for map markers */
+    lng: number | null
   }>
 > {
   const token = await getRlsToken()
@@ -738,7 +744,13 @@ export async function getStopsForDay(
       const [customerRows, poolRows] = await Promise.all([
         customerIds.length > 0
           ? db
-              .select({ id: customers.id, full_name: customers.full_name })
+              .select({
+                id: customers.id,
+                full_name: customers.full_name,
+                address: customers.address,
+                lat: customers.lat,
+                lng: customers.lng,
+              })
               .from(customers)
               .where(inArray(customers.id, customerIds))
           : Promise.resolve([]),
@@ -750,26 +762,32 @@ export async function getStopsForDay(
           : Promise.resolve([]),
       ])
 
-      const customerMap = new Map(customerRows.map((c) => [c.id, c.full_name]))
+      const customerMap = new Map(customerRows.map((c) => [c.id, c]))
       const poolMap = new Map(poolRows.map((p) => [p.id, p.name]))
 
       return stops
         .sort((a, b) => a.sort_index - b.sort_index)
-        .map((stop) => ({
-          id: stop.id,
-          techId: stop.tech_id,
-          customerId: stop.customer_id,
-          poolId: stop.pool_id,
-          scheduleRuleId: stop.schedule_rule_id,
-          scheduledDate: stop.scheduled_date,
-          sortIndex: stop.sort_index,
-          positionLocked: stop.position_locked,
-          windowStart: stop.window_start,
-          windowEnd: stop.window_end,
-          status: stop.status,
-          customerName: customerMap.get(stop.customer_id) ?? "Unknown Customer",
-          poolName: stop.pool_id ? (poolMap.get(stop.pool_id) ?? null) : null,
-        }))
+        .map((stop) => {
+          const customer = customerMap.get(stop.customer_id)
+          return {
+            id: stop.id,
+            techId: stop.tech_id,
+            customerId: stop.customer_id,
+            poolId: stop.pool_id,
+            scheduleRuleId: stop.schedule_rule_id,
+            scheduledDate: stop.scheduled_date,
+            sortIndex: stop.sort_index,
+            positionLocked: stop.position_locked,
+            windowStart: stop.window_start,
+            windowEnd: stop.window_end,
+            status: stop.status,
+            customerName: customer?.full_name ?? "Unknown Customer",
+            poolName: stop.pool_id ? (poolMap.get(stop.pool_id) ?? null) : null,
+            address: customer?.address ?? null,
+            lat: customer?.lat ?? null,
+            lng: customer?.lng ?? null,
+          }
+        })
     })
   } catch (error) {
     console.error("[getStopsForDay] Error:", error)
