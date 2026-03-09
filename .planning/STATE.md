@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 5 of 10 (Office Operations & Dispatch) — IN PROGRESS
-Plan: 1/6 complete
-Status: Phase 5 Plan 01 complete — alerts/org_settings schema + send-pre-arrival Edge Function in place; foundation ready for plans 02-06
-Last activity: 2026-03-09 — Phase 5 Plan 01 executed: schema foundation and pre-arrival notification Edge Function
+Plan: 2/6 complete
+Status: Phase 5 Plan 02 complete — React Email service report templates + JWT public report links + completeStop updated; ready for plans 03-06
+Last activity: 2026-03-09 — Phase 5 Plan 02 executed: React Email templates, report token system, public /api/reports/[token] route, completeStop wired to new React Email flow
 
 Progress: [████████░░] 80%
 
@@ -52,6 +52,7 @@ Progress: [████████░░] 80%
 | Phase 04-scheduling-routing P05 | 5 | 2 tasks | 12 files |
 | Phase 04-scheduling-routing P04 | 8 | 2 tasks | 6 files |
 | Phase 05-office-operations-dispatch P01 | 6 | 2 tasks | 8 files |
+| Phase 05-office-operations-dispatch P02 | 6 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -164,6 +165,9 @@ Recent decisions affecting current work:
 - [Phase 05-01]: Twilio via raw fetch + URLSearchParams + btoa in Deno — Twilio npm package does not work in Deno runtime
 - [Phase 05-01]: drizzle-kit push NULL RLS policy pitfall confirmed again in Phase 5 — manually recreated all 8 policies for alerts and org_settings via psql
 - [Phase 05-01]: org_settings SELECT for all org members (owner, office, tech) — tech needs requirements config at stop completion time
+- [Phase 05-02]: @react-email/render exports `render` (not `renderAsync`) — older docs reference renderAsync but v1+ API is render() returning Promise<string>
+- [Phase 05-02]: Next.js "use server" files may only export async functions — non-async consts (SNOOZE_OPTIONS) and interface exports cause `invalid-use-server-value` build error; move to @/lib/*/constants.ts
+- [Phase 05-02]: Report token references visitId (not content hash) — token stays valid across stop edits; public link always serves latest report_html for that visitId
 
 ### Pending Todos
 
@@ -183,5 +187,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 05-01-PLAN.md — alerts/org_settings schema + send-pre-arrival Edge Function
-Resume file: N/A — continue Phase 5 with Plan 02
+Stopped at: Completed 05-02-PLAN.md — React Email service reports + JWT public report links
+Resume file: N/A — continue Phase 5 with Plan 03
