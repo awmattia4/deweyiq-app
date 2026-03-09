@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 5 of 10 (Office Operations & Dispatch) — IN PROGRESS
-Plan: 2/6 complete
-Status: Phase 5 Plan 02 complete — React Email service report templates + JWT public report links + completeStop updated; ready for plans 03-06
-Last activity: 2026-03-09 — Phase 5 Plan 02 executed: React Email templates, report token system, public /api/reports/[token] route, completeStop wired to new React Email flow
+Plan: 4/6 complete
+Status: Phase 5 Plan 04 complete — alerts dashboard with auto-detection (missed stops, declining chemistry, incomplete data), dismiss/snooze lifecycle, sidebar badge, dashboard summary card; ready for plans 05-06
+Last activity: 2026-03-09 — Phase 5 Plan 04 executed: alerts.ts server actions, /alerts page, AlertFeed/AlertCard components, sidebar badge, dashboard card
 
 Progress: [████████░░] 80%
 
@@ -53,6 +53,8 @@ Progress: [████████░░] 80%
 | Phase 04-scheduling-routing P04 | 8 | 2 tasks | 6 files |
 | Phase 05-office-operations-dispatch P01 | 6 | 2 tasks | 8 files |
 | Phase 05-office-operations-dispatch P02 | 6 | 2 tasks | 8 files |
+| Phase 05-office-operations-dispatch P04 | 7 | 2 tasks | 9 files |
+| Phase 05-office-operations-dispatch P03 | 7 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -168,6 +170,10 @@ Recent decisions affecting current work:
 - [Phase 05-02]: @react-email/render exports `render` (not `renderAsync`) — older docs reference renderAsync but v1+ API is render() returning Promise<string>
 - [Phase 05-02]: Next.js "use server" files may only export async functions — non-async consts (SNOOZE_OPTIONS) and interface exports cause `invalid-use-server-value` build error; move to @/lib/*/constants.ts
 - [Phase 05-02]: Report token references visitId (not content hash) — token stays valid across stop edits; public link always serves latest report_html for that visitId
+- [Phase 05-04]: SNOOZE_OPTIONS extracted to src/lib/alerts/constants.ts — Next.js use server files can only export async functions; const/types must live in non-server files
+- [Phase 05-04]: adminDb for alert generation (not withRls) — generation scans all org data without RLS filtering complexities; caller validates org membership before calling
+- [Phase 05-04]: alertCount fetched in layout.tsx server component and passed as prop through AppShell to AppSidebar — sidebar is client component so count is injected from server
+- [Phase 05-03]: Two-step withRls queries (stops then customers) for sendPreArrivalNotifications — avoids RLS correlated subquery pitfall per MEMORY.md
 
 ### Pending Todos
 
@@ -187,5 +193,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 05-02-PLAN.md — React Email service reports + JWT public report links
-Resume file: N/A — continue Phase 5 with Plan 03
+Stopped at: Completed 05-04-PLAN.md — alerts dashboard with generation, dismiss/snooze, sidebar badge, dashboard card
+Resume file: N/A — continue Phase 5 with Plan 05
