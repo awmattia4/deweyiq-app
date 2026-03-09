@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 4 of 10 (Scheduling & Routing) — COMPLETE
-Plan: 7/7 complete
-Status: Phase 4 verified, approved, and polished 2026-03-09 — all 4 success criteria met; post-approval fixes applied (dispatch map rewrite, stop list, dashboard counts, copy route weeks, marker jitter fix, per-pool assignment, co-located stop markers, dispatch pool name display)
-Last activity: 2026-03-09 — Per-pool assignment, co-located pill markers, dispatch pool name
+Phase: 5 of 10 (Office Operations & Dispatch) — IN PROGRESS
+Plan: 1/6 complete
+Status: Phase 5 Plan 01 complete — alerts/org_settings schema + send-pre-arrival Edge Function in place; foundation ready for plans 02-06
+Last activity: 2026-03-09 — Phase 5 Plan 01 executed: schema foundation and pre-arrival notification Edge Function
 
 Progress: [████████░░] 80%
 
@@ -51,6 +51,7 @@ Progress: [████████░░] 80%
 | Phase 04-scheduling-routing P01 | 12 | 2 tasks | 13 files |
 | Phase 04-scheduling-routing P05 | 5 | 2 tasks | 12 files |
 | Phase 04-scheduling-routing P04 | 8 | 2 tasks | 6 files |
+| Phase 05-office-operations-dispatch P01 | 6 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,9 @@ Recent decisions affecting current work:
 - [Phase 04 POST-APPROVAL]: Per-pool schedule assignment — `getUnassignedCustomers` now tracks assigned `customer_id:pool_id` pairs (not just customer_id), filters each customer's pools to only unassigned ones. UnassignedPanel redesigned with per-pool selection (composite keys), multi-pool group headers with indeterminate checkbox, individual pool Assign buttons. Route builder drag-drop uses `bulkAssignStops(pairs)` for all pools instead of `assignStopToRoute(pairs[0])` for first pool only.
 - [Phase 04 POST-APPROVAL]: Co-located stop markers — stops at same lat/lng (e.g. pool + spa at same address) render as a single pill-shaped combined marker showing all indices ("4 · 5"). Geographic offset approach (0.00025 degrees) was invisible at normal zoom — pill markers work at every zoom level. Applied to both schedule route-map and dispatch dispatch-map.
 - [Phase 04 POST-APPROVAL]: Dispatch stop rows now show pool name — customer name on first line, pool name + address on second line, so two stops for the same customer are distinguishable.
+- [Phase 05-01]: Twilio via raw fetch + URLSearchParams + btoa in Deno — Twilio npm package does not work in Deno runtime
+- [Phase 05-01]: drizzle-kit push NULL RLS policy pitfall confirmed again in Phase 5 — manually recreated all 8 policies for alerts and org_settings via psql
+- [Phase 05-01]: org_settings SELECT for all org members (owner, office, tech) — tech needs requirements config at stop completion time
 
 ### Pending Todos
 
@@ -179,5 +183,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Phase 4 complete — all 7 plans executed, user-verified, gsd-verifier passed 4/4; post-approval per-pool assignment + UI fixes applied
-Resume file: N/A — start Phase 5 planning
+Stopped at: Completed 05-01-PLAN.md — alerts/org_settings schema + send-pre-arrival Edge Function
+Resume file: N/A — continue Phase 5 with Plan 02
