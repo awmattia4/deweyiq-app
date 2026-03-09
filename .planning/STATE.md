@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 4 of 10 (Scheduling & Routing) — IN PROGRESS
-Plan: 5/7 complete (04-01 schema + 04-02 schedule rules + 04-03 route builder + 04-04 + 04-05 dispatch map)
-Status: In progress — 04-05 complete 2026-03-08; live dispatch map with GPS broadcasting built
-Last activity: 2026-03-08 — Phase 4 plan 05 complete
+Plan: 5/7 complete (04-01 schema + 04-02 schedule rules + 04-03 route builder + 04-04 unassigned panel + 04-05 dispatch map)
+Status: In progress — 04-04 complete 2026-03-08; unassigned panel, multi-container DnD, copy route dialog built
+Last activity: 2026-03-08 — Phase 4 plan 04 complete
 
 Progress: [██████░░░░] 62%
 
@@ -50,6 +50,7 @@ Progress: [██████░░░░] 62%
 | Phase 04-scheduling-routing P02 | 10 | 2 tasks | 8 files |
 | Phase 04-scheduling-routing P01 | 12 | 2 tasks | 13 files |
 | Phase 04-scheduling-routing P05 | 5 | 2 tasks | 12 files |
+| Phase 04-scheduling-routing P04 | 8 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,8 @@ Recent decisions affecting current work:
 - [Phase 04-05]: StopPopup as React overlay (not MapLibre Popup API) — allows Next.js Link and full React rendering without setHTML string
 - [Phase 04-05]: DispatchClientShell pattern: server page SSRs data, client shell owns TechFilter selectedTechId state
 - [Phase 04-05]: OKLCH color palette pre-assigned to techs by index in getDispatchData for consistent colors across markers, route lines, and filter chips
+- [Phase 04-scheduling-routing]: LEFT JOIN for unassigned customers: getUnassignedCustomers fetches all org customers and assigned IDs separately, filters in JS — avoids RLS correlated subquery pitfall
+- [Phase 04-scheduling-routing]: Multi-container DnD handleDragOver inserts temp ScheduleStop for visual feedback; handleDragEnd persists via assignStopToRoute then refreshes from server
 
 ### Pending Todos
 
