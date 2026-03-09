@@ -174,6 +174,7 @@ Recent decisions affecting current work:
 - [Phase 05-04]: adminDb for alert generation (not withRls) — generation scans all org data without RLS filtering complexities; caller validates org membership before calling
 - [Phase 05-04]: alertCount fetched in layout.tsx server component and passed as prop through AppShell to AppSidebar — sidebar is client component so count is injected from server
 - [Phase 05-03]: Two-step withRls queries (stops then customers) for sendPreArrivalNotifications — avoids RLS correlated subquery pitfall per MEMORY.md
+- [Phase 05-03]: getRouteStartedStatus pre-fetched in parallel with getTodayStops via Promise.all — button renders in correct SSR state without client-side loading flicker
 
 ### Pending Todos
 
@@ -193,5 +194,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Completed 05-04-PLAN.md — alerts dashboard with generation, dismiss/snooze, sidebar badge, dashboard card
+Stopped at: Completed 05-03-PLAN.md — sendPreArrivalNotifications action and Start Route button (executed after 05-04)
 Resume file: N/A — continue Phase 5 with Plan 05
