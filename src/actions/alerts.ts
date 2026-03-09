@@ -36,15 +36,6 @@ export type AlertCounts = {
   incomplete_data: number
 }
 
-// ─── Snooze options ────────────────────────────────────────────────────────────
-
-export const SNOOZE_OPTIONS = [
-  { label: "1 hour", ms: 1 * 60 * 60 * 1000 },
-  { label: "4 hours", ms: 4 * 60 * 60 * 1000 },
-  { label: "1 day", ms: 24 * 60 * 60 * 1000 },
-  { label: "1 week", ms: 7 * 24 * 60 * 60 * 1000 },
-] as const
-
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 async function getRlsToken(): Promise<SupabaseToken | null> {

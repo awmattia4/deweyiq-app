@@ -11,11 +11,15 @@ import {
   checklistTemplates,
   checklistTasks,
   serviceVisits,
+  orgs,
+  profiles,
 } from "@/lib/db/schema"
 import { eq, and, desc } from "drizzle-orm"
 import type { ChemicalProduct, ChemicalKey } from "@/lib/chemistry/dosing"
 import type { SanitizerType } from "@/lib/chemistry/targets"
-import { generateServiceReport } from "@/lib/reports/service-report"
+import { render as renderEmail } from "@react-email/render"
+import { ServiceReportEmail } from "@/lib/emails/service-report-email"
+import { signReportToken } from "@/lib/reports/report-token"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -303,23 +307,56 @@ export async function completeStop(
 
     const poolName = poolRows[0]?.name ?? "Pool"
 
-    // ── 4. Generate service report HTML ────────────────────────────────────
+    // ── 4. Fetch tech display name from profiles ─────────────────────────────
+    const techRows = await adminDb
+      .select({ fullName: profiles.full_name })
+      .from(profiles)
+      .where(eq(profiles.id, techId))
+      .limit(1)
+
+    const techName = techRows[0]?.fullName ?? "Technician"
+
+    // ── 5. Fetch org name for email branding ────────────────────────────────
+    const orgId = token.org_id as string
+    const orgRows = await adminDb
+      .select({ name: orgs.name })
+      .from(orgs)
+      .where(eq(orgs.id, orgId))
+      .limit(1)
+
+    const companyName = orgRows[0]?.name ?? "Pool Company"
+
+    // ── 6. Generate signed report token and public URL ─────────────────────
     const now = new Date()
-    const reportHtml = generateServiceReport({
-      visitId: input.visitId,
-      serviceDate: now,
-      techName: "Tech", // Phase 4: fetch from profiles
-      companyName: "Pool Company",
-      customerName,
-      poolName,
-      chemistry: input.chemistry,
-      checklist: input.checklist,
-      notes: input.notes,
-      photoStoragePaths: [], // Online URLs resolved separately if photos are included
-      includePhotos: false, // Phase 4: per-customer preference
+    const reportToken = await signReportToken(input.visitId)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+    const reportUrl = `${appUrl}/api/reports/${reportToken}`
+
+    // ── 7. Render branded React Email report HTML ──────────────────────────
+    const serviceDate = now.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     })
 
-    // ── 5. Check if this visit already exists (edit vs first completion) ─────
+    const reportHtml = await renderEmail(
+      ServiceReportEmail({
+        customerName,
+        techName,
+        companyName,
+        serviceDate,
+        poolName,
+        chemistry: input.chemistry,
+        checklist: input.checklist.map((item) => ({
+          task: item.taskId,
+          completed: item.completed,
+        })),
+        reportUrl,
+      })
+    )
+
+    // ── 8. Check if this visit already exists (edit vs first completion) ─────
     const existingVisit = await adminDb
       .select({ id: serviceVisits.id })
       .from(serviceVisits)
@@ -327,7 +364,7 @@ export async function completeStop(
       .limit(1)
     const isUpdate = existingVisit.length > 0
 
-    // ── 6. Insert or update the service visit record via withRls ─────────────
+    // ── 9. Insert or update the service visit record via withRls ─────────────
     await withRls(token, async (db) => {
       await db
         .insert(serviceVisits)
@@ -367,9 +404,9 @@ export async function completeStop(
         })
     })
 
-    // ── 7. Best-effort: send email report via Edge Function ─────────────────
-    // Only send on first completion — edits update the record silently.
-    // email_reports preference field: Phase 4 adds per-customer toggle.
+    // ── 10. Best-effort: send email report via Edge Function ────────────────
+    // Only send on first completion — edits update report_html silently (no resend).
+    // If customer has no email: skip silently — no error, no alert.
     if (customerEmail && !isUpdate) {
       try {
         const supabase = await createClient()
@@ -379,7 +416,7 @@ export async function completeStop(
             customerEmail,
             customerName,
             reportHtml,
-            fromName: "Pool Company",
+            fromName: companyName,
             fromEmail: "reports@poolco.app",
           },
         })
