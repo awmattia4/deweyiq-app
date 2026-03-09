@@ -9,6 +9,7 @@ import {
   ContactIcon,
   CalendarIcon,
   MapPinIcon,
+  BellIcon,
   SettingsIcon,
   UserCircleIcon,
   LogOutIcon,
@@ -103,6 +104,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: MapPinIcon,
     roles: ["owner", "office"],
   },
+  // ── Available in Phase 5 ───────────────────────────────────────────────────
+  {
+    label: "Alerts",
+    href: "/alerts",
+    icon: BellIcon,
+    roles: ["owner", "office"], // Techs do NOT see the Alerts nav item (locked decision)
+  },
   // ── Future phases (Phase 7+) — hidden until ready ─────────────────────────
   // { label: "Billing",         href: "/billing",   icon: CreditCardIcon,      roles: ["owner"] },                  // Phase 7
   // { label: "Reports",         href: "/reports",   icon: BarChartIcon,        roles: ["owner"] },                  // Phase 9
@@ -153,6 +161,7 @@ function getRoleLabel(role: AuthUser["role"]): string {
 
 interface AppSidebarProps {
   user: AuthUser
+  alertCount?: number
 }
 
 /**
@@ -167,7 +176,7 @@ interface AppSidebarProps {
  * tabs (billing settings, team management, reports)."
  * Those additional tabs are hidden until their phases ship (see NAV_ITEMS comments).
  */
-export function AppSidebar({ user }: AppSidebarProps) {
+export function AppSidebar({ user, alertCount = 0 }: AppSidebarProps) {
   const pathname = usePathname()
 
   // Select the correct nav set based on role
@@ -219,6 +228,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   pathname === item.href ||
                   (item.href !== "/" && pathname.startsWith(item.href + "/"))
 
+                const isAlertsItem = item.href === "/alerts"
+                const showBadge = isAlertsItem && alertCount > 0
+
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
@@ -229,6 +241,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
                       <Link href={item.href}>
                         <item.icon className="h-4 w-4" aria-hidden="true" />
                         <span>{item.label}</span>
+                        {showBadge && (
+                          <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-destructive-foreground group-data-[collapsible=icon]:hidden">
+                            {alertCount > 99 ? "99+" : alertCount}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

@@ -11,6 +11,7 @@ import type { AuthUser } from "@/actions/auth"
 interface AppShellProps {
   user: AuthUser
   children: React.ReactNode
+  alertCount?: number
 }
 
 /**
@@ -33,7 +34,7 @@ interface AppShellProps {
  * SyncInitializer renders null but wires initSyncListener() and
  * prefetchTodayRoutes() on mount (per locked decision on pre-caching).
  */
-export function AppShell({ user, children }: AppShellProps) {
+export function AppShell({ user, children, alertCount = 0 }: AppShellProps) {
   return (
     <TooltipProvider>
       {/* Offline indicator — fixed at viewport top, renders null when online */}
@@ -44,7 +45,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
       {/* Sidebar layout */}
       <SidebarProvider>
-        <AppSidebar user={user} />
+        <AppSidebar user={user} alertCount={alertCount} />
 
         {/* Main content area (sidebar inset) */}
         <SidebarInset>

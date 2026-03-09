@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
+import { getAlertCount } from "@/actions/alerts"
 import { AppShell } from "@/components/shell/app-shell"
 
 /**
@@ -19,6 +20,9 @@ import { AppShell } from "@/components/shell/app-shell"
  *
  * Calls initSyncListener() and prefetchTodayRoutes() via AppShell's
  * SyncInitializer client component (per locked decision on pre-caching).
+ *
+ * Phase 5: alertCount fetched for owner/office — powers sidebar badge.
+ * Non-fatal: defaults to 0 if the query fails.
  */
 export default async function AppLayout({
   children,
@@ -35,5 +39,9 @@ export default async function AppLayout({
     redirect("/portal")
   }
 
-  return <AppShell user={user}>{children}</AppShell>
+  // Fetch alert count for sidebar badge (owner/office only)
+  // getAlertCount returns 0 for tech role so it's safe to call for all roles
+  const alertCount = await getAlertCount()
+
+  return <AppShell user={user} alertCount={alertCount}>{children}</AppShell>
 }

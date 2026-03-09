@@ -2,9 +2,10 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { getCurrentUser } from "@/actions/auth"
+import { getAlertCountByType } from "@/actions/alerts"
 import { withRls } from "@/lib/db"
-import { profiles, orgs } from "@/lib/db/schema"
-import { eq, count } from "drizzle-orm"
+import { profiles, orgs, routeStops } from "@/lib/db/schema"
+import { eq, count, and } from "drizzle-orm"
 import { createClient } from "@/lib/supabase/server"
 import {
   Card,
@@ -21,6 +22,8 @@ import {
   PlusIcon,
   CalendarDaysIcon,
   ActivityIcon,
+  BellIcon,
+  CheckCircle2Icon,
 } from "lucide-react"
 
 export const metadata: Metadata = {
@@ -50,6 +53,8 @@ export default async function DashboardPage() {
   // Fetch real data via Drizzle with RLS
   let teamCount = 1
   let orgName = "Your Organization"
+  let todayStopCount = 0
+  let todayCompletedCount = 0
 
   try {
     const supabase = await createClient()
@@ -57,8 +62,9 @@ export default async function DashboardPage() {
 
     if (claimsData?.claims) {
       const token = claimsData.claims as Parameters<typeof withRls>[0]
+      const today = new Date().toISOString().split("T")[0]
 
-      const [teamResult, orgResult] = await Promise.all([
+      const [teamResult, orgResult, stopsResult] = await Promise.all([
         // Count all profiles in the org (includes the current user)
         withRls(token, (db) =>
           db
@@ -74,15 +80,37 @@ export default async function DashboardPage() {
             .where(eq(orgs.id, user.org_id))
             .limit(1)
         ),
+        // Count today's route stops
+        withRls(token, (db) =>
+          db
+            .select({ status: routeStops.status })
+            .from(routeStops)
+            .where(
+              and(
+                eq(routeStops.org_id, user.org_id),
+                eq(routeStops.scheduled_date, today)
+              )
+            )
+        ),
       ])
 
       teamCount = teamResult[0]?.count ?? 1
       orgName = orgResult[0]?.name ?? "Your Organization"
+      todayStopCount = stopsResult.length
+      todayCompletedCount = stopsResult.filter((s) => s.status === "complete").length
     }
   } catch (err) {
     // Non-fatal — page renders with fallback values if DB is unreachable
     console.error("[DashboardPage] Failed to fetch org data:", err)
   }
+
+  // Fetch alert counts for dashboard summary card (non-fatal)
+  const alertCounts = await getAlertCountByType().catch(() => ({
+    total: 0,
+    missed_stop: 0,
+    declining_chemistry: 0,
+    incomplete_data: 0,
+  }))
 
   const firstName = user.full_name?.split(" ")[0] || "there"
   const today = new Date().toLocaleDateString("en-US", {
@@ -111,18 +139,20 @@ export default async function DashboardPage() {
 
       {/* ── Key metrics ──────────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Today's stops — placeholder until Phase 3 */}
+        {/* Today's stops — real count from route_stops */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardDescription>Today&apos;s Stops</CardDescription>
               <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </div>
-            <CardTitle className="text-3xl font-bold">0</CardTitle>
+            <CardTitle className="text-3xl font-bold">{todayStopCount}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground">
-              Routes set up in Phase 3 &mdash; scheduling coming soon
+              {todayStopCount === 0
+                ? "No stops scheduled for today"
+                : `${todayCompletedCount} completed, ${todayStopCount - todayCompletedCount} remaining`}
             </p>
           </CardContent>
         </Card>
@@ -143,23 +173,57 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Activity feed — placeholder */}
-        <Card className="sm:col-span-2 lg:col-span-1">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardDescription>Recent Activity</CardDescription>
-              <ActivityIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <CardTitle className="text-base font-medium text-muted-foreground">
-              No activity yet
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Service logs and invoices will appear here as your team works
-            </p>
-          </CardContent>
-        </Card>
+        {/* Alerts summary card — links to /alerts */}
+        <Link href="/alerts" className="block sm:col-span-2 lg:col-span-1 group">
+          <Card className="h-full transition-colors group-hover:border-border/80 group-hover:bg-card/80 cursor-pointer">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription>Active Alerts</CardDescription>
+                <BellIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </div>
+              {alertCounts.total === 0 ? (
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2Icon className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                  <CardTitle className="text-base font-medium text-emerald-500">
+                    All clear
+                  </CardTitle>
+                </div>
+              ) : (
+                <CardTitle className="text-3xl font-bold text-destructive">
+                  {alertCounts.total}
+                </CardTitle>
+              )}
+            </CardHeader>
+            <CardContent>
+              {alertCounts.total === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No active alerts — everything looks good
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {alertCounts.missed_stop > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-red-400">{alertCounts.missed_stop}</span>{" "}
+                      missed {alertCounts.missed_stop === 1 ? "stop" : "stops"}
+                    </p>
+                  )}
+                  {alertCounts.declining_chemistry > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-amber-400">{alertCounts.declining_chemistry}</span>{" "}
+                      declining chemistry
+                    </p>
+                  )}
+                  {alertCounts.incomplete_data > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-blue-400">{alertCounts.incomplete_data}</span>{" "}
+                      incomplete {alertCounts.incomplete_data === 1 ? "record" : "records"}
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* ── Quick actions ─────────────────────────────────────────────────── */}

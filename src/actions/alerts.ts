@@ -4,37 +4,13 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { adminDb, withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { alerts, routeStops, serviceVisits, customers, pools, profiles } from "@/lib/db/schema"
-import { and, eq, isNull, lt, lte, or, sql, inArray, not, desc } from "drizzle-orm"
-import { getCurrentUser } from "@/actions/auth"
+import { alerts, routeStops, serviceVisits, customers, pools } from "@/lib/db/schema"
+import { and, eq, isNull, lt, or, sql, inArray, not, desc } from "drizzle-orm"
+import type { AlertType, AlertSeverity, Alert, AlertCounts } from "@/lib/alerts/constants"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export type AlertType = "missed_stop" | "declining_chemistry" | "incomplete_data"
-export type AlertSeverity = "info" | "warning" | "critical"
-
-export interface Alert {
-  id: string
-  org_id: string
-  alert_type: AlertType
-  severity: AlertSeverity
-  reference_id: string | null
-  reference_type: string | null
-  title: string
-  description: string | null
-  generated_at: Date
-  dismissed_at: Date | null
-  snoozed_until: Date | null
-  metadata: Record<string, unknown> | null
-  created_at: Date
-}
-
-export type AlertCounts = {
-  total: number
-  missed_stop: number
-  declining_chemistry: number
-  incomplete_data: number
-}
+// NOTE: Types are imported (not re-exported) from @/lib/alerts/constants because
+// Next.js "use server" files may only export async functions. Client components
+// that need Alert types must import directly from @/lib/alerts/constants.
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 

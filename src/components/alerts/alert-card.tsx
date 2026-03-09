@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { dismissAlert, snoozeAlert } from "@/actions/alerts"
-import type { Alert } from "@/actions/alerts"
+import type { Alert } from "@/lib/alerts/constants"
 import { SNOOZE_OPTIONS } from "@/lib/alerts/constants"
 
 // ─── Severity indicator ────────────────────────────────────────────────────────
