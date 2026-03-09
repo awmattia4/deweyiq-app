@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation** - Auth, database schema with multi-tenant RLS, and offline PWA shell — every other phase depends on this (completed 2026-03-05)
 - [x] **Phase 2: Customer & Pool Data Model** - Customer CRM, pool profiles, equipment tracking, and service history store (completed 2026-03-06)
 - [x] **Phase 3: Field Tech App** - The daily-driver mobile app — route view, service logging, chemistry, checklists, photos, offline sync (completed 2026-03-08)
-- [ ] **Phase 4: Scheduling & Routing** - Route builder, recurring schedules, live route progress, and one-click route optimization
+- [x] **Phase 4: Scheduling & Routing** - Route builder, recurring schedules, live route progress, and one-click route optimization (completed 2026-03-09)
 - [ ] **Phase 5: Office Operations & Dispatch** - Real-time dispatch board, automated service reports, and customer notifications
 - [ ] **Phase 6: Work Orders & Quoting** - Repair work orders, professional quotes, customer approval, and invoice conversion
 - [ ] **Phase 7: Billing & Payments** - Invoicing, Stripe AutoPay/ACH, dunning, QuickBooks bi-directional sync, and built-in accounting
@@ -116,14 +116,15 @@ Plans:
   3. Office staff can see an alerts dashboard that surfaces missed stops, overdue invoices, and declining chemical trends — not every reading, only actionable exceptions
   4. The company owner can configure which alert types are enabled and whether they route to email, in-app notification, or SMS per alert category
   5. The company owner can configure which chemistry readings and checklist tasks are required for techs, and set minimum data thresholds for stop completion
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 05-01: Pre-arrival notifications — SMS/email trigger before tech arrival (Resend + Twilio), configurable lead time
-- [ ] 05-02: Post-service report delivery — branded email with service report link, React Email template, Resend send
-- [ ] 05-03: Alerts dashboard — missed stop detection, overdue invoice query, chemical trend flag, in-app alert UI
-- [ ] 05-04: Notification configuration — per-company alert settings, channel routing (email/SMS/in-app), per-customer opt-in
-- [ ] 05-05: Company service settings — configurable required chemistry readings per sanitizer type, required checklist tasks, minimum data threshold for stop completion, tech display name editing
+- [ ] 05-01-PLAN.md — Schema foundation: alerts + org_settings tables with RLS, customers.notifications_enabled column, route_stops.pre_arrival_sent_at column, send-pre-arrival Edge Function
+- [ ] 05-02-PLAN.md — Service report email: React Email branded template, signed JWT report tokens, public /api/reports/[token] route, completeStop rewire
+- [ ] 05-03-PLAN.md — Pre-arrival notifications: sendPreArrivalNotifications server action, Start Route button on tech view, idempotency via pre_arrival_sent_at
+- [ ] 05-04-PLAN.md — Alerts dashboard: alert generation (missed stops, declining chemistry, incomplete data), feed with filter chips, dismiss/snooze, sidebar badge, dashboard summary card
+- [ ] 05-05-PLAN.md — Company settings + service requirements: notification channel toggles, required chemistry per sanitizer type, required checklist tasks, warn-but-allow enforcement in completeStop
+- [ ] 05-06-PLAN.md — Phase 5 end-to-end human verification checkpoint
 
 ### Phase 6: Work Orders & Quoting
 **Goal**: Office and field staff can create, quote, approve, and dispatch repair jobs — and completed jobs generate invoices automatically
@@ -219,6 +220,7 @@ Plans:
 - [ ] 10-02: Predictive chemistry alerts — linear regression on per-pool reading history, alert threshold validation, CPO-reviewed thresholds
 - [ ] 10-03: Automated workload balancing — auto-schedule engine based on service level rules, tech availability, and geography
 - [ ] 10-04: ML route optimization — algorithm selection (OSRM vs. Google ROA), Upstash QStash async job, before/after comparison UI
+- [ ] 10-05: Smart customer creation — intelligent suggestions when adding pools/equipment (pool+spa auto-notes, service frequency recommendations, common equipment combos, gate code reminders)
 
 ## Progress
 
@@ -230,8 +232,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Foundation | 0/6 | Complete    | 2026-03-05 |
 | 2. Customer & Pool Data Model | 0/4 | Complete    | 2026-03-06 |
 | 3. Field Tech App | 8/8 | Complete    | 2026-03-08 |
-| 4. Scheduling & Routing | 0/7 | Not started | - |
-| 5. Office Operations & Dispatch | 0/4 | Not started | - |
+| 4. Scheduling & Routing | 7/7 | Complete | 2026-03-09 |
+| 5. Office Operations & Dispatch | 0/6 | Not started | - |
 | 6. Work Orders & Quoting | 0/5 | Not started | - |
 | 7. Billing & Payments | 0/7 | Not started | - |
 | 8. Customer Portal | 0/5 | Not started | - |
