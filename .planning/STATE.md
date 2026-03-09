@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 4 — Scheduling & Routing (Phase 3 complete)
+**Current focus:** Phase 5 — Office Operations & Dispatch (Phase 4 complete)
 
 ## Current Position
 
-Phase: 4 of 10 (Scheduling & Routing) — IN PROGRESS
-Plan: 5/7 complete (04-01 schema + 04-02 schedule rules + 04-03 route builder + 04-04 unassigned panel + 04-05 dispatch map)
-Status: In progress — 04-04 complete 2026-03-08; unassigned panel, multi-container DnD, copy route dialog built
-Last activity: 2026-03-08 — Phase 4 plan 04 complete
+Phase: 4 of 10 (Scheduling & Routing) — COMPLETE
+Plan: 7/7 complete
+Status: Phase 4 verified, approved, and polished 2026-03-09 — all 4 success criteria met; post-approval fixes applied (dispatch map rewrite, stop list, dashboard counts, copy route weeks, marker jitter fix, per-pool assignment, co-located stop markers, dispatch pool name display)
+Last activity: 2026-03-09 — Per-pool assignment, co-located pill markers, dispatch pool name
 
-Progress: [██████░░░░] 62%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -153,6 +153,13 @@ Recent decisions affecting current work:
 - [Phase 04-05]: OKLCH color palette pre-assigned to techs by index in getDispatchData for consistent colors across markers, route lines, and filter chips
 - [Phase 04-scheduling-routing]: LEFT JOIN for unassigned customers: getUnassignedCustomers fetches all org customers and assigned IDs separately, filters in JS — avoids RLS correlated subquery pitfall
 - [Phase 04-scheduling-routing]: Multi-container DnD handleDragOver inserts temp ScheduleStop for visual feedback; handleDragEnd persists via assignStopToRoute then refreshes from server
+- [Phase 04 BUG FIX]: MapLibre oklch() colors don't work in WebGL paint properties (line-color, fill-color) — only CSS DOM elements support oklch(). Use hex colors (#60a5fa) for all MapLibre layer paint properties.
+- [Phase 04 BUG FIX]: Dispatch map rewritten to use shared MapClient component — original custom map init had multiple issues (oklch in paint, broken layout, marker stacking). Always reuse MapClient + dynamic import pattern from map-client.tsx.
+- [Phase 04 BUG FIX]: NEVER use `transition: transform` on MapLibre marker elements — MapLibre updates marker CSS `transform` to reposition during pan/zoom; a CSS transition causes markers to lag behind the map creating a jitter effect. Dispatch map was fine (no transition), schedule map had it.
+- [Phase 04 BUG FIX]: Dashboard had hardcoded "0" stop count — always wire real queries for data cards, never leave placeholder values that look like real data.
+- [Phase 04 POST-APPROVAL]: Per-pool schedule assignment — `getUnassignedCustomers` now tracks assigned `customer_id:pool_id` pairs (not just customer_id), filters each customer's pools to only unassigned ones. UnassignedPanel redesigned with per-pool selection (composite keys), multi-pool group headers with indeterminate checkbox, individual pool Assign buttons. Route builder drag-drop uses `bulkAssignStops(pairs)` for all pools instead of `assignStopToRoute(pairs[0])` for first pool only.
+- [Phase 04 POST-APPROVAL]: Co-located stop markers — stops at same lat/lng (e.g. pool + spa at same address) render as a single pill-shaped combined marker showing all indices ("4 · 5"). Geographic offset approach (0.00025 degrees) was invisible at normal zoom — pill markers work at every zoom level. Applied to both schedule route-map and dispatch dispatch-map.
+- [Phase 04 POST-APPROVAL]: Dispatch stop rows now show pool name — customer name on first line, pool name + address on second line, so two stops for the same customer are distinguishable.
 
 ### Pending Todos
 
@@ -171,6 +178,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08
-Stopped at: Completed 04-05-PLAN.md — live dispatch map with GPS broadcasting and real-time tech positions
-Resume file: N/A — start Phase 4 plan 06 (route optimization)
+Last session: 2026-03-09
+Stopped at: Phase 4 complete — all 7 plans executed, user-verified, gsd-verifier passed 4/4; post-approval per-pool assignment + UI fixes applied
+Resume file: N/A — start Phase 5 planning
