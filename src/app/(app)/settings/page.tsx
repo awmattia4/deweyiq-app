@@ -11,7 +11,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProfileForm } from "@/components/settings/profile-form"
 import { MapsPreferenceSetting } from "@/components/settings/maps-preference"
-import { LogOutIcon, BuildingIcon, UserIcon, MapPinIcon } from "lucide-react"
+import { NotificationSettings } from "@/components/settings/notification-settings"
+import { ServiceRequirements } from "@/components/settings/service-requirements"
+import { CompanyProfileSettings } from "@/components/settings/company-profile-settings"
+import { getOrgSettings } from "@/actions/company-settings"
+import { LogOutIcon, BuildingIcon, UserIcon, MapPinIcon, BellIcon, ClipboardCheckIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -22,7 +26,8 @@ export const metadata: Metadata = {
  *
  * Phase 3: Accessible to all roles (owner, office, tech).
  * - Tech: sees maps preference + read-only profile
- * - Owner / office: sees profile editing + org info + maps preference
+ * - Owner: sees full company settings (notifications, service requirements, company profile)
+ * - Office: sees profile editing + org info + maps preference (read-only company settings)
  *
  * Tech redirect removed — tech needs access to set maps preference (FIELD-11).
  */
@@ -32,7 +37,7 @@ export default async function SettingsPage() {
   if (!user) redirect("/login")
   if (user.role === "customer") redirect("/portal")
 
-  // Fetch org name for display (non-tech roles only, still available for tech read-only)
+  // Fetch org name for display
   let orgName = "Your Organization"
 
   try {
@@ -55,6 +60,10 @@ export default async function SettingsPage() {
   }
 
   const isTech = user.role === "tech"
+  const isOwner = user.role === "owner"
+
+  // Fetch org settings for owner (needed for notification toggles and service requirements)
+  const orgSettings = isOwner ? await getOrgSettings() : null
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -64,9 +73,65 @@ export default async function SettingsPage() {
         <p className="text-muted-foreground text-sm mt-1">
           {isTech
             ? "Manage your field preferences."
-            : "Manage your profile and account settings."}
+            : isOwner
+              ? "Manage company settings, notifications, and service requirements."
+              : "Manage your profile and account settings."}
         </p>
       </div>
+
+      {/* ── Owner: Company Profile ──────────────────────────────────────── */}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BuildingIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Company Profile</CardTitle>
+            </div>
+            <CardDescription>
+              Your company name appears in service reports and customer emails.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CompanyProfileSettings orgName={orgName} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Notification Settings ────────────────────────────────── */}
+      {isOwner && orgSettings && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BellIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Notifications</CardTitle>
+            </div>
+            <CardDescription>
+              Control which notifications are sent to customers and which alerts are generated for your office.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <NotificationSettings settings={orgSettings} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Service Requirements ──────────────────────────────────── */}
+      {isOwner && orgSettings && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ClipboardCheckIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Service Requirements</CardTitle>
+            </div>
+            <CardDescription>
+              Configure required chemistry readings per sanitizer type and required checklist tasks. Techs see warnings but are never blocked from completing stops.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ServiceRequirements settings={orgSettings} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Maps app preference — visible to ALL roles (FIELD-11) ─────────── */}
       <Card>
@@ -125,8 +190,8 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ── Organization section — owner/office only ───────────────────────── */}
-      {!isTech && (
+      {/* ── Organization section — office role only (owner has company profile above) ── */}
+      {!isTech && !isOwner && (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -134,7 +199,7 @@ export default async function SettingsPage() {
               <CardTitle className="text-base">Organization</CardTitle>
             </div>
             <CardDescription>
-              Your organization&apos;s details. Org settings expand in later phases.
+              Your organization&apos;s details.
             </CardDescription>
           </CardHeader>
           <CardContent>
