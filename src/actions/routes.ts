@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeDays, routeStops, customers, pools, serviceVisits } from "@/lib/db/schema"
-import { and, eq, desc, asc } from "drizzle-orm"
+import { and, eq, desc, asc, isNotNull } from "drizzle-orm"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -386,5 +386,50 @@ export async function skipStop(
   } catch (error) {
     console.error("[skipStop] Error:", error)
     return { success: false, error: "Failed to record skip" }
+  }
+}
+
+/**
+ * getRouteStartedStatus — checks if the authenticated tech has already started
+ * their route today (i.e., at least one stop has pre_arrival_sent_at set).
+ *
+ * Used by the routes page to render the Start Route button in the correct
+ * initial state (active vs already-started/disabled).
+ *
+ * @returns true if route was already started, false otherwise
+ */
+export async function getRouteStartedStatus(): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  if (!claimsData?.claims) return false
+
+  const claims = claimsData.claims as SupabaseToken
+  const orgId = claims["org_id"] as string | undefined
+  const userId = claims["sub"] as string | undefined
+
+  if (!orgId || !userId) return false
+
+  const today = new Date().toISOString().split("T")[0]
+
+  try {
+    const rows = await withRls(claims, async (db) => {
+      return db
+        .select({ id: routeStops.id })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, userId),
+            eq(routeStops.scheduled_date, today),
+            isNotNull(routeStops.pre_arrival_sent_at)
+          )
+        )
+        .limit(1)
+    })
+
+    return rows.length > 0
+  } catch (error) {
+    console.error("[getRouteStartedStatus] Error:", error)
+    return false
   }
 }

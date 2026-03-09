@@ -2,10 +2,11 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
-import { getTodayStops } from "@/actions/routes"
+import { getTodayStops, getRouteStartedStatus } from "@/actions/routes"
 import { StopList } from "@/components/field/stop-list"
 import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
+import { StartRouteButton } from "@/components/field/start-route-button"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -41,7 +42,11 @@ export default async function RoutesPage() {
   })
 
   // Fetch today's stops server-side for instant render (no loading flicker)
-  const stops = await getTodayStops()
+  // Also check if route was already started for the Start Route button initial state
+  const [stops, routeAlreadyStarted] = await Promise.all([
+    getTodayStops(),
+    user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
+  ])
 
   // Calculate completed stops for the progress bar
   const completedStops = stops.filter(
@@ -74,6 +79,11 @@ export default async function RoutesPage() {
           </button>
         )}
       </div>
+
+      {/* ── Start Route button — tech-only, shown when there are stops ──── */}
+      {user.role === "tech" && stops.length > 0 && (
+        <StartRouteButton alreadyStarted={routeAlreadyStarted} />
+      )}
 
       {/* ── Progress bar ─────────────────────────────────────────────────── */}
       {stops.length > 0 && (
