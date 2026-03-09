@@ -50,6 +50,8 @@ export const routeStops = pgTable(
     window_end: time("window_end"),
     // Stop status lifecycle: scheduled → in_progress → complete | skipped | holiday
     status: text("status").notNull().default("scheduled"),
+    // Phase 5: idempotency for pre-arrival notifications — set after first successful send
+    pre_arrival_sent_at: timestamp("pre_arrival_sent_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

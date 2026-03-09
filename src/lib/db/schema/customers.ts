@@ -1,4 +1,4 @@
-import { doublePrecision, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { boolean, doublePrecision, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -41,6 +41,8 @@ export const customers = pgTable(
     // Geocoding coordinates — set by Phase 4 geocoding when address is saved
     lat: doublePrecision("lat"),
     lng: doublePrecision("lng"),
+    // Phase 5: per-customer opt-out for pre-arrival SMS/email notifications
+    notifications_enabled: boolean("notifications_enabled").notNull().default(true),
     // Timestamps
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

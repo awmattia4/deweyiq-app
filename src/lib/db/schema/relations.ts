@@ -22,6 +22,8 @@ import { chemicalProducts } from "./chemical-products"
 import { routeStops } from "./route-stops"
 import { scheduleRules } from "./schedule-rules"
 import { holidays } from "./holidays"
+import { alerts } from "./alerts"
+import { orgSettings } from "./org-settings"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -116,4 +118,14 @@ export const scheduleRulesRelations = relations(scheduleRules, ({ one, many }) =
 
 export const holidaysRelations = relations(holidays, ({ one }) => ({
   org: one(orgs, { fields: [holidays.org_id], references: [orgs.id] }),
+}))
+
+// Phase 5 relations
+
+export const alertsRelations = relations(alerts, ({ one }) => ({
+  org: one(orgs, { fields: [alerts.org_id], references: [orgs.id] }),
+}))
+
+export const orgSettingsRelations = relations(orgSettings, ({ one }) => ({
+  org: one(orgs, { fields: [orgSettings.org_id], references: [orgs.id] }),
 }))
