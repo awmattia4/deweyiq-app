@@ -26,6 +26,7 @@ import {
   CopyIcon,
   PanelLeftIcon,
   PanelLeftCloseIcon,
+  Wand2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { TechDaySelector } from "./tech-day-selector"
@@ -33,6 +34,7 @@ import { RouteStopList } from "./route-stop-list"
 import { RouteMap, type ScheduleStop } from "./route-map"
 import { UnassignedPanel } from "./unassigned-panel"
 import { CopyRouteDialog } from "./copy-route-dialog"
+import { OptimizePreview } from "./optimize-preview"
 import {
   getStopsForDay,
   getUnassignedCustomers,
@@ -41,6 +43,7 @@ import {
   bulkAssignStops,
   type UnassignedCustomer,
 } from "@/actions/schedule"
+import { optimizeRoute, type OptimizationResult } from "@/actions/optimize"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -173,6 +176,12 @@ export function RouteBuilder({
   const [isAssigning, setIsAssigning] = useState(false)
   const [showUnassigned, setShowUnassigned] = useState(true)
   const [showCopyDialog, setShowCopyDialog] = useState(false)
+
+  // Optimization state
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null)
+  const [showOptimizePreview, setShowOptimizePreview] = useState(false)
+  const [isApplyingOptimization, setIsApplyingOptimization] = useState(false)
 
   // Multi-container DnD state
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -500,6 +509,34 @@ export function RouteBuilder({
     fetchAll(selectedTechId, selectedDay)
   }, [fetchAll, selectedTechId, selectedDay])
 
+  // ── Optimize route handler ───────────────────────────────────────────────────
+
+  const handleOptimize = useCallback(async () => {
+    if (isOptimizing || stops.length === 0) return
+
+    setIsOptimizing(true)
+    try {
+      const result = await optimizeRoute(selectedTechId, currentDate)
+
+      if (result.success) {
+        setOptimizationResult(result)
+        setShowOptimizePreview(true)
+      } else {
+        toast.error(result.error ?? "Optimization failed — please try again")
+      }
+    } catch {
+      toast.error("An error occurred during optimization")
+    } finally {
+      setIsOptimizing(false)
+    }
+  }, [isOptimizing, stops.length, selectedTechId, currentDate])
+
+  const handleOptimizationApplied = useCallback(() => {
+    setShowOptimizePreview(false)
+    setOptimizationResult(null)
+    fetchAll(selectedTechId, selectedDay)
+  }, [fetchAll, selectedTechId, selectedDay])
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const stopIds = stops.map((s) => s.id)
@@ -552,6 +589,33 @@ export function RouteBuilder({
           >
             <CopyIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Copy Route</span>
+          </Button>
+
+          {/* Optimize route button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOptimize}
+            disabled={
+              isOptimizing ||
+              stops.length === 0 ||
+              stops.every((s) => s.positionLocked)
+            }
+            className="gap-1.5"
+            title={
+              stops.every((s) => s.positionLocked)
+                ? "All stops are locked — unlock at least one to optimize"
+                : "Optimize route to minimize drive time"
+            }
+          >
+            {isOptimizing ? (
+              <Loader2Icon className="h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2Icon className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {isOptimizing ? "Optimizing…" : "Optimize Route"}
+            </span>
           </Button>
         </div>
       </div>
@@ -643,6 +707,23 @@ export function RouteBuilder({
           sourceStopCount={stops.length}
           techs={techs}
           onCopyComplete={handleCopyComplete}
+        />
+      )}
+
+      {/* ── Optimize Preview dialog ─────────────────────────────────────────── */}
+      {optimizationResult && (
+        <OptimizePreview
+          open={showOptimizePreview}
+          onOpenChange={(open) => {
+            setShowOptimizePreview(open)
+            if (!open) setOptimizationResult(null)
+          }}
+          result={optimizationResult}
+          techId={selectedTechId}
+          date={currentDate}
+          onApplied={handleOptimizationApplied}
+          isApplying={isApplyingOptimization}
+          onApplyingChange={setIsApplyingOptimization}
         />
       )}
     </div>
