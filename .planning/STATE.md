@@ -9,7 +9,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 5 of 10 (Office Operations & Dispatch) — IN PROGRESS
+Phase: 5 of 11 (Office Operations & Dispatch) — IN PROGRESS
 Plan: 4/6 complete
 Status: Phase 5 Plan 04 complete — alerts dashboard with auto-detection (missed stops, declining chemistry, incomplete data), dismiss/snooze lifecycle, sidebar badge, dashboard summary card; ready for plans 05-06
 Last activity: 2026-03-09 — Phase 5 Plan 04 executed: alerts.ts server actions, /alerts page, AlertFeed/AlertCard components, sidebar badge, dashboard card
