@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ten phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features close out the roadmap because they require accumulated operational data to be useful rather than theatrical.
+Eleven phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features close out the roadmap because they require accumulated operational data to be useful rather than theatrical.
 
 ## Phases
 
@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 8: Customer Portal** - Full self-service portal — service history, invoice payment, service requests, and messaging
 - [ ] **Phase 9: Reporting & Team Analytics** - Owner dashboards, technician scorecards, chemical profitability, and financial reporting
 - [ ] **Phase 10: Smart Features & AI** - AI route optimization, predictive chemistry alerts, and automated workload balancing
+- [ ] **Phase 11: Subscription Billing** - Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
 
 ## Phase Details
 
@@ -135,14 +136,17 @@ Plans:
   2. Office staff can generate a professional quote with line items and send it to a customer; the customer can approve it via a link in their email or through the portal
   3. An approved quote automatically converts to a work order with no manual re-entry
   4. When a work order is marked complete, office staff can convert it to an invoice with one click
-**Plans**: TBD
+**Plans**: 8 plans
 
 Plans:
-- [ ] 06-01: Work order model — create, assign, status workflow, attach to customer/pool
-- [ ] 06-02: Work order details — photos, notes, parts list, labor entries, cost tracking
-- [ ] 06-03: Quote builder — line-item editor, professional PDF output, email delivery
-- [ ] 06-04: Customer quote approval — email link approval, portal approval, approved-to-work-order conversion
-- [ ] 06-05: Work order to invoice conversion — one-click invoice generation from completed work order
+- [ ] 06-01-PLAN.md — Schema foundation: all Phase 6 tables (work_orders, line items, parts catalog, templates, quotes, invoices), org_settings extensions, @react-pdf/renderer install, core WO + catalog server actions
+- [ ] 06-02-PLAN.md — WO office UI: work order list page with filters, WO detail page with timeline/status controls, create dialog, sidebar nav
+- [ ] 06-03-PLAN.md — Tech field flow: flag-issue sheet in stop workflow (~10s flow), WO arrival/completion with photos/notes/hours
+- [ ] 06-04-PLAN.md — Line items + catalog: line item editor with catalog search/auto-fill, parts catalog manager in settings, WO templates in settings, Phase 6 org settings fields
+- [ ] 06-05-PLAN.md — Quote builder: quote PDF with @react-pdf/renderer, email delivery via Resend with PDF attachment, quote token system, versioning
+- [ ] 06-06-PLAN.md — Customer quote approval: public approval page (no auth), approve/decline/request-changes flow, approved-to-WO auto-conversion
+- [ ] 06-07-PLAN.md — Invoice conversion: WO-to-invoice preparation, invoice PDF, atomic invoice numbering, multi-WO invoicing, invoice list
+- [ ] 06-08-PLAN.md — Phase 6 end-to-end human verification checkpoint
 
 ### Phase 7: Billing & Payments
 **Goal**: The company can invoice customers across multiple billing models, collect payments automatically via Stripe, handle failed payments gracefully, sync with QuickBooks, and run financial reports — all without leaving the platform
@@ -222,10 +226,33 @@ Plans:
 - [ ] 10-04: ML route optimization — algorithm selection (OSRM vs. Google ROA), Upstash QStash async job, before/after comparison UI
 - [ ] 10-05: Smart customer creation — intelligent suggestions when adding pools/equipment (pool+spa auto-notes, service frequency recommendations, common equipment combos, gate code reminders)
 
+### Phase 11: Subscription Billing
+**Goal**: Pool companies pay for using the PoolCo SaaS platform via tiered subscriptions based on pool count — Stripe handles checkout, payment methods, and subscription lifecycle; the app enforces tier limits and handles failed payments gracefully
+**Depends on**: Phase 1 (auth, multi-tenant RLS, org model)
+**Requirements**: SUB-01, SUB-02, SUB-03, SUB-04, SUB-05, SUB-06, SUB-07, SUB-08, SUB-09, SUB-10
+**Success Criteria** (what must be TRUE):
+  1. A new org starts with a 14-day free trial (no credit card required) and sees a trial banner counting down
+  2. An owner can select a plan (Starter/Pro/Enterprise, monthly or annual) and complete checkout via Stripe — subscription activates immediately
+  3. An owner can view their current plan, pool usage, invoice history, and manage payment methods from /billing
+  4. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
+  5. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
+  6. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
+  7. Successful payment after restriction lifts all restrictions automatically
+**Plans**: 7 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — Schema + Stripe setup: subscriptions table with enums, src/lib/stripe.ts client singleton, tier config constants
+- [ ] 11-02-PLAN.md — Checkout & onboarding: createCheckoutSession, trial creation on signup, success/cancel pages
+- [ ] 11-03-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling 6 event types (checkout, subscription lifecycle, invoices, trial ending)
+- [ ] 11-04-PLAN.md — Billing management UI: /billing page with plan card, usage bar, invoice history, cancel/reactivate, trial + restricted banners
+- [ ] 11-05-PLAN.md — Usage tracking & tier enforcement: pool count tracking, limit checking with grace periods, upgrade prompt dialog
+- [ ] 11-06-PLAN.md — Failed payment & dunning: grace period management, account restriction (read-only mode), recovery flow
+- [ ] 11-07-PLAN.md — End-to-end verification checkpoint: 7 manual test scenarios with Stripe test mode
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -234,8 +261,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 3. Field Tech App | 8/8 | Complete    | 2026-03-08 |
 | 4. Scheduling & Routing | 7/7 | Complete | 2026-03-09 |
 | 5. Office Operations & Dispatch | 0/6 | Not started | - |
-| 6. Work Orders & Quoting | 0/5 | Not started | - |
+| 6. Work Orders & Quoting | 0/8 | Not started | - |
 | 7. Billing & Payments | 0/7 | Not started | - |
 | 8. Customer Portal | 0/5 | Not started | - |
 | 9. Reporting & Team Analytics | 0/5 | Not started | - |
 | 10. Smart Features & AI | 0/4 | Not started | - |
+| 11. Subscription Billing | 0/7 | Not started | - |
