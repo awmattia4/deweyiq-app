@@ -720,6 +720,271 @@ export async function getQuotesForWorkOrder(
 }
 
 // ---------------------------------------------------------------------------
+// getQuotePublicData
+// ---------------------------------------------------------------------------
+
+/**
+ * getQuotePublicData — Fetches all data needed for the public quote approval page.
+ *
+ * Uses adminDb throughout (no RLS) — customer has no Supabase auth session.
+ * This is called from the server component at /quote/[token] after token verification.
+ *
+ * Returns null if quote not found or data is incomplete.
+ */
+export interface QuotePublicLineItem {
+  id: string
+  description: string
+  quantity: number
+  unit: string
+  unitPrice: number
+  total: number
+  isOptional: boolean
+  isTaxable: boolean
+}
+
+export interface QuotePublicData {
+  quote: {
+    id: string
+    quote_number: string | null
+    version: number
+    status: string
+    expires_at: Date | null
+    approved_at: Date | null
+  }
+  companyName: string
+  logoUrl: string | null
+  customerName: string
+  propertyAddress: string | null
+  scopeOfWork: string | null
+  lineItems: QuotePublicLineItem[]
+  subtotal: number
+  taxRate: number
+  taxAmount: number
+  grandTotal: number
+  termsAndConditions: string | null
+  expirationDate: string
+  flaggedByTechName: string | null
+}
+
+export async function getQuotePublicData(
+  quoteId: string
+): Promise<QuotePublicData | null> {
+  try {
+    // ── 1. Fetch quote ─────────────────────────────────────────────────────
+    const quoteRows = await adminDb
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1)
+
+    const quote = quoteRows[0]
+    if (!quote) return null
+
+    // ── 2. Fetch WO ────────────────────────────────────────────────────────
+    const woRows = await adminDb
+      .select({
+        id: workOrders.id,
+        org_id: workOrders.org_id,
+        customer_id: workOrders.customer_id,
+        title: workOrders.title,
+        description: workOrders.description,
+        flagged_by_tech_id: workOrders.flagged_by_tech_id,
+        tax_exempt: workOrders.tax_exempt,
+        discount_type: workOrders.discount_type,
+        discount_value: workOrders.discount_value,
+      })
+      .from(workOrders)
+      .where(eq(workOrders.id, quote.work_order_id))
+      .limit(1)
+
+    const wo = woRows[0]
+    if (!wo) return null
+
+    // ── 3. Fetch customer ──────────────────────────────────────────────────
+    const customerRows = await adminDb
+      .select({
+        full_name: customers.full_name,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.id, wo.customer_id))
+      .limit(1)
+
+    const customer = customerRows[0]
+    if (!customer) return null
+
+    // ── 4. Fetch org settings ──────────────────────────────────────────────
+    const settingsRows = await adminDb
+      .select({
+        default_tax_rate: orgSettings.default_tax_rate,
+        quote_terms_and_conditions: orgSettings.quote_terms_and_conditions,
+      })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, wo.org_id))
+      .limit(1)
+
+    const settings = settingsRows[0]
+
+    // ── 5. Fetch org ────────────────────────────────────────────────────────
+    const orgRows = await adminDb
+      .select({ name: orgs.name, logo_url: orgs.logo_url })
+      .from(orgs)
+      .where(eq(orgs.id, wo.org_id))
+      .limit(1)
+
+    const org = orgRows[0]
+
+    // ── 6. Fetch line items ────────────────────────────────────────────────
+    const lineItemRows = await adminDb
+      .select()
+      .from(workOrderLineItems)
+      .where(eq(workOrderLineItems.work_order_id, wo.id))
+      .orderBy(workOrderLineItems.sort_order)
+
+    // ── 7. Fetch flaggedBy tech name ───────────────────────────────────────
+    let flaggedByTechName: string | null = null
+    if (wo.flagged_by_tech_id) {
+      const techRows = await adminDb
+        .select({ full_name: profiles.full_name })
+        .from(profiles)
+        .where(eq(profiles.id, wo.flagged_by_tech_id))
+        .limit(1)
+      flaggedByTechName = techRows[0]?.full_name ?? null
+    }
+
+    // ── 8. Compute totals ──────────────────────────────────────────────────
+    const taxRate = parseFloat(settings?.default_tax_rate ?? "0.0875")
+
+    const snapshotData = quote.snapshot_json as Record<string, unknown> | null
+    const scopeOfWork =
+      (snapshotData?.scope_of_work as string | undefined) ??
+      wo.description ??
+      wo.title
+
+    const lineItems: QuotePublicLineItem[] = lineItemRows.map((li) => {
+      const qty = parseFloat(li.quantity ?? "1")
+      const unitPrice = parseFloat(li.unit_price ?? "0")
+      const total = qty * unitPrice
+      return {
+        id: li.id,
+        description: li.description,
+        quantity: qty,
+        unit: li.unit ?? "each",
+        unitPrice,
+        total,
+        isOptional: li.is_optional,
+        isTaxable: li.is_taxable,
+      }
+    })
+
+    const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0)
+
+    let discountAmount: number | null = null
+    if (wo.discount_type && wo.discount_value) {
+      const discVal = parseFloat(String(wo.discount_value))
+      if (wo.discount_type === "percent") {
+        discountAmount = subtotal * (discVal / 100)
+      } else {
+        discountAmount = discVal
+      }
+    }
+
+    const discountedSubtotal = discountAmount ? subtotal - discountAmount : subtotal
+
+    const taxableSubtotal = lineItems
+      .filter((li) => li.isTaxable)
+      .reduce((sum, li) => sum + li.total, 0)
+
+    const isTaxExempt = wo.tax_exempt
+    const taxAmount = isTaxExempt ? 0 : taxableSubtotal * taxRate
+    const grandTotal = discountedSubtotal + taxAmount
+
+    const expirationDate = quote.expires_at
+      ? new Date(quote.expires_at).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : "No expiration"
+
+    return {
+      quote: {
+        id: quote.id,
+        quote_number: quote.quote_number,
+        version: quote.version,
+        status: quote.status,
+        expires_at: quote.expires_at,
+        approved_at: quote.approved_at,
+      },
+      companyName: org?.name ?? "Pool Company",
+      logoUrl: org?.logo_url ?? null,
+      customerName: customer.full_name,
+      propertyAddress: customer.address ?? null,
+      scopeOfWork,
+      lineItems,
+      subtotal,
+      taxRate,
+      taxAmount,
+      grandTotal,
+      termsAndConditions: settings?.quote_terms_and_conditions ?? null,
+      expirationDate,
+      flaggedByTechName,
+    }
+  } catch (err) {
+    console.error("[getQuotePublicData] Error:", err)
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// checkQuoteExpiration (stretch utility)
+// ---------------------------------------------------------------------------
+
+/**
+ * checkQuoteExpiration — Checks if a quote is expiring soon.
+ *
+ * Returns:
+ * - { isExpiring: true, daysLeft: N } if quote is 'sent' and within 7 days of expiry
+ * - { isExpiring: false } otherwise
+ *
+ * Intended to be called by a cron job in a future phase to send reminder emails.
+ * The cron trigger is out of scope for Phase 6.
+ */
+export async function checkQuoteExpiration(quoteId: string): Promise<{
+  isExpiring: boolean
+  daysLeft?: number
+}> {
+  try {
+    const rows = await adminDb
+      .select({
+        status: quotes.status,
+        expires_at: quotes.expires_at,
+      })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1)
+
+    const quote = rows[0]
+    if (!quote || quote.status !== "sent" || !quote.expires_at) {
+      return { isExpiring: false }
+    }
+
+    const now = new Date()
+    const msLeft = new Date(quote.expires_at).getTime() - now.getTime()
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+
+    if (daysLeft <= 7 && daysLeft > 0) {
+      return { isExpiring: true, daysLeft }
+    }
+
+    return { isExpiring: false }
+  } catch (err) {
+    console.error("[checkQuoteExpiration] Error:", err)
+    return { isExpiring: false }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // updateQuoteDraft
 // ---------------------------------------------------------------------------
 
