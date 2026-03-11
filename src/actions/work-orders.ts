@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   workOrders,
@@ -12,6 +12,8 @@ import {
   profiles,
   quotes,
   woTemplates,
+  alerts,
+  orgSettings,
 } from "@/lib/db/schema"
 import {
   eq,
@@ -195,6 +197,66 @@ async function appendActivityEvent(
       updated_at: new Date(),
     })
     .where(eq(workOrders.id, workOrderId))
+}
+
+// ---------------------------------------------------------------------------
+// Types for WO create dialog
+// ---------------------------------------------------------------------------
+
+export interface CustomerForWo {
+  id: string
+  full_name: string
+  pools: Array<{ id: string; name: string; type: string }>
+}
+
+// ---------------------------------------------------------------------------
+// getCustomersForWo
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns customers with their pools for the WO create dialog.
+ * Two separate queries to avoid RLS correlated subquery pitfall (MEMORY.md).
+ */
+export async function getCustomersForWo(): Promise<CustomerForWo[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  try {
+    return await withRls(token, async (db) => {
+      const customerRows = await db
+        .select({ id: customers.id, full_name: customers.full_name })
+        .from(customers)
+        .orderBy(customers.full_name)
+
+      if (customerRows.length === 0) return []
+
+      const customerIds = customerRows.map((c) => c.id)
+      const poolRows = await db
+        .select({
+          id: pools.id,
+          customer_id: pools.customer_id,
+          name: pools.name,
+          type: pools.type,
+        })
+        .from(pools)
+        .where(inArray(pools.customer_id, customerIds))
+
+      const poolsByCustomer: Record<string, Array<{ id: string; name: string; type: string }>> = {}
+      for (const p of poolRows) {
+        if (!poolsByCustomer[p.customer_id]) poolsByCustomer[p.customer_id] = []
+        poolsByCustomer[p.customer_id].push({ id: p.id, name: p.name, type: p.type })
+      }
+
+      return customerRows.map((c) => ({
+        id: c.id,
+        full_name: c.full_name,
+        pools: poolsByCustomer[c.id] ?? [],
+      }))
+    })
+  } catch (err) {
+    console.error("[getCustomersForWo] Error:", err)
+    return []
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -450,7 +512,7 @@ export async function createWorkOrder(
   const userId = token.sub
 
   try {
-    return await withRls(token, async (db) => {
+    const woId = await withRls(token, async (db) => {
       const now = new Date()
 
       // ── 1. Create the WO record ────────────────────────────────────────
@@ -480,8 +542,8 @@ export async function createWorkOrder(
       }
 
       const inserted = await db.insert(workOrders).values(woValues).returning({ id: workOrders.id })
-      const woId = inserted[0]?.id
-      if (!woId) throw new Error("Failed to insert work order")
+      const newWoId = inserted[0]?.id
+      if (!newWoId) throw new Error("Failed to insert work order")
 
       // ── 2. Seed line items from template if templateId provided ────────
       if (data.templateId) {
@@ -500,7 +562,7 @@ export async function createWorkOrder(
         if (snapshot && Array.isArray(snapshot) && snapshot.length > 0) {
           const lineItemValues = snapshot.map((item) => ({
             org_id: orgId,
-            work_order_id: woId,
+            work_order_id: newWoId,
             description: item.description,
             item_type: item.item_type ?? "part",
             labor_type: item.labor_type ?? null,
@@ -519,11 +581,85 @@ export async function createWorkOrder(
       }
 
       revalidatePath("/work-orders")
-      return woId
+      return newWoId
     })
+
+    // ── 3. Fire office alert for tech-flagged WOs (best-effort, non-fatal) ──
+    // Uses adminDb because techs cannot INSERT into alerts (RLS: owner+office only).
+    // Runs outside withRls transaction so alert failure never rolls back WO creation.
+    if (woId && data.flaggedByTechId) {
+      await _notifyOfficeWoFlagged(
+        orgId,
+        woId,
+        data.title,
+        data.severity ?? null,
+        data.flaggedByTechId
+      )
+    }
+
+    return woId
   } catch (err) {
     console.error("[createWorkOrder] Error:", err)
     return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _notifyOfficeWoFlagged — internal helper for flagged WO office alerts
+// ---------------------------------------------------------------------------
+
+/**
+ * Fires an office alert when a tech flags a WO from a service stop.
+ * Uses adminDb because techs cannot INSERT into alerts (RLS: owner+office only).
+ * Checks org_settings.wo_notify_office_on_flag before inserting.
+ */
+async function _notifyOfficeWoFlagged(
+  orgId: string,
+  woId: string,
+  woTitle: string,
+  severity: string | null,
+  techId: string
+): Promise<void> {
+  try {
+    // Check org_settings.wo_notify_office_on_flag
+    const settingsRows = await adminDb
+      .select({ wo_notify_office_on_flag: orgSettings.wo_notify_office_on_flag })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, orgId))
+      .limit(1)
+
+    const notify = settingsRows[0]?.wo_notify_office_on_flag ?? true
+    if (!notify) return
+
+    // Fetch tech name for the alert message
+    const techRows = await adminDb
+      .select({ full_name: profiles.full_name })
+      .from(profiles)
+      .where(eq(profiles.id, techId))
+      .limit(1)
+    const techName = techRows[0]?.full_name ?? "Tech"
+
+    // Map WO severity to alert severity: routine→info, urgent→warning, emergency→critical
+    const alertSeverity =
+      severity === "emergency" ? "critical"
+      : severity === "urgent" ? "warning"
+      : "info"
+
+    await adminDb
+      .insert(alerts)
+      .values({
+        org_id: orgId,
+        alert_type: "work_order_flagged",
+        severity: alertSeverity,
+        reference_id: woId,
+        reference_type: "work_order",
+        title: `Issue flagged by ${techName}: ${woTitle}`,
+        metadata: { techId, woId, severity },
+      })
+      .onConflictDoNothing()
+  } catch (err) {
+    // Non-fatal — alert is best-effort, don't fail the WO creation
+    console.error("[createWorkOrder] Failed to create flagged-issue alert:", err)
   }
 }
 
@@ -757,5 +893,200 @@ export async function createFollowUpWorkOrder(parentWoId: string): Promise<strin
   } catch (err) {
     console.error("[createFollowUpWorkOrder] Error:", err)
     return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// addLineItemToWorkOrder
+// ---------------------------------------------------------------------------
+
+export interface AddLineItemInput {
+  catalogItemId?: string
+  description: string
+  itemType: "part" | "labor" | "other"
+  laborType?: "hourly" | "flat_rate"
+  quantity: string
+  unit: string
+  unitCost?: string
+  unitPrice?: string
+  markupPct?: string
+  discountType?: "percent" | "fixed"
+  discountValue?: string
+  isTaxable: boolean
+  isOptional: boolean
+  actualHours?: string
+}
+
+/**
+ * Adds a line item to a work order.
+ * Returns the new line item id, or null on failure.
+ */
+export async function addLineItemToWorkOrder(
+  workOrderId: string,
+  data: AddLineItemInput
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+
+  try {
+    const result = await withRls(token, async (db) => {
+      // Get current max sort_order for this WO
+      const existing = await db
+        .select({ sort_order: workOrderLineItems.sort_order })
+        .from(workOrderLineItems)
+        .where(eq(workOrderLineItems.work_order_id, workOrderId))
+        .orderBy(desc(workOrderLineItems.sort_order))
+        .limit(1)
+
+      const nextSort = existing.length > 0 ? (existing[0].sort_order ?? 0) + 1 : 0
+
+      const inserted = await db
+        .insert(workOrderLineItems)
+        .values({
+          org_id: orgId,
+          work_order_id: workOrderId,
+          catalog_item_id: data.catalogItemId ?? null,
+          description: data.description,
+          item_type: data.itemType,
+          labor_type: data.laborType ?? null,
+          quantity: data.quantity,
+          unit: data.unit,
+          unit_cost: data.unitCost ?? null,
+          unit_price: data.unitPrice ?? null,
+          markup_pct: data.markupPct ?? null,
+          discount_type: data.discountType ?? null,
+          discount_value: data.discountValue ?? null,
+          is_taxable: data.isTaxable,
+          is_optional: data.isOptional,
+          actual_hours: data.actualHours ?? null,
+          sort_order: nextSort,
+        })
+        .returning({ id: workOrderLineItems.id })
+
+      return inserted[0]?.id ?? null
+    })
+
+    revalidatePath(`/work-orders/${workOrderId}`)
+    return { success: true, id: result ?? undefined }
+  } catch (err) {
+    console.error("[addLineItemToWorkOrder] Error:", err)
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateLineItem
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates a line item's fields.
+ */
+export async function updateLineItem(
+  lineItemId: string,
+  data: Partial<AddLineItemInput> & { workOrderId?: string }
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      const updates: Partial<typeof workOrderLineItems.$inferInsert> = {}
+
+      if (data.catalogItemId !== undefined) updates.catalog_item_id = data.catalogItemId
+      if (data.description !== undefined) updates.description = data.description
+      if (data.itemType !== undefined) updates.item_type = data.itemType
+      if (data.laborType !== undefined) updates.labor_type = data.laborType
+      if (data.quantity !== undefined) updates.quantity = data.quantity
+      if (data.unit !== undefined) updates.unit = data.unit
+      if (data.unitCost !== undefined) updates.unit_cost = data.unitCost
+      if (data.unitPrice !== undefined) updates.unit_price = data.unitPrice
+      if (data.markupPct !== undefined) updates.markup_pct = data.markupPct
+      if (data.discountType !== undefined) updates.discount_type = data.discountType
+      if (data.discountValue !== undefined) updates.discount_value = data.discountValue
+      if (data.isTaxable !== undefined) updates.is_taxable = data.isTaxable
+      if (data.isOptional !== undefined) updates.is_optional = data.isOptional
+      if (data.actualHours !== undefined) updates.actual_hours = data.actualHours
+
+      await db
+        .update(workOrderLineItems)
+        .set(updates)
+        .where(eq(workOrderLineItems.id, lineItemId))
+    })
+
+    if (data.workOrderId) {
+      revalidatePath(`/work-orders/${data.workOrderId}`)
+    }
+    return { success: true }
+  } catch (err) {
+    console.error("[updateLineItem] Error:", err)
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// deleteLineItem
+// ---------------------------------------------------------------------------
+
+/**
+ * Deletes a line item permanently.
+ */
+export async function deleteLineItem(
+  lineItemId: string,
+  workOrderId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .delete(workOrderLineItems)
+        .where(eq(workOrderLineItems.id, lineItemId))
+    })
+
+    revalidatePath(`/work-orders/${workOrderId}`)
+    return { success: true }
+  } catch (err) {
+    console.error("[deleteLineItem] Error:", err)
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// reorderLineItems
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates sort_order for each line item based on orderedIds array position.
+ */
+export async function reorderLineItems(
+  workOrderId: string,
+  orderedIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await db
+          .update(workOrderLineItems)
+          .set({ sort_order: i })
+          .where(
+            and(
+              eq(workOrderLineItems.id, orderedIds[i]),
+              eq(workOrderLineItems.work_order_id, workOrderId)
+            )
+          )
+      }
+    })
+
+    revalidatePath(`/work-orders/${workOrderId}`)
+    return { success: true }
+  } catch (err) {
+    console.error("[reorderLineItems] Error:", err)
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
   }
 }

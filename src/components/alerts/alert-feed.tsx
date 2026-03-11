@@ -43,6 +43,7 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
     missed_stop: alerts.filter((a) => a.alert_type === "missed_stop").length,
     declining_chemistry: alerts.filter((a) => a.alert_type === "declining_chemistry").length,
     incomplete_data: alerts.filter((a) => a.alert_type === "incomplete_data").length,
+    work_order_flagged: alerts.filter((a) => a.alert_type === "work_order_flagged").length,
   }
 
   return (

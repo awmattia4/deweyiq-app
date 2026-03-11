@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -13,6 +14,7 @@ import {
   SettingsIcon,
   UserCircleIcon,
   LogOutIcon,
+  WrenchIcon,
 } from "lucide-react"
 import {
   Sidebar,
@@ -26,6 +28,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
@@ -111,6 +114,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: BellIcon,
     roles: ["owner", "office"], // Techs do NOT see the Alerts nav item (locked decision)
   },
+  // ── Available in Phase 6 ───────────────────────────────────────────────────
+  {
+    label: "Work Orders",
+    href: "/work-orders",
+    icon: WrenchIcon,
+    roles: ["owner", "office"],
+  },
   // ── Future phases (Phase 7+) — hidden until ready ─────────────────────────
   // { label: "Billing",         href: "/billing",   icon: CreditCardIcon,      roles: ["owner"] },                  // Phase 7
   // { label: "Reports",         href: "/reports",   icon: BarChartIcon,        roles: ["owner"] },                  // Phase 9
@@ -162,6 +172,8 @@ function getRoleLabel(role: AuthUser["role"]): string {
 interface AppSidebarProps {
   user: AuthUser
   alertCount?: number
+  orgName?: string | null
+  orgLogoUrl?: string | null
 }
 
 /**
@@ -176,8 +188,14 @@ interface AppSidebarProps {
  * tabs (billing settings, team management, reports)."
  * Those additional tabs are hidden until their phases ship (see NAV_ITEMS comments).
  */
-export function AppSidebar({ user, alertCount = 0 }: AppSidebarProps) {
+export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl }: AppSidebarProps) {
   const pathname = usePathname()
+  const { setOpenMobile } = useSidebar()
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    setOpenMobile(false)
+  }, [pathname, setOpenMobile])
 
   // Select the correct nav set based on role
   const navItems =
@@ -190,28 +208,50 @@ export function AppSidebar({ user, alertCount = 0 }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon">
-      {/* ── Header: PoolCo branding ─────────────────────────────────────── */}
+      {/* ── Header: Software + company branding ─────────────────────────── */}
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-3">
-          {/* Wave logo mark */}
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-4 w-4 text-primary-foreground"
-              aria-hidden="true"
-            >
-              <path
-                d="M2 12C2 12 5 8 8 8C11 8 13 12 16 12C19 12 22 8 22 8"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
+        <div className="flex flex-col gap-1.5 px-2 py-3">
+          {/* Software branding — small */}
+          <div className="flex items-center gap-1.5 group-data-[collapsible=icon]:justify-center">
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/80">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-3 w-3 text-primary-foreground"
+                aria-hidden="true"
+              >
+                <path
+                  d="M2 12C2 12 5 8 8 8C11 8 13 12 16 12C19 12 22 8 22 8"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <span className="text-[10px] font-medium tracking-wide uppercase text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+              PoolCo
+            </span>
           </div>
-          <span className="truncate font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-            PoolCo
-          </span>
+
+          {/* Company branding — prominent */}
+          <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+            {orgLogoUrl ? (
+              <img
+                src={orgLogoUrl}
+                alt={orgName ?? "Company logo"}
+                className="h-8 w-8 shrink-0 rounded-md object-contain"
+              />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary">
+                <span className="text-sm font-bold text-primary-foreground">
+                  {(orgName ?? "C")[0].toUpperCase()}
+                </span>
+              </div>
+            )}
+            <span className="truncate font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+              {orgName ?? "My Company"}
+            </span>
+          </div>
         </div>
       </SidebarHeader>
 

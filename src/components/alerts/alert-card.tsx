@@ -51,15 +51,17 @@ function SeverityDot({ severity }: { severity: Alert["severity"] }) {
 // ─── Alert label ──────────────────────────────────────────────────────────────
 
 function AlertTypeLabel({ alertType }: { alertType: Alert["alert_type"] }) {
-  const config = {
+  const config: Record<string, { label: string; className: string }> = {
     missed_stop: { label: "Missed Stop", className: "text-red-400" },
     declining_chemistry: { label: "Declining Chemistry", className: "text-amber-400" },
     incomplete_data: { label: "Incomplete Data", className: "text-blue-400" },
-  }[alertType] ?? { label: alertType, className: "text-muted-foreground" }
+    work_order_flagged: { label: "Issue Flagged", className: "text-amber-400" },
+  }
+  const { label, className } = config[alertType] ?? { label: alertType, className: "text-muted-foreground" }
 
   return (
-    <span className={cn("text-xs font-medium", config.className)}>
-      {config.label}
+    <span className={cn("text-xs font-medium", className)}>
+      {label}
     </span>
   )
 }
