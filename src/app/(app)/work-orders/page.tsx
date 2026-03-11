@@ -4,8 +4,10 @@ import { WrenchIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
 import { getWorkOrders } from "@/actions/work-orders"
 import { getWoTemplates } from "@/actions/parts-catalog"
+import { getInvoices } from "@/actions/invoices"
 import { WoList } from "@/components/work-orders/wo-list"
 import { WoCreateDialog } from "@/components/work-orders/wo-create-dialog"
+import { WoInvoicesTabShell } from "@/components/work-orders/wo-invoices-tab-shell"
 
 export const metadata: Metadata = {
   title: "Work Orders",
@@ -15,9 +17,11 @@ export const metadata: Metadata = {
  * WorkOrdersPage — Server component listing all open work orders.
  *
  * Role guard: owner and office only. Techs are redirected to /routes.
- * Fetches WOs (no filters = all WOs) and WO templates in parallel.
+ * Fetches WOs, WO templates, and invoices in parallel.
  *
- * WoList handles client-side filtering; WoCreateDialog handles creation.
+ * WoList handles WO client-side filtering.
+ * InvoiceList handles invoice client-side filtering.
+ * WoInvoicesTabShell (client) manages the WOs | Invoices tab toggle.
  */
 export default async function WorkOrdersPage() {
   const user = await getCurrentUser()
@@ -26,10 +30,11 @@ export default async function WorkOrdersPage() {
   if (user.role === "tech") redirect("/routes")
   if (user.role === "customer") redirect("/portal")
 
-  // Fetch WOs and templates in parallel
-  const [workOrders, templates] = await Promise.all([
+  // Fetch WOs, templates, and invoices in parallel
+  const [workOrders, templates, invoices] = await Promise.all([
     getWorkOrders(),
     getWoTemplates(),
+    getInvoices(),
   ])
 
   return (
@@ -50,8 +55,11 @@ export default async function WorkOrdersPage() {
         <WoCreateDialog templates={templates} />
       </div>
 
-      {/* ── Work order list with filters ─────────────────────────────────── */}
-      <WoList workOrders={workOrders} />
+      {/* ── WOs | Invoices tab shell ──────────────────────────────────────── */}
+      <WoInvoicesTabShell
+        workOrders={workOrders}
+        invoices={invoices}
+      />
     </div>
   )
 }

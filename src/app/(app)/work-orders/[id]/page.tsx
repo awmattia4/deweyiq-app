@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getWorkOrder } from "@/actions/work-orders"
 import { getTechProfiles } from "@/actions/work-orders"
+import { getInvoiceForWorkOrder } from "@/actions/invoices"
 import { WoDetail } from "@/components/work-orders/wo-detail"
 
 interface WorkOrderDetailPageProps {
@@ -12,7 +13,8 @@ interface WorkOrderDetailPageProps {
  * WorkOrderDetailPage — Server component for a single WO.
  *
  * Fetches the WO with all relations (customer, pool, line items, quotes,
- * activity log) and tech profiles for the assignment dialog.
+ * activity log), tech profiles for the assignment dialog, and invoice info
+ * (for the "Prepare Invoice" / "View Invoice" action on completed WOs).
  *
  * Role guard: owner and office only. Techs are redirected to /routes.
  */
@@ -33,15 +35,22 @@ export default async function WorkOrderDetailPage({ params }: WorkOrderDetailPag
 
   const { id } = await params
 
-  // Fetch WO and tech profiles in parallel
-  const [workOrder, techs] = await Promise.all([
+  // Fetch WO, tech profiles, and invoice info in parallel
+  const [workOrder, techs, invoiceInfo] = await Promise.all([
     getWorkOrder(id),
     getTechProfiles(),
+    getInvoiceForWorkOrder(id),
   ])
 
   if (!workOrder) {
     notFound()
   }
 
-  return <WoDetail workOrder={workOrder} techs={techs} />
+  return (
+    <WoDetail
+      workOrder={workOrder}
+      techs={techs}
+      invoiceInfo={invoiceInfo}
+    />
+  )
 }

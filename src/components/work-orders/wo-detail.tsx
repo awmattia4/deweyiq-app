@@ -14,6 +14,7 @@ import {
   XIcon,
   Loader2Icon,
   ImageIcon,
+  ReceiptIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -31,6 +32,7 @@ import {
   createFollowUpWorkOrder,
 } from "@/actions/work-orders"
 import type { WorkOrderDetail, TechProfile } from "@/actions/work-orders"
+import { prepareInvoice } from "@/actions/invoices"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -166,6 +168,7 @@ const PRIORITY_OPTIONS = [
 interface WoDetailProps {
   workOrder: WorkOrderDetail
   techs: TechProfile[]
+  invoiceInfo?: { id: string; invoice_number: string | null; status: string } | null
 }
 
 /**
@@ -179,10 +182,15 @@ interface WoDetailProps {
  * - Linked quotes section
  * - Follow-up WO links
  */
-export function WoDetail({ workOrder: initialWo, techs }: WoDetailProps) {
+export function WoDetail({
+  workOrder: initialWo,
+  techs,
+  invoiceInfo,
+}: WoDetailProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [wo, setWo] = useState(initialWo)
+  const [prepareInvoicePending, setPrepareInvoicePending] = useState(false)
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
@@ -316,6 +324,28 @@ export function WoDetail({ workOrder: initialWo, techs }: WoDetailProps) {
       router.push(`/work-orders/${newWoId}`)
     } else {
       toast.error("Failed to create follow-up work order")
+    }
+  }
+
+  // ── Prepare invoice handler ─────────────────────────────────────────────
+
+  async function handlePrepareInvoice() {
+    // If invoice already exists, navigate directly to it
+    if (invoiceInfo) {
+      router.push(`/work-orders/${wo.id}/invoice/${invoiceInfo.id}`)
+      return
+    }
+
+    // Create a new invoice from this WO
+    setPrepareInvoicePending(true)
+    const invoiceId = await prepareInvoice(wo.id)
+    setPrepareInvoicePending(false)
+
+    if (invoiceId) {
+      toast.success("Invoice prepared")
+      router.push(`/work-orders/${wo.id}/invoice/${invoiceId}`)
+    } else {
+      toast.error("Failed to prepare invoice")
     }
   }
 
@@ -540,6 +570,9 @@ export function WoDetail({ workOrder: initialWo, techs }: WoDetailProps) {
         onSchedule={() => setScheduleDialogOpen(true)}
         onFollowUp={handleCreateFollowUp}
         followUpPending={followUpPending}
+        onPrepareInvoice={handlePrepareInvoice}
+        prepareInvoicePending={prepareInvoicePending}
+        invoiceInfo={invoiceInfo}
       />
 
       {/* ── Assignment section ───────────────────────────────────────────── */}
@@ -924,6 +957,9 @@ interface StatusActionBarProps {
   onSchedule: () => void
   onFollowUp: () => void
   followUpPending: boolean
+  onPrepareInvoice: () => void
+  prepareInvoicePending: boolean
+  invoiceInfo?: { id: string; invoice_number: string | null; status: string } | null
 }
 
 function StatusActionBar({
@@ -934,9 +970,32 @@ function StatusActionBar({
   onSchedule,
   onFollowUp,
   followUpPending,
+  onPrepareInvoice,
+  prepareInvoicePending,
+  invoiceInfo,
 }: StatusActionBarProps) {
-  if (wo.status === "invoiced" || wo.status === "cancelled") {
+  if (wo.status === "cancelled") {
     return null
+  }
+
+  // Invoiced status: show invoice link instead of action bar
+  if (wo.status === "invoiced") {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+        <ReceiptIcon className="h-4 w-4 text-emerald-400 shrink-0" />
+        <span className="text-sm font-medium text-emerald-300">Invoiced</span>
+        {invoiceInfo && (
+          <Link
+            href={`/work-orders/${wo.id}/invoice/${invoiceInfo.id}`}
+            className="ml-auto text-sm font-medium text-emerald-300 hover:text-emerald-200 underline underline-offset-2 transition-colors"
+          >
+            {invoiceInfo.invoice_number
+              ? `View Invoice ${invoiceInfo.invoice_number}`
+              : "View Invoice"}
+          </Link>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -1032,8 +1091,16 @@ function StatusActionBar({
         {/* Complete status actions */}
         {wo.status === "complete" && (
           <>
-            <Button size="sm" variant="outline" disabled>
-              Prepare Invoice
+            <Button
+              size="sm"
+              onClick={onPrepareInvoice}
+              disabled={isPending || prepareInvoicePending}
+            >
+              {prepareInvoicePending && (
+                <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />
+              )}
+              <ReceiptIcon className="mr-1.5 h-4 w-4" />
+              {invoiceInfo ? "View Invoice" : "Prepare Invoice"}
             </Button>
             <Button
               size="sm"
