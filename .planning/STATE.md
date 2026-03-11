@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 6/6 complete (01, 03, 04, 05, 06 done; 02 remaining)
-Status: Phase 6 Plan 06 complete — Public customer quote approval page at /quote/[token], POST endpoint /api/quotes/[token]/approve, approved quotes auto-convert WO to 'approved', office alerts for all customer responses
-Last activity: 2026-03-11 — Phase 6 Plan 06 executed: customer quote approval portal + API endpoint + WO auto-conversion
+Plan: 7/7 complete (01, 02, 03, 04, 05, 06, 07 done)
+Status: Phase 6 Plan 07 complete — Invoice preparation screen, invoice PDF, invoice list page, multi-WO invoicing, atomic invoice number generation, WO detail wiring
+Last activity: 2026-03-11 — Phase 6 Plan 07 executed: work-order-to-invoice conversion flow, invoice PDF, invoice list
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [█████████░] 90%
 | Phase 06-work-orders-quoting P04 | 14 | 2 tasks | 7 files |
 | Phase 06-work-orders-quoting P05 | 10 | 2 tasks | 7 files |
 | Phase 06-work-orders-quoting P06 | 4 | 2 tasks | 4 files |
+| Phase 06-work-orders-quoting P07 | 11 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -210,6 +211,11 @@ Recent decisions affecting current work:
 - [Phase 06-06]: onConflictDoNothing for quote response alerts — unique (org_id, alert_type, reference_id) constraint with reference_id=quote.id ensures exactly one alert per quote per action type
 - [Phase 06-06]: Status guard on approval API — only 'sent' quotes can be acted on; prevents double-approval race conditions
 - [Phase 06-06]: Light theme for /quote/[token] public page — customer-facing portal uses white/gray design system, not dark admin theme
+- [Phase 06-07]: adminDb for finalizeInvoice atomic counter — org_settings UPDATE RLS is owner-only; adminDb lets office staff finalize invoices without owner role (same pattern as quote numbers)
+- [Phase 06-07]: Two-query pattern for invoice list fetches — fetch invoices then customer names separately to avoid RLS correlated subquery pitfall per MEMORY.md
+- [Phase 06-07]: Invoice line_total pre-calculated per row — recalculateInvoiceTotals helper called after any line item mutation; same pattern as WO line items
+- [Phase 06-07]: WoInvoicesTabShell both panels in DOM with hidden/visible toggle — preserves local filter state when switching tabs without refetching (same as ScheduleTabs)
+- [Phase 06-07]: handlePrepareInvoice in WoDetail creates invoice on first click, navigates to existing on subsequent — server pre-fetches invoiceInfo for the WO
 
 ### Pending Todos
 
@@ -229,5 +235,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 06-06-PLAN.md — Customer quote approval portal at /quote/[token], POST /api/quotes/[token]/approve, WO auto-conversion on approval, office alerts
-Resume file: N/A — Phase 6 complete (Plan 02 WO detail page still remaining); consider Phase 7 (Invoicing) or cleanup Plan 02
+Stopped at: Completed 06-07-PLAN.md — Invoice preparation screen, invoice PDF, invoice list, multi-WO invoicing, atomic invoice numbers, WO detail wiring
+Resume file: N/A — Phase 6 complete (all 7 plans executed); begin Phase 7 (Billing & Payments)
