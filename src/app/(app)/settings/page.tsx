@@ -14,23 +14,31 @@ import { MapsPreferenceSetting } from "@/components/settings/maps-preference"
 import { NotificationSettings } from "@/components/settings/notification-settings"
 import { ServiceRequirements } from "@/components/settings/service-requirements"
 import { CompanyProfileSettings } from "@/components/settings/company-profile-settings"
-import { getOrgSettings } from "@/actions/company-settings"
-import { LogOutIcon, BuildingIcon, UserIcon, MapPinIcon, BellIcon, ClipboardCheckIcon } from "lucide-react"
+import { ChecklistManager } from "@/components/settings/checklist-manager"
+import { ChemistryTargetEditor } from "@/components/settings/chemistry-target-editor"
+import { PartsCatalogManager } from "@/components/settings/parts-catalog-manager"
+import { WoTemplateManager } from "@/components/settings/wo-template-manager"
+import { WorkOrderSettings } from "@/components/settings/work-order-settings"
+import { getOrgSettings, getChecklistTasks, getOrgLogoUrl } from "@/actions/company-settings"
+import { getCatalogItems, getWoTemplates } from "@/actions/parts-catalog"
+import {
+  LogOutIcon,
+  BuildingIcon,
+  UserIcon,
+  MapPinIcon,
+  BellIcon,
+  ClipboardCheckIcon,
+  ListChecksIcon,
+  FlaskConicalIcon,
+  ShoppingCartIcon,
+  FileTextIcon,
+  WrenchIcon,
+} from "lucide-react"
 
 export const metadata: Metadata = {
   title: "Settings",
 }
 
-/**
- * Settings — Profile editing and org info, plus tech-specific preferences.
- *
- * Phase 3: Accessible to all roles (owner, office, tech).
- * - Tech: sees maps preference + read-only profile
- * - Owner: sees full company settings (notifications, service requirements, company profile)
- * - Office: sees profile editing + org info + maps preference (read-only company settings)
- *
- * Tech redirect removed — tech needs access to set maps preference (FIELD-11).
- */
 export default async function SettingsPage() {
   const user = await getCurrentUser()
 
@@ -62,8 +70,16 @@ export default async function SettingsPage() {
   const isTech = user.role === "tech"
   const isOwner = user.role === "owner"
 
-  // Fetch org settings for owner (needed for notification toggles and service requirements)
-  const orgSettings = isOwner ? await getOrgSettings() : null
+  // Fetch owner data in parallel
+  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList] = isOwner
+    ? await Promise.all([
+        getOrgSettings(),
+        getChecklistTasks(),
+        getOrgLogoUrl(),
+        getCatalogItems(),
+        getWoTemplates(),
+      ])
+    : [null, [], null, [], []]
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -79,7 +95,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      {/* ── Owner: Company Profile ──────────────────────────────────────── */}
+      {/* ── Owner: Company Profile (with logo upload) ────────────────────── */}
       {isOwner && (
         <Card>
           <CardHeader>
@@ -88,16 +104,22 @@ export default async function SettingsPage() {
               <CardTitle className="text-base">Company Profile</CardTitle>
             </div>
             <CardDescription>
-              Your company name appears in service reports and customer emails.
+              Your company name and logo appear in service reports and customer emails.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <CompanyProfileSettings orgName={orgName} />
+            <CompanyProfileSettings
+              orgName={orgName}
+              logoUrl={logoUrl}
+              homeBaseAddress={orgSettings?.home_base_address ?? null}
+              homeBaseLat={orgSettings?.home_base_lat ?? null}
+              homeBaseLng={orgSettings?.home_base_lng ?? null}
+            />
           </CardContent>
         </Card>
       )}
 
-      {/* ── Owner: Notification Settings ────────────────────────────────── */}
+      {/* ── Owner: Notification Settings (includes report content config) ── */}
       {isOwner && orgSettings && (
         <Card>
           <CardHeader>
@@ -106,7 +128,7 @@ export default async function SettingsPage() {
               <CardTitle className="text-base">Notifications</CardTitle>
             </div>
             <CardDescription>
-              Control which notifications are sent to customers and which alerts are generated for your office.
+              Control notifications sent to customers, service report content, and office alert preferences.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -115,7 +137,25 @@ export default async function SettingsPage() {
         </Card>
       )}
 
-      {/* ── Owner: Service Requirements ──────────────────────────────────── */}
+      {/* ── Owner: Service Checklist (DB-backed CRUD) ─────────────────────── */}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ListChecksIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Service Checklist</CardTitle>
+            </div>
+            <CardDescription>
+              Customize the tasks your techs see at every service stop. Mark tasks as required or add photo requirements.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChecklistManager initialTasks={checklistTasks} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Required Chemistry Readings ─────────────────────────────── */}
       {isOwner && orgSettings && (
         <Card>
           <CardHeader>
@@ -124,7 +164,7 @@ export default async function SettingsPage() {
               <CardTitle className="text-base">Service Requirements</CardTitle>
             </div>
             <CardDescription>
-              Configure required chemistry readings per sanitizer type and required checklist tasks. Techs see warnings but are never blocked from completing stops.
+              Configure which chemistry readings are required per sanitizer type. Techs see warnings but are never blocked from completing stops.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -133,7 +173,79 @@ export default async function SettingsPage() {
         </Card>
       )}
 
-      {/* ── Maps app preference — visible to ALL roles (FIELD-11) ─────────── */}
+      {/* ── Owner: Chemistry Target Ranges ──────────────────────────────────── */}
+      {isOwner && orgSettings && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FlaskConicalIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Chemistry Targets</CardTitle>
+            </div>
+            <CardDescription>
+              Customize the ideal min/max range for each chemistry reading per sanitizer type. Defaults are based on CPO industry standards.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChemistryTargetEditor settings={orgSettings} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Work Order Settings (rates, markup, tax, quote) ─────────── */}
+      {isOwner && orgSettings && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <WrenchIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Work Order Settings</CardTitle>
+            </div>
+            <CardDescription>
+              Configure default labor rates, parts markup, tax rate, quote settings, and work order notifications.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WorkOrderSettings settings={orgSettings} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Parts & Materials Catalog ──────────────────────────────── */}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShoppingCartIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Parts &amp; Materials Catalog</CardTitle>
+            </div>
+            <CardDescription>
+              Save frequently used parts and labor items for quick reuse on work orders and quotes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PartsCatalogManager initialItems={catalogItems} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Owner: Work Order Templates ──────────────────────────────────── */}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileTextIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">Work Order Templates</CardTitle>
+            </div>
+            <CardDescription>
+              Create templates for common repeat jobs to save time when creating work orders.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WoTemplateManager initialTemplates={woTemplateList} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Maps app preference — visible to ALL roles ─────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -162,7 +274,6 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           {isTech ? (
-            /* Tech: read-only profile view */
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between py-1">
                 <div>
@@ -190,7 +301,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ── Organization section — office role only (owner has company profile above) ── */}
+      {/* ── Organization section — office role only ──────────────────────── */}
       {!isTech && !isOwner && (
         <Card>
           <CardHeader>
