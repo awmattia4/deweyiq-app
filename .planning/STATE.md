@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 5 — Office Operations & Dispatch (Phase 4 complete)
+**Current focus:** Phase 6 — Work Orders & Quoting (Phase 5 complete)
 
 ## Current Position
 
-Phase: 5 of 11 (Office Operations & Dispatch) — IN PROGRESS
-Plan: 4/6 complete
-Status: Phase 5 Plan 04 complete — alerts dashboard with auto-detection (missed stops, declining chemistry, incomplete data), dismiss/snooze lifecycle, sidebar badge, dashboard summary card; ready for plans 05-06
-Last activity: 2026-03-09 — Phase 5 Plan 04 executed: alerts.ts server actions, /alerts page, AlertFeed/AlertCard components, sidebar badge, dashboard card
+Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
+Plan: 1/6 complete
+Status: Phase 6 Plan 01 complete — 7 new DB tables (work_orders, quotes, invoices + 4 more) with RLS, @react-pdf/renderer installed, core WO/catalog server actions; ready for plans 02-06
+Last activity: 2026-03-11 — Phase 6 Plan 01 executed: schema tables, org_settings extension, customers.tax_exempt, WO CRUD actions, parts catalog actions
 
 Progress: [████████░░] 80%
 
@@ -55,6 +55,7 @@ Progress: [████████░░] 80%
 | Phase 05-office-operations-dispatch P02 | 6 | 2 tasks | 8 files |
 | Phase 05-office-operations-dispatch P04 | 7 | 2 tasks | 9 files |
 | Phase 05-office-operations-dispatch P03 | 7 | 2 tasks | 4 files |
+| Phase 06-work-orders-quoting P01 | 9 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,14 @@ Recent decisions affecting current work:
 - [Phase 05-04]: alertCount fetched in layout.tsx server component and passed as prop through AppShell to AppSidebar — sidebar is client component so count is injected from server
 - [Phase 05-03]: Two-step withRls queries (stops then customers) for sendPreArrivalNotifications — avoids RLS correlated subquery pitfall per MEMORY.md
 - [Phase 05-03]: getRouteStartedStatus pre-fetched in parallel with getTodayStops via Promise.all — button renders in correct SSR state without client-side loading flicker
+- [Phase 06-01]: drizzle-kit push NULL RLS policy confirmed again in Phase 6 — manually fixed all 28 policies via ALTER POLICY for 7 new tables (work_orders, work_order_line_items, parts_catalog, wo_templates, quotes, invoices, invoice_line_items)
+- [Phase 06-01]: appendActivityEvent uses COALESCE(activity_log, '[]'::jsonb) || event::jsonb — safe null handling for new WOs with no existing log
+- [Phase 06-01]: getWorkOrder fetches profiles in a single inArray query, not multiple self-joins — avoids Drizzle alias complexity for createdBy/assignedTech/flaggedBy
+- [Phase 06-01]: getWorkOrders priority sort in application layer (emergency→high→normal→low) — simpler than CASE WHEN SQL
+- [Phase 06-01]: @react-pdf/renderer requires serverExternalPackages in next.config.ts to prevent 'Component is not a constructor' crash
+- [Phase 06-01]: parent_wo_id has no FK constraint — avoids cascade issues when parent WO is deleted
+- [Phase 06-01]: invoices.work_order_ids is JSONB string[] for multi-WO combined invoicing
+- [Phase 06-01]: Phase 6 hex-only colors convention — all PDF-related code must use hex colors (#60a5fa etc), not oklch(); documented in work-orders.ts header
 
 ### Pending Todos
 
@@ -193,6 +202,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Completed 05-03-PLAN.md — sendPreArrivalNotifications action and Start Route button (executed after 05-04)
-Resume file: N/A — continue Phase 5 with Plan 05
+Last session: 2026-03-11
+Stopped at: Completed 06-01-PLAN.md — Phase 6 data foundation (7 tables, @react-pdf/renderer, WO/catalog server actions)
+Resume file: N/A — continue Phase 6 with Plan 02
