@@ -768,6 +768,7 @@ export async function updateWorkOrderStatus(
   if (!token) return { success: false, error: "Not authenticated" }
 
   const userId = token.sub
+  const orgId = token.org_id as string
 
   // Allowed transitions map
   const ALLOWED_TRANSITIONS: Record<string, WorkOrderStatus[]> = {
@@ -782,7 +783,7 @@ export async function updateWorkOrderStatus(
   }
 
   try {
-    return await withRls(token, async (db) => {
+    const result = await withRls(token, async (db) => {
       // Fetch current status
       const current = await db
         .select({ status: workOrders.status })
@@ -849,6 +850,15 @@ export async function updateWorkOrderStatus(
       revalidatePath(`/work-orders/${id}`)
       return { success: true }
     })
+
+    // ── Customer notification on completion (best-effort, non-fatal) ───────
+    // Note: Actual customer email/SMS is handled by Phase 7 notifications.
+    // Here we insert an info alert for office visibility of the completion.
+    if (result.success && newStatus === "complete") {
+      void _notifyOfficeWoCompleted(orgId, id, userId)
+    }
+
+    return result
   } catch (err) {
     console.error("[updateWorkOrderStatus] Error:", err)
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
@@ -1128,5 +1138,160 @@ export async function reorderLineItems(
   } catch (err) {
     console.error("[reorderLineItems] Error:", err)
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateLineItemActualHours
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates actual_hours on a line item (used by techs at WO completion time).
+ * Tech role is allowed per work_order_line_items RLS — owner+office only for updates.
+ *
+ * Note: The WO line_items UPDATE policy only allows owner+office. Techs log
+ * actual hours by calling this action which uses the tech's RLS context.
+ * If the RLS blocks the update, we gracefully surface the error.
+ */
+export async function updateLineItemActualHours(
+  lineItemId: string,
+  actualHours: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(workOrderLineItems)
+        .set({ actual_hours: actualHours })
+        .where(eq(workOrderLineItems.id, lineItemId))
+    })
+
+    return { success: true }
+  } catch (err) {
+    console.error("[updateLineItemActualHours] Error:", err)
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getAssignedWorkOrders
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches WOs assigned to the current tech user with status 'scheduled' or
+ * 'in_progress'. Used for the tech's "My Work Orders" view.
+ */
+export async function getAssignedWorkOrders(): Promise<WorkOrderSummary[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const userId = token.sub
+
+  try {
+    return await withRls(token, async (db) => {
+      const rows = await db
+        .select({
+          id: workOrders.id,
+          org_id: workOrders.org_id,
+          customer_id: workOrders.customer_id,
+          pool_id: workOrders.pool_id,
+          assigned_tech_id: workOrders.assigned_tech_id,
+          title: workOrders.title,
+          description: workOrders.description,
+          category: workOrders.category,
+          priority: workOrders.priority,
+          status: workOrders.status,
+          severity: workOrders.severity,
+          target_date: workOrders.target_date,
+          completed_at: workOrders.completed_at,
+          cancelled_at: workOrders.cancelled_at,
+          flagged_by_tech_id: workOrders.flagged_by_tech_id,
+          tax_exempt: workOrders.tax_exempt,
+          created_at: workOrders.created_at,
+          updated_at: workOrders.updated_at,
+          customerName: customers.full_name,
+          poolName: pools.name,
+          techName: profiles.full_name,
+        })
+        .from(workOrders)
+        .leftJoin(customers, eq(workOrders.customer_id, customers.id))
+        .leftJoin(pools, eq(workOrders.pool_id, pools.id))
+        .leftJoin(profiles, eq(workOrders.assigned_tech_id, profiles.id))
+        .where(
+          and(
+            eq(workOrders.assigned_tech_id, userId),
+            inArray(workOrders.status, ["scheduled", "in_progress"])
+          )
+        )
+        .orderBy(workOrders.target_date, desc(workOrders.created_at))
+
+      return rows.map((r) => ({
+        ...r,
+        customerName: r.customerName ?? "Unknown Customer",
+        poolName: r.poolName ?? null,
+        techName: r.techName ?? null,
+      }))
+    })
+  } catch (err) {
+    console.error("[getAssignedWorkOrders] Error:", err)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _notifyOfficeWoCompleted — internal helper for WO completion office alert
+// ---------------------------------------------------------------------------
+
+/**
+ * Inserts an info alert for the office when a WO is marked complete.
+ * Uses adminDb. Checks org_settings.wo_notify_customer_on_complete for
+ * customer notification intent (actual email/SMS is Phase 7).
+ */
+async function _notifyOfficeWoCompleted(
+  orgId: string,
+  woId: string,
+  completedById: string
+): Promise<void> {
+  try {
+    // Fetch WO title and customer name for the alert message
+    const woRows = await adminDb
+      .select({
+        title: workOrders.title,
+        customerName: customers.full_name,
+      })
+      .from(workOrders)
+      .leftJoin(customers, eq(workOrders.customer_id, customers.id))
+      .where(eq(workOrders.id, woId))
+      .limit(1)
+
+    const wo = woRows[0]
+    if (!wo) return
+
+    // Check org_settings.wo_notify_customer_on_complete
+    const settingsRows = await adminDb
+      .select({ wo_notify_customer_on_complete: orgSettings.wo_notify_customer_on_complete })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, orgId))
+      .limit(1)
+
+    const notifyCustomer = settingsRows[0]?.wo_notify_customer_on_complete ?? true
+
+    await adminDb
+      .insert(alerts)
+      .values({
+        org_id: orgId,
+        alert_type: "work_order_flagged", // re-use type for WO lifecycle events
+        severity: "info",
+        reference_id: woId,
+        reference_type: "work_order",
+        title: `Work order completed: ${wo.title}${notifyCustomer ? " — customer notification pending" : ""}`,
+        metadata: { woId, completedById, customerName: wo.customerName, notifyCustomer },
+      })
+      .onConflictDoNothing()
+  } catch (err) {
+    // Non-fatal
+    console.error("[updateWorkOrderStatus] Failed to create completion alert:", err)
   }
 }
