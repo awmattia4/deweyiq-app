@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 5/6 complete (01, 03, 04, 05 done; 02, 06 remaining)
-Status: Phase 6 Plan 05 complete — QuoteDocument PDF, QuoteEmail template, quote JWT token, createQuote/sendQuote/reviseQuote server actions, QuoteBuilder UI, /api/quotes/[id]/pdf route handler
-Last activity: 2026-03-11 — Phase 6 Plan 05 executed: quote PDF + email + token + builder + PDF route handler
+Plan: 6/6 complete (01, 03, 04, 05, 06 done; 02 remaining)
+Status: Phase 6 Plan 06 complete — Public customer quote approval page at /quote/[token], POST endpoint /api/quotes/[token]/approve, approved quotes auto-convert WO to 'approved', office alerts for all customer responses
+Last activity: 2026-03-11 — Phase 6 Plan 06 executed: customer quote approval portal + API endpoint + WO auto-conversion
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [████████░░] 80%
 | Phase 06-work-orders-quoting P03 | 15 | 2 tasks | 6 files |
 | Phase 06-work-orders-quoting P04 | 14 | 2 tasks | 7 files |
 | Phase 06-work-orders-quoting P05 | 10 | 2 tasks | 7 files |
+| Phase 06-work-orders-quoting P06 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -204,6 +205,11 @@ Recent decisions affecting current work:
 - [Phase 06-05]: adminDb for next_quote_number atomic increment — org_settings UPDATE RLS is owner-only; adminDb lets office staff create quotes without owner role
 - [Phase 06-05]: QUOTE_TOKEN_SECRET separate from REPORT_TOKEN_SECRET — per 06-RESEARCH.md Pitfall 3
 - [Phase 06-05]: new Uint8Array(buffer) for Web Response API — Node.js Buffer is not assignable to BodyInit; Uint8Array is the correct type
+- [Phase 06-06]: adminDb throughout public quote routes — customer has no Supabase auth session (per 06-RESEARCH.md Pitfall 5); token verification is the sole authorization
+- [Phase 06-06]: approved_optional_item_ids stored on quote row — Plan 07 (invoicing) will use this list to include only customer-approved optional items on the invoice
+- [Phase 06-06]: onConflictDoNothing for quote response alerts — unique (org_id, alert_type, reference_id) constraint with reference_id=quote.id ensures exactly one alert per quote per action type
+- [Phase 06-06]: Status guard on approval API — only 'sent' quotes can be acted on; prevents double-approval race conditions
+- [Phase 06-06]: Light theme for /quote/[token] public page — customer-facing portal uses white/gray design system, not dark admin theme
 
 ### Pending Todos
 
@@ -223,5 +229,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 06-05-PLAN.md — Quote PDF, email template, JWT token, builder UI, PDF route handler
-Resume file: N/A — continue Phase 6 with Plan 02 (WO detail page) or Plan 06 (invoicing)
+Stopped at: Completed 06-06-PLAN.md — Customer quote approval portal at /quote/[token], POST /api/quotes/[token]/approve, WO auto-conversion on approval, office alerts
+Resume file: N/A — Phase 6 complete (Plan 02 WO detail page still remaining); consider Phase 7 (Invoicing) or cleanup Plan 02
