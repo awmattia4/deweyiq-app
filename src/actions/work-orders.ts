@@ -117,7 +117,10 @@ export interface CreateWorkOrderInput {
   category?: string
   priority?: string
   severity?: string
+  /** Pass explicit UUID, OR set flagFromCurrentUser: true to auto-fill from JWT */
   flaggedByTechId?: string
+  /** When true, server action auto-fills flaggedByTechId from the JWT sub claim */
+  flagFromCurrentUser?: boolean
   flaggedFromVisitId?: string
   templateId?: string
 }
@@ -255,6 +258,39 @@ export async function getCustomersForWo(): Promise<CustomerForWo[]> {
     })
   } catch (err) {
     console.error("[getCustomersForWo] Error:", err)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTechProfiles — for WO assignment dialogs
+// ---------------------------------------------------------------------------
+
+export interface TechProfile {
+  id: string
+  full_name: string
+}
+
+/**
+ * Returns all tech-role profiles for the org.
+ * Used by the WO assignment/scheduling dialogs.
+ */
+export async function getTechProfiles(): Promise<TechProfile[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  try {
+    return await withRls(token, async (db) => {
+      const rows = await db
+        .select({ id: profiles.id, full_name: profiles.full_name })
+        .from(profiles)
+        .where(eq(profiles.role, "tech"))
+        .orderBy(profiles.full_name)
+
+      return rows.map((r) => ({ id: r.id, full_name: r.full_name }))
+    })
+  } catch (err) {
+    console.error("[getTechProfiles] Error:", err)
     return []
   }
 }
@@ -511,6 +547,10 @@ export async function createWorkOrder(
   const orgId = token.org_id as string
   const userId = token.sub
 
+  // Resolve flaggedByTechId — if flagFromCurrentUser, use the JWT sub claim
+  const resolvedFlaggedByTechId =
+    data.flagFromCurrentUser ? userId : (data.flaggedByTechId ?? null)
+
   try {
     const woId = await withRls(token, async (db) => {
       const now = new Date()
@@ -526,7 +566,7 @@ export async function createWorkOrder(
         category: data.category ?? "other",
         priority: data.priority ?? "normal",
         severity: data.severity ?? null,
-        flagged_by_tech_id: data.flaggedByTechId ?? null,
+        flagged_by_tech_id: resolvedFlaggedByTechId,
         flagged_from_visit_id: data.flaggedFromVisitId ?? null,
         template_id: data.templateId ?? null,
         activity_log: [
@@ -587,13 +627,13 @@ export async function createWorkOrder(
     // ── 3. Fire office alert for tech-flagged WOs (best-effort, non-fatal) ──
     // Uses adminDb because techs cannot INSERT into alerts (RLS: owner+office only).
     // Runs outside withRls transaction so alert failure never rolls back WO creation.
-    if (woId && data.flaggedByTechId) {
+    if (woId && resolvedFlaggedByTechId) {
       await _notifyOfficeWoFlagged(
         orgId,
         woId,
         data.title,
         data.severity ?? null,
-        data.flaggedByTechId
+        resolvedFlaggedByTechId
       )
     }
 
