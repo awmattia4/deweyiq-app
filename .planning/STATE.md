@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 1/6 complete
-Status: Phase 6 Plan 01 complete — 7 new DB tables (work_orders, quotes, invoices + 4 more) with RLS, @react-pdf/renderer installed, core WO/catalog server actions; ready for plans 02-06
-Last activity: 2026-03-11 — Phase 6 Plan 01 executed: schema tables, org_settings extension, customers.tax_exempt, WO CRUD actions, parts catalog actions
+Plan: 2/6 complete
+Status: Phase 6 Plan 02 complete — WO list page, WO detail page, create dialog, sidebar nav; office staff can view/create/manage work orders; ready for plans 03-06
+Last activity: 2026-03-11 — Phase 6 Plan 02 executed: WO list+detail pages, WoList, WoCreateDialog, WoDetail components, getCustomersForWo/getTechProfiles actions
 
 Progress: [████████░░] 80%
 
@@ -56,6 +56,7 @@ Progress: [████████░░] 80%
 | Phase 05-office-operations-dispatch P04 | 7 | 2 tasks | 9 files |
 | Phase 05-office-operations-dispatch P03 | 7 | 2 tasks | 4 files |
 | Phase 06-work-orders-quoting P01 | 9 | 2 tasks | 12 files |
+| Phase 06-work-orders-quoting P02 | 9 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,10 @@ Recent decisions affecting current work:
 - [Phase 06-01]: parent_wo_id has no FK constraint — avoids cascade issues when parent WO is deleted
 - [Phase 06-01]: invoices.work_order_ids is JSONB string[] for multi-WO combined invoicing
 - [Phase 06-01]: Phase 6 hex-only colors convention — all PDF-related code must use hex colors (#60a5fa etc), not oklch(); documented in work-orders.ts header
+- [Phase 06-02]: WoList uses local useState filter over pre-fetched server data — avoids URL param complexity for single-page list
+- [Phase 06-02]: getCustomersForWo two-query pattern — fetch customers then pools separately to avoid RLS correlated subquery pitfall (MEMORY.md)
+- [Phase 06-02]: getTechProfiles added to work-orders.ts — keeps WO-related actions co-located, avoids importing from dispatch patterns
+- [Phase 06-02]: WoDetail inline edit with optimistic setWo + router.refresh() — immediate UI feedback without full refetch latency
 
 ### Pending Todos
 
@@ -203,5 +208,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 06-01-PLAN.md — Phase 6 data foundation (7 tables, @react-pdf/renderer, WO/catalog server actions)
-Resume file: N/A — continue Phase 6 with Plan 02
+Stopped at: Completed 06-02-PLAN.md — WO list+detail pages, create dialog, sidebar nav, getCustomersForWo/getTechProfiles actions
+Resume file: N/A — continue Phase 6 with Plan 03
