@@ -43,6 +43,8 @@ export const customers = pgTable(
     lng: doublePrecision("lng"),
     // Phase 5: per-customer opt-out for pre-arrival SMS/email notifications
     notifications_enabled: boolean("notifications_enabled").notNull().default(true),
+    // Phase 6: tax exemption status — when true, WOs/invoices skip tax calculation
+    tax_exempt: boolean("tax_exempt").notNull().default(false),
     // Timestamps
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

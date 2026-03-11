@@ -1,4 +1,4 @@
-import { boolean, jsonb, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core"
+import { boolean, doublePrecision, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -39,6 +39,31 @@ export const orgSettings = pgTable(
     required_chemistry_by_sanitizer: jsonb("required_chemistry_by_sanitizer").$type<Record<string, string[]>>(),
     // Array of checklist task IDs that must be completed at every stop
     required_checklist_task_ids: jsonb("required_checklist_task_ids").$type<string[]>(),
+    // Service report content toggles — control what appears in the customer email
+    report_include_chemistry: boolean("report_include_chemistry").notNull().default(true),
+    report_include_checklist: boolean("report_include_checklist").notNull().default(true),
+    report_include_photos: boolean("report_include_photos").notNull().default(true),
+    report_include_tech_name: boolean("report_include_tech_name").notNull().default(true),
+    // Custom chemistry target ranges — overrides per sanitizer type
+    // Record<sanitizerType, Record<param, { min: number; max: number }>>
+    custom_chemistry_targets: jsonb("custom_chemistry_targets").$type<Record<string, Record<string, { min: number; max: number }>>>(),
+    // Home base / office address — used as route optimization start/end point
+    home_base_address: text("home_base_address"),
+    home_base_lat: doublePrecision("home_base_lat"),
+    home_base_lng: doublePrecision("home_base_lng"),
+    // Phase 6: Work Orders & Quoting settings
+    default_hourly_rate: numeric("default_hourly_rate", { precision: 10, scale: 2 }),
+    default_parts_markup_pct: numeric("default_parts_markup_pct", { precision: 5, scale: 2 }).default("30"),
+    default_tax_rate: numeric("default_tax_rate", { precision: 5, scale: 4 }).default("0.0875"),
+    default_quote_expiry_days: integer("default_quote_expiry_days").default(30),
+    invoice_number_prefix: text("invoice_number_prefix").default("INV"),
+    next_invoice_number: integer("next_invoice_number").notNull().default(1),
+    quote_number_prefix: text("quote_number_prefix").default("Q"),
+    next_quote_number: integer("next_quote_number").notNull().default(1),
+    quote_terms_and_conditions: text("quote_terms_and_conditions"),
+    wo_notify_office_on_flag: boolean("wo_notify_office_on_flag").notNull().default(true),
+    wo_notify_customer_on_scheduled: boolean("wo_notify_customer_on_scheduled").notNull().default(true),
+    wo_notify_customer_on_complete: boolean("wo_notify_customer_on_complete").notNull().default(true),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

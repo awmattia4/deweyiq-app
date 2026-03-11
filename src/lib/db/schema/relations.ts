@@ -24,6 +24,9 @@ import { scheduleRules } from "./schedule-rules"
 import { holidays } from "./holidays"
 import { alerts } from "./alerts"
 import { orgSettings } from "./org-settings"
+import { workOrders, workOrderLineItems } from "./work-orders"
+import { quotes } from "./quotes"
+import { invoices, invoiceLineItems } from "./invoices"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -37,6 +40,9 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   checklistTasks: many(checklistTasks),
   routeStops: many(routeStops),
   scheduleRules: many(scheduleRules),
+  // Phase 6
+  workOrders: many(workOrders),
+  invoices: many(invoices),
 }))
 
 export const poolsRelations = relations(pools, ({ one, many }) => ({
@@ -128,4 +134,64 @@ export const alertsRelations = relations(alerts, ({ one }) => ({
 
 export const orgSettingsRelations = relations(orgSettings, ({ one }) => ({
   org: one(orgs, { fields: [orgSettings.org_id], references: [orgs.id] }),
+}))
+
+// Phase 6 relations
+
+export const workOrdersRelations = relations(workOrders, ({ one, many }) => ({
+  org: one(orgs, { fields: [workOrders.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [workOrders.customer_id], references: [customers.id] }),
+  pool: one(pools, { fields: [workOrders.pool_id], references: [pools.id] }),
+  createdBy: one(profiles, {
+    fields: [workOrders.created_by_id],
+    references: [profiles.id],
+    relationName: "workOrder_createdBy",
+  }),
+  assignedTech: one(profiles, {
+    fields: [workOrders.assigned_tech_id],
+    references: [profiles.id],
+    relationName: "workOrder_assignedTech",
+  }),
+  flaggedByTech: one(profiles, {
+    fields: [workOrders.flagged_by_tech_id],
+    references: [profiles.id],
+    relationName: "workOrder_flaggedByTech",
+  }),
+  cancelledBy: one(profiles, {
+    fields: [workOrders.cancelled_by_id],
+    references: [profiles.id],
+    relationName: "workOrder_cancelledBy",
+  }),
+  lineItems: many(workOrderLineItems),
+  quotes: many(quotes),
+}))
+
+export const workOrderLineItemsRelations = relations(workOrderLineItems, ({ one }) => ({
+  org: one(orgs, { fields: [workOrderLineItems.org_id], references: [orgs.id] }),
+  workOrder: one(workOrders, {
+    fields: [workOrderLineItems.work_order_id],
+    references: [workOrders.id],
+  }),
+}))
+
+export const quotesRelations = relations(quotes, ({ one }) => ({
+  org: one(orgs, { fields: [quotes.org_id], references: [orgs.id] }),
+  workOrder: one(workOrders, {
+    fields: [quotes.work_order_id],
+    references: [workOrders.id],
+  }),
+}))
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  org: one(orgs, { fields: [invoices.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [invoices.customer_id], references: [customers.id] }),
+  lineItems: many(invoiceLineItems),
+}))
+
+export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) => ({
+  org: one(orgs, { fields: [invoiceLineItems.org_id], references: [orgs.id] }),
+  invoice: one(invoices, {
+    fields: [invoiceLineItems.invoice_id],
+    references: [invoices.id],
+  }),
 }))

@@ -28,6 +28,12 @@ export * from "./holidays"
 export * from "./alerts"
 export * from "./org-settings"
 
+// Phase 06 tables
+export * from "./work-orders"
+export * from "./parts-catalog"
+export * from "./quotes"
+export * from "./invoices"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.
