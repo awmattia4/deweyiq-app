@@ -13,6 +13,7 @@ import {
   PencilIcon,
   SkipForwardIcon,
   AlertTriangleIcon,
+  FlagIcon,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -28,13 +29,14 @@ import { ChemistryDosing } from "@/components/field/chemistry-dosing"
 import { Checklist } from "@/components/field/checklist"
 import { PhotoCapture } from "@/components/field/photo-capture"
 import { NotesField } from "@/components/field/notes-field"
-import { CompletionModal, SkipStopDialog } from "@/components/field/completion-modal"
+import { CompletionModal, SkipStopDialog, OverrideWarningSheet } from "@/components/field/completion-modal"
+import { FlagIssueSheet } from "@/components/work-orders/flag-issue-sheet"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
 import { useLiveQuery } from "dexie-react-hooks"
 import { offlineDb } from "@/lib/offline/db"
 import { enqueueWrite } from "@/lib/offline/sync"
 import { completeStop, skipStop } from "@/actions/visits"
-import type { StopContext } from "@/actions/visits"
+import type { StopContext, CompleteStopWarnings } from "@/actions/visits"
 import type { FullChemistryReadings } from "@/lib/chemistry/dosing"
 import { cn } from "@/lib/utils"
 
@@ -72,9 +74,12 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
   const [completionOpen, setCompletionOpen] = useState(false)
   const [skipOpen, setSkipOpen] = useState(false)
+  const [flagIssueOpen, setFlagIssueOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [pendingNav, setPendingNav] = useState<string | null>(null)
+  // Warn-but-allow: warnings returned from completeStop when overrideWarnings=false
+  const [warnings, setWarnings] = useState<CompleteStopWarnings | null>(null)
 
   // Edit mode is derived from Dexie draft status — NOT React state.
   // This avoids stale closure bugs since useLiveQuery keeps it in sync.
@@ -197,81 +202,107 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
       .filter(Boolean) as string[]
   }, [visitId])
 
-  // ── Complete stop handler ────────────────────────────────────────────────
+  // ── Complete stop handler (shared logic) ────────────────────────────────
+
+  const executeComplete = useCallback(
+    async (overrideWarnings: boolean) => {
+      if (!draft) return
+      const wasEditing = draft.status === "editing"
+      setIsSubmitting(true)
+
+      try {
+        const photoStoragePaths = await getUploadedPhotoPaths()
+
+        // Use draft.id (original visitId) so re-completion updates the same
+        // server row via onConflictDoUpdate instead of creating a duplicate.
+        const effectiveVisitId = draft.id ?? visitId
+        const completionData = {
+          visitId: effectiveVisitId,
+          customerId: context.customerId,
+          poolId: context.poolId,
+          chemistry: draft.chemistry,
+          checklist: draft.checklist,
+          notes: draft.notes,
+          photoStoragePaths,
+          overrideWarnings,
+        }
+
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          // Online: call server action directly
+          const result = await completeStop(completionData)
+
+          // Warn-but-allow: server returned missing requirements → show override sheet
+          if (!result.success && result.warnings) {
+            setWarnings(result.warnings)
+            setCompletionOpen(false)
+            return
+          }
+
+          if (!result.success) {
+            throw new Error(result.error ?? "Failed to complete stop")
+          }
+        } else {
+          // Offline: enqueue to sync queue — replayed via POST /api/visits/complete
+          await enqueueWrite("/api/visits/complete", "POST", completionData)
+        }
+
+        // Clear any previously shown warnings
+        setWarnings(null)
+
+        // Mark draft as completed and clean up Dexie draft
+        await completeDraft()
+
+        // Clean up uploaded photo queue items (they're now saved to the visit)
+        const uploadedPhotos = await offlineDb.photoQueue
+          .where("visitId")
+          .equals(effectiveVisitId)
+          .and((item) => item.status === "uploaded")
+          .toArray()
+        await offlineDb.photoQueue.bulkDelete(
+          uploadedPhotos.map((p) => p.id!).filter(Boolean)
+        )
+
+        setCompletionOpen(false)
+
+        toast.success(wasEditing ? "Stop updated!" : "Stop completed!", {
+          description: `${context.customerName} — ${context.poolName}`,
+        })
+
+        router.push("/routes")
+      } catch (err) {
+        console.error("[StopWorkflow] Complete stop error:", err)
+        toast.error(wasEditing ? "Failed to update stop" : "Failed to save stop", {
+          description:
+            err instanceof Error ? err.message : "Please try again.",
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    },
+    [
+      draft,
+      visitId,
+      context.customerId,
+      context.poolId,
+      context.customerName,
+      context.poolName,
+      getUploadedPhotoPaths,
+      completeDraft,
+      router,
+    ]
+  )
+
+  // ── First attempt: check requirements before completing ──────────────────
 
   const handleConfirmComplete = useCallback(async () => {
-    if (!draft) return
-    // Capture before any status changes
-    const wasEditing = draft.status === "editing"
-    setIsSubmitting(true)
+    await executeComplete(false)
+  }, [executeComplete])
 
-    try {
-      const photoStoragePaths = await getUploadedPhotoPaths()
+  // ── Override: tech chose to complete despite missing required data ────────
 
-      // Use draft.id (original visitId) so re-completion updates the same
-      // server row via onConflictDoUpdate instead of creating a duplicate.
-      const effectiveVisitId = draft.id ?? visitId
-      const completionData = {
-        visitId: effectiveVisitId,
-        customerId: context.customerId,
-        poolId: context.poolId,
-        chemistry: draft.chemistry,
-        checklist: draft.checklist,
-        notes: draft.notes,
-        photoStoragePaths,
-      }
-
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        // Online: call server action directly
-        const result = await completeStop(completionData)
-        if (!result.success) {
-          throw new Error(result.error ?? "Failed to complete stop")
-        }
-      } else {
-        // Offline: enqueue to sync queue — replayed via POST /api/visits/complete
-        await enqueueWrite("/api/visits/complete", "POST", completionData)
-      }
-
-      // Mark draft as completed and clean up Dexie draft
-      await completeDraft()
-
-      // Clean up uploaded photo queue items (they're now saved to the visit)
-      const uploadedPhotos = await offlineDb.photoQueue
-        .where("visitId")
-        .equals(effectiveVisitId)
-        .and((item) => item.status === "uploaded")
-        .toArray()
-      await offlineDb.photoQueue.bulkDelete(
-        uploadedPhotos.map((p) => p.id!).filter(Boolean)
-      )
-
-      setCompletionOpen(false)
-
-      toast.success(wasEditing ? "Stop updated!" : "Stop completed!", {
-        description: `${context.customerName} — ${context.poolName}`,
-      })
-
-      router.push("/routes")
-    } catch (err) {
-      console.error("[StopWorkflow] Complete stop error:", err)
-      toast.error(wasEditing ? "Failed to update stop" : "Failed to save stop", {
-        description:
-          err instanceof Error ? err.message : "Please try again.",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }, [
-    draft,
-    visitId,
-    context.customerId,
-    context.poolId,
-    context.customerName,
-    context.poolName,
-    getUploadedPhotoPaths,
-    completeDraft,
-    router,
-  ])
+  const handleCompleteAnyway = useCallback(async () => {
+    await executeComplete(true)
+  }, [executeComplete])
 
   // ── Skip stop handler ─────────────────────────────────────────────────────
 
@@ -486,36 +517,52 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
               </Button>
             </div>
           ) : (
-            <div className="flex gap-3">
-              {/* Skip button — only on first completion, not when editing */}
-              {!isEditMode && (
+            <>
+              {/* Flag Issue button — always visible, spans full width above primary actions */}
+              <div className="flex gap-3 mb-2.5">
                 <Button
                   variant="outline"
-                  className="h-12 px-4 rounded-xl border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-pointer"
-                  onClick={() => setSkipOpen(true)}
+                  className="flex-1 h-10 rounded-xl border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/50 hover:text-amber-300 transition-colors cursor-pointer text-sm"
+                  onClick={() => setFlagIssueOpen(true)}
                   disabled={isSubmitting}
-                  aria-label="Skip this stop"
+                  aria-label="Flag an issue"
                 >
-                  <SkipForwardIcon className="h-4 w-4" />
-                  <span className="ml-1.5 text-sm">Skip</span>
+                  <FlagIcon className="h-4 w-4 mr-1.5" />
+                  Flag Issue
                 </Button>
-              )}
+              </div>
 
-              {/* Complete / Save button — primary action */}
-              <Button
-                className={cn(
-                  "flex-1 h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
-                  hasMinimumData
-                    ? "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
-                    : "bg-muted text-muted-foreground cursor-not-allowed"
+              <div className="flex gap-3">
+                {/* Skip button — only on first completion, not when editing */}
+                {!isEditMode && (
+                  <Button
+                    variant="outline"
+                    className="h-12 px-4 rounded-xl border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors cursor-pointer"
+                    onClick={() => setSkipOpen(true)}
+                    disabled={isSubmitting}
+                    aria-label="Skip this stop"
+                  >
+                    <SkipForwardIcon className="h-4 w-4" />
+                    <span className="ml-1.5 text-sm">Skip</span>
+                  </Button>
                 )}
-                disabled={!hasMinimumData || isSubmitting}
-                onClick={() => setCompletionOpen(true)}
-              >
-                <CheckCircleIcon className="h-5 w-5 mr-2" />
-                {isEditMode ? "Save Changes" : "Complete Stop"}
-              </Button>
-            </div>
+
+                {/* Complete / Save button — primary action */}
+                <Button
+                  className={cn(
+                    "flex-1 h-12 text-base font-semibold rounded-xl transition-all cursor-pointer",
+                    hasMinimumData
+                      ? "bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                  )}
+                  disabled={!hasMinimumData || isSubmitting}
+                  onClick={() => setCompletionOpen(true)}
+                >
+                  <CheckCircleIcon className="h-5 w-5 mr-2" />
+                  {isEditMode ? "Save Changes" : "Complete Stop"}
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -534,11 +581,32 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
         />
       )}
 
+      {/* ── Override warning sheet — shown when completeStop returns warnings ── */}
+      {warnings && (
+        <OverrideWarningSheet
+          open={warnings !== null}
+          warnings={warnings}
+          onGoBack={() => setWarnings(null)}
+          onCompleteAnyway={handleCompleteAnyway}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
       <SkipStopDialog
         open={skipOpen}
         onClose={() => setSkipOpen(false)}
         onConfirm={handleConfirmSkip}
         isSubmitting={isSubmitting}
+      />
+
+      {/* ── Flag Issue sheet — always mounted, visible at any stop state ────── */}
+      <FlagIssueSheet
+        open={flagIssueOpen}
+        customerId={context.customerId}
+        poolId={context.poolId}
+        visitId={visitId}
+        orgId={context.orgId}
+        onClose={() => setFlagIssueOpen(false)}
       />
 
       {/* ── Discard edits confirmation ─────────────────────────────────────── */}

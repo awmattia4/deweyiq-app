@@ -14,7 +14,7 @@ export const SNOOZE_OPTIONS = [
   { label: "1 week", ms: 7 * 24 * 60 * 60 * 1000 },
 ] as const
 
-export type AlertType = "missed_stop" | "declining_chemistry" | "incomplete_data"
+export type AlertType = "missed_stop" | "declining_chemistry" | "incomplete_data" | "work_order_flagged"
 export type AlertSeverity = "info" | "warning" | "critical"
 
 export interface Alert {

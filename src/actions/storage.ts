@@ -72,3 +72,54 @@ export async function createPhotoUploadUrl(
     return null
   }
 }
+
+/**
+ * createWoPhotoUploadUrl — generates a signed upload URL for work order photos.
+ *
+ * Storage path: {orgId}/work-orders/{woId}/{subPath}/{fileName}
+ * Bucket: work-order-photos (private, 5MB limit, webp/jpeg/png only)
+ *
+ * @param orgId    - Organization ID (first path segment for RLS)
+ * @param woId     - Work order UUID (second path segment)
+ * @param fileName - File name (should include extension, e.g. "photo-1234.webp")
+ * @param subPath  - Optional sub-folder, e.g. "completion" (default: none)
+ */
+export async function createWoPhotoUploadUrl(
+  orgId: string,
+  woId: string,
+  fileName: string,
+  subPath?: string
+): Promise<SignedUploadResult | null> {
+  try {
+    const supabase = await createClient()
+
+    const { data: claimsData } = await supabase.auth.getClaims()
+    if (!claimsData?.claims) {
+      console.error("[storage] Not authenticated — cannot create WO upload URL")
+      return null
+    }
+
+    // Storage path: orgId/work-orders/woId/[subPath/]fileName
+    const pathSegments = subPath
+      ? `${orgId}/work-orders/${woId}/${subPath}/${fileName}`
+      : `${orgId}/work-orders/${woId}/${fileName}`
+
+    const { data, error } = await supabase.storage
+      .from("work-order-photos")
+      .createSignedUploadUrl(pathSegments)
+
+    if (error) {
+      console.error("[storage] Failed to create WO signed upload URL:", error)
+      return null
+    }
+
+    return {
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path: data.path,
+    }
+  } catch (err) {
+    console.error("[storage] createWoPhotoUploadUrl error:", err)
+    return null
+  }
+}
