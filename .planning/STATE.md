@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 2/6 complete
-Status: Phase 6 Plan 02 complete — WO list page, WO detail page, create dialog, sidebar nav; office staff can view/create/manage work orders; ready for plans 03-06
-Last activity: 2026-03-11 — Phase 6 Plan 02 executed: WO list+detail pages, WoList, WoCreateDialog, WoDetail components, getCustomersForWo/getTechProfiles actions
+Plan: 4/6 complete
+Status: Phase 6 Plan 04 complete — LineItemEditor component, PartsCatalogManager, WoTemplateManager, WorkOrderSettings; line items fully editable on WO detail; catalog + templates manageable in settings; ready for plans 05-06
+Last activity: 2026-03-11 — Phase 6 Plan 04 executed: LineItemEditor, PartsCatalogManager, WoTemplateManager, WorkOrderSettings, line item server actions (addLineItemToWorkOrder, updateLineItem, deleteLineItem, reorderLineItems), OrgSettings Phase 6 type extension
 
 Progress: [████████░░] 80%
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 80%
 | Phase 05-office-operations-dispatch P03 | 7 | 2 tasks | 4 files |
 | Phase 06-work-orders-quoting P01 | 9 | 2 tasks | 12 files |
 | Phase 06-work-orders-quoting P02 | 9 | 2 tasks | 9 files |
+| Phase 06-work-orders-quoting P04 | 14 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -189,6 +190,9 @@ Recent decisions affecting current work:
 - [Phase 06-02]: getCustomersForWo two-query pattern — fetch customers then pools separately to avoid RLS correlated subquery pitfall (MEMORY.md)
 - [Phase 06-02]: getTechProfiles added to work-orders.ts — keeps WO-related actions co-located, avoids importing from dispatch patterns
 - [Phase 06-02]: WoDetail inline edit with optimistic setWo + router.refresh() — immediate UI feedback without full refetch latency
+- [Phase 06-04]: No @radix-ui/react-icons in project — use lucide-react only
+- [Phase 06-04]: workOrderLineItems schema has no updated_at column — removed from updateLineItem and reorderLineItems
+- [Phase 06-04]: OrgSettings Phase 6 fields now include all numeric/text/boolean fields from org_settings schema; DEFAULT_SETTINGS updated
 
 ### Pending Todos
 
@@ -208,5 +212,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 06-02-PLAN.md — WO list+detail pages, create dialog, sidebar nav, getCustomersForWo/getTechProfiles actions
-Resume file: N/A — continue Phase 6 with Plan 03
+Stopped at: Completed 06-04-PLAN.md — LineItemEditor, PartsCatalogManager, WoTemplateManager, WorkOrderSettings, line item server actions, OrgSettings Phase 6 extension
+Resume file: N/A — continue Phase 6 with Plan 05
