@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 4/6 complete
-Status: Phase 6 Plan 04 complete — LineItemEditor component, PartsCatalogManager, WoTemplateManager, WorkOrderSettings; line items fully editable on WO detail; catalog + templates manageable in settings; ready for plans 05-06
-Last activity: 2026-03-11 — Phase 6 Plan 04 executed: LineItemEditor, PartsCatalogManager, WoTemplateManager, WorkOrderSettings, line item server actions (addLineItemToWorkOrder, updateLineItem, deleteLineItem, reorderLineItems), OrgSettings Phase 6 type extension
+Plan: 4/6 complete (01, 03, 04 done; 02, 05, 06 remaining)
+Status: Phase 6 Plan 03 complete — FlagIssueSheet (10-second issue flagging), WoTechCompletion (arrival + full completion flow), createWoPhotoUploadUrl, updateLineItemActualHours, getAssignedWorkOrders, office alert notifications for flagged/completed WOs
+Last activity: 2026-03-11 — Phase 6 Plan 03 executed: FlagIssueSheet + WoTechCompletion components, storage/work-orders action extensions, alerts for WO lifecycle events
 
 Progress: [████████░░] 80%
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 80%
 | Phase 05-office-operations-dispatch P03 | 7 | 2 tasks | 4 files |
 | Phase 06-work-orders-quoting P01 | 9 | 2 tasks | 12 files |
 | Phase 06-work-orders-quoting P02 | 9 | 2 tasks | 9 files |
+| Phase 06-work-orders-quoting P03 | 15 | 2 tasks | 6 files |
 | Phase 06-work-orders-quoting P04 | 14 | 2 tasks | 7 files |
 
 ## Accumulated Context
@@ -193,6 +194,11 @@ Recent decisions affecting current work:
 - [Phase 06-04]: No @radix-ui/react-icons in project — use lucide-react only
 - [Phase 06-04]: workOrderLineItems schema has no updated_at column — removed from updateLineItem and reorderLineItems
 - [Phase 06-04]: OrgSettings Phase 6 fields now include all numeric/text/boolean fields from org_settings schema; DEFAULT_SETTINGS updated
+- [Phase 06-03]: flagFromCurrentUser boolean flag: server action resolves flaggedByTechId from JWT token.sub — avoids requiring client to read auth context
+- [Phase 06-03]: Alert insertion for tech-flagged WOs uses adminDb (not withRls) — alerts INSERT RLS is owner+office only; tech cannot insert directly; matches generateAlerts pattern
+- [Phase 06-03]: WO notification helpers are void fire-and-forget — alert failure must never roll back WO mutation; non-fatal by design
+- [Phase 06-03]: updateWorkOrderStatus and createWorkOrder restructured from return-await-withRls to const-result-await pattern — required for post-transaction notification side effects
+- [Phase 06-03]: work-order-photos bucket requires manual creation in Supabase Storage with org-scoped RLS before photos can upload
 
 ### Pending Todos
 
@@ -212,5 +218,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Completed 06-04-PLAN.md — LineItemEditor, PartsCatalogManager, WoTemplateManager, WorkOrderSettings, line item server actions, OrgSettings Phase 6 extension
-Resume file: N/A — continue Phase 6 with Plan 05
+Stopped at: Completed 06-03-PLAN.md — FlagIssueSheet + WoTechCompletion, office alert notifications for WO flagging/completion
+Resume file: N/A — continue Phase 6 with Plan 02 (WO detail page) or Plan 05 (quoting)
