@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 6/9 complete (01, 02, 03, 04, 05, 06 done)
-Status: Phase 7 Plan 05 complete — AutoPay enrollment, off-session charging, receipt emails, configurable dunning engine
-Last activity: 2026-03-12 — Phase 7 Plan 05 executed: AutoPay + dunning engine with retry and reminder emails
+Plan: 7/9 complete (01, 02, 03, 04, 05, 06, 07 done)
+Status: Phase 7 Plan 07 complete — Reports page with AR aging/revenue/P&L, expense entry, CSV export, overdue flags
+Last activity: 2026-03-12 — Phase 7 Plan 07 executed: Reports and overdue balance flags
 
-Progress: [██████----] 67%
+Progress: [████████--] 78%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [██████----] 67%
 | Phase 07-billing-payments P06 | 16 | 2 tasks | 14 files |
 | Phase 07-billing-payments P04 | 8 | 2 tasks | 6 files |
 | Phase 07-billing-payments P05 | 14 | 2 tasks | 15 files |
+| Phase 07-billing-payments P07 | 9 | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -248,6 +249,11 @@ Recent decisions affecting current work:
 - [Phase 07-05]: Receipt email sent from webhook handler (handlePaymentSucceeded) — ensures ALL payments (manual and AutoPay) get receipts consistently
 - [Phase 07-05]: redirect: "if_required" on confirmPayment — card payments handled inline for immediate AutoPay save, redirect only for ACH/3DS
 - [Phase 07-05]: CRON_SECRET Bearer token auth for internal cron API routes — Edge Function calls Next.js API with secret header
+- [Phase 07-07]: AR aging uses due_date for calculating days overdue (not issued_at) — matches standard accounting practice
+- [Phase 07-07]: CSV export restricted to owner role; report viewing available to owner+office
+- [Phase 07-07]: Overdue banner on customer profile is office/owner only; overdue pill on route stops is visible to tech per locked decision
+- [Phase 07-07]: handlePaymentSucceeded recalculates overdue_balance by SUM of remaining unpaid past-due invoices (not subtractive approach) — avoids balance drift
+- [Phase 07-07]: Reports nav added to sidebar in Phase 7 (originally planned for Phase 9)
 
 ### Pending Todos
 
@@ -267,5 +273,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-05-PLAN.md — AutoPay enrollment, off-session charging, receipt emails, configurable dunning engine
-Resume file: .planning/phases/07-billing-payments/07-07-PLAN.md
+Stopped at: Completed 07-07-PLAN.md — Reports page with AR aging/revenue/P&L, expense entry, CSV export, overdue flags
+Resume file: .planning/phases/07-billing-payments/07-08-PLAN.md
