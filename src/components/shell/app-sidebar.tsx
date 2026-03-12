@@ -15,6 +15,7 @@ import {
   UserCircleIcon,
   LogOutIcon,
   WrenchIcon,
+  BarChart3Icon,
 } from "lucide-react"
 import {
   Sidebar,
@@ -121,9 +122,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: WrenchIcon,
     roles: ["owner", "office"],
   },
-  // ── Future phases (Phase 7+) — hidden until ready ─────────────────────────
-  // { label: "Billing",         href: "/billing",   icon: CreditCardIcon,      roles: ["owner"] },                  // Phase 7
-  // { label: "Reports",         href: "/reports",   icon: BarChartIcon,        roles: ["owner"] },                  // Phase 9
+  // ── Available in Phase 7 ───────────────────────────────────────────────────
+  {
+    label: "Reports",
+    href: "/reports",
+    icon: BarChart3Icon,
+    roles: ["owner", "office"],
+  },
 ]
 
 // Tech-only nav (minimal — just their work)
