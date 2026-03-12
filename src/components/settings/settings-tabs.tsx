@@ -18,8 +18,10 @@ import { WorkOrderSettings } from "@/components/settings/work-order-settings"
 import { StripeConnectSettings } from "@/components/settings/stripe-connect-settings"
 import { PaymentStackSettings } from "@/components/settings/payment-stack-settings"
 import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
+import { DunningSettings } from "@/components/settings/dunning-settings"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTaskRow } from "@/actions/company-settings"
+import type { DunningStep } from "@/lib/db/schema/dunning"
 import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
 import type { StripeAccountStatus } from "@/actions/stripe-connect"
@@ -77,6 +79,9 @@ interface SettingsTabsProps {
   ccSurchargePct: string | null
   qboConnected: boolean
   qboStatus: QboConnectionStatus | null
+  // Dunning data
+  dunningSteps: DunningStep[]
+  dunningMaxRetries: number
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -102,6 +107,8 @@ export function SettingsTabs({
   ccSurchargePct,
   qboConnected,
   qboStatus,
+  dunningSteps,
+  dunningMaxRetries,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -344,6 +351,21 @@ export function SettingsTabs({
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payment Retry &amp; Reminders</CardTitle>
+              <CardDescription>
+                Configure automatic payment retry schedule and reminder emails for overdue invoices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DunningSettings
+                initialSteps={dunningSteps}
+                initialMaxRetries={dunningMaxRetries}
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 

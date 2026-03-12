@@ -11,6 +11,7 @@ import { getOrgSettings, getChecklistTasks, getOrgLogoUrl } from "@/actions/comp
 import { getCatalogItems, getWoTemplates } from "@/actions/parts-catalog"
 import { getStripeAccountStatus } from "@/actions/stripe-connect"
 import { getQboStatus } from "@/actions/qbo-sync"
+import { getDunningConfig } from "@/actions/dunning"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -47,7 +48,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus] = isOwner
+  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTasks(),
@@ -56,8 +57,9 @@ export default async function SettingsPage() {
         getWoTemplates(),
         getStripeAccountStatus(),
         getQboStatus(),
+        getDunningConfig(),
       ])
-    : [null, [], null, [], [], null, null]
+    : [null, [], null, [], [], null, null, null]
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -90,6 +92,8 @@ export default async function SettingsPage() {
         ccSurchargePct={orgSettings?.cc_surcharge_pct ?? null}
         qboConnected={orgSettings?.qbo_connected ?? false}
         qboStatus={qboStatus ?? null}
+        dunningSteps={dunningConfig?.steps ?? []}
+        dunningMaxRetries={dunningConfig?.maxRetries ?? 3}
         signOutAction={async () => {
           "use server"
           await signOut()
