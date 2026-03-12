@@ -38,6 +38,7 @@ import { InvoiceEmail } from "@/lib/emails/invoice-email"
 import { render as renderEmail } from "@react-email/render"
 import { signPayToken } from "@/lib/pay-token"
 import { Resend } from "resend"
+import { syncInvoiceToQbo } from "@/actions/qbo-sync"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -993,6 +994,11 @@ export async function finalizeInvoice(
       await updateWorkOrderStatus(woId, "invoiced")
     }
 
+    // Fire-and-forget QBO sync -- never blocks finalization
+    syncInvoiceToQbo(invoiceId).catch((err) =>
+      console.error("[finalizeInvoice] QBO sync error:", err)
+    )
+
     revalidatePath("/work-orders")
 
     return { success: true, invoiceNumber }
@@ -1318,6 +1324,11 @@ export async function sendInvoice(
         }
       }
     }
+
+    // Fire-and-forget QBO sync -- never blocks invoice send
+    syncInvoiceToQbo(invoiceId).catch((err) =>
+      console.error("[sendInvoice] QBO sync error:", err)
+    )
 
     revalidatePath("/work-orders")
     return { success: true, invoiceNumber: invoiceNumber ?? undefined }

@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { getStripe } from "@/lib/stripe/client"
+import { syncPaymentToQbo } from "@/actions/qbo-sync"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,7 +111,7 @@ export async function recordManualPayment(
     }
 
     // Create payment_records entry
-    await withRls(token, (db) =>
+    const insertedPayment = await withRls(token, (db) =>
       db.insert(paymentRecords).values({
         org_id: orgId,
         invoice_id: invoiceId,
@@ -118,8 +119,10 @@ export async function recordManualPayment(
         method,
         status: "settled",
         settled_at: now,
-      })
+      }).returning({ id: paymentRecords.id })
     )
+
+    const paymentRecordId = insertedPayment[0]?.id
 
     // If amount covers invoice total, mark invoice as paid
     const invoiceTotal = parseFloat(invoice.total)
@@ -134,6 +137,13 @@ export async function recordManualPayment(
             updated_at: now,
           })
           .where(eq(invoices.id, invoiceId))
+      )
+    }
+
+    // Fire-and-forget QBO sync -- never blocks payment recording
+    if (paymentRecordId) {
+      syncPaymentToQbo(paymentRecordId).catch((err) =>
+        console.error("[recordManualPayment] QBO sync error:", err)
       )
     }
 

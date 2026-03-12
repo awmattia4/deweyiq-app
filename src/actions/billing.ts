@@ -27,6 +27,7 @@ import {
   serviceVisits,
 } from "@/lib/db/schema"
 import { eq, and, gte, lte, sql, isNotNull } from "drizzle-orm"
+import { syncInvoiceToQbo } from "@/actions/qbo-sync"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -407,6 +408,11 @@ export async function generateInvoiceForCustomer(
     })
 
     if (invoiceId) {
+      // Fire-and-forget QBO sync -- never blocks invoice generation
+      syncInvoiceToQbo(invoiceId).catch((err) =>
+        console.error("[generateInvoiceForCustomer] QBO sync error:", err)
+      )
+
       revalidatePath("/work-orders")
     }
 

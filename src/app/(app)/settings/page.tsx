@@ -10,6 +10,7 @@ import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { getOrgSettings, getChecklistTasks, getOrgLogoUrl } from "@/actions/company-settings"
 import { getCatalogItems, getWoTemplates } from "@/actions/parts-catalog"
 import { getStripeAccountStatus } from "@/actions/stripe-connect"
+import { getQboStatus } from "@/actions/qbo-sync"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -46,7 +47,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList, stripeStatus] = isOwner
+  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTasks(),
@@ -54,8 +55,9 @@ export default async function SettingsPage() {
         getCatalogItems(),
         getWoTemplates(),
         getStripeAccountStatus(),
+        getQboStatus(),
       ])
-    : [null, [], null, [], [], null]
+    : [null, [], null, [], [], null, null]
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -87,6 +89,7 @@ export default async function SettingsPage() {
         ccSurchargeEnabled={orgSettings?.cc_surcharge_enabled ?? false}
         ccSurchargePct={orgSettings?.cc_surcharge_pct ?? null}
         qboConnected={orgSettings?.qbo_connected ?? false}
+        qboStatus={qboStatus ?? null}
         signOutAction={async () => {
           "use server"
           await signOut()

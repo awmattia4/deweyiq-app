@@ -21,6 +21,7 @@ import {
   alerts,
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
+import { syncPaymentToQbo } from "@/actions/qbo-sync"
 
 // ---------------------------------------------------------------------------
 // handlePaymentSucceeded
@@ -96,6 +97,19 @@ export async function handlePaymentSucceeded(
       updated_at: now,
     })
     .where(eq(invoices.id, invoiceId))
+
+  // Fire-and-forget QBO sync for the settled payment
+  const settledRecords = await adminDb
+    .select({ id: paymentRecords.id })
+    .from(paymentRecords)
+    .where(eq(paymentRecords.stripe_payment_intent_id, paymentIntent.id))
+    .limit(1)
+
+  if (settledRecords[0]?.id) {
+    syncPaymentToQbo(settledRecords[0].id).catch((err) =>
+      console.error("[handlePaymentSucceeded] QBO sync error:", err)
+    )
+  }
 
   // TODO(Plan-05): Send receipt email via ReceiptEmail template
 

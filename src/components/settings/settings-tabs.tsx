@@ -17,6 +17,8 @@ import { WoTemplateManager } from "@/components/settings/wo-template-manager"
 import { WorkOrderSettings } from "@/components/settings/work-order-settings"
 import { StripeConnectSettings } from "@/components/settings/stripe-connect-settings"
 import { PaymentStackSettings } from "@/components/settings/payment-stack-settings"
+import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
+import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTaskRow } from "@/actions/company-settings"
 import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
@@ -74,6 +76,7 @@ interface SettingsTabsProps {
   ccSurchargeEnabled: boolean
   ccSurchargePct: string | null
   qboConnected: boolean
+  qboStatus: QboConnectionStatus | null
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -98,6 +101,7 @@ export function SettingsTabs({
   ccSurchargeEnabled,
   ccSurchargePct,
   qboConnected,
+  qboStatus,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -323,6 +327,23 @@ export function SettingsTabs({
               />
             </CardContent>
           </Card>
+
+          {qboStatus && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CreditCardIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <CardTitle className="text-base">QuickBooks Online</CardTitle>
+                </div>
+                <CardDescription>
+                  Sync invoices, payments, and customers to your QuickBooks Online account automatically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <QboConnectSettings initialStatus={qboStatus} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
