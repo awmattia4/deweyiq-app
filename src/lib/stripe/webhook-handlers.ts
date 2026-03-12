@@ -319,21 +319,27 @@ export async function handlePaymentFailed(
       .where(eq(invoices.id, invoiceId))
   }
 
-  // Update customer overdue_balance
+  // Recalculate customer overdue_balance (absolute, not incremental — avoids
+  // double-counting when the same PI fails multiple times via retry webhooks)
   if (invoice) {
-    const [customer] = await adminDb
-      .select({ overdue_balance: customers.overdue_balance })
-      .from(customers)
-      .where(eq(customers.id, invoice.customer_id))
-      .limit(1)
-
-    const currentBalance = parseFloat(customer?.overdue_balance ?? "0")
-    const invoiceAmount = parseFloat(invoice.total)
+    const [result] = await adminDb
+      .select({
+        total: sql<string>`COALESCE(SUM(${invoices.total}::numeric), 0)::text`,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.customer_id, invoice.customer_id),
+          sql`${invoices.status} IN ('sent', 'overdue')`,
+          sql`${invoices.paid_at} IS NULL`,
+          sql`${invoices.due_date} < now()::date`
+        )
+      )
 
     await adminDb
       .update(customers)
       .set({
-        overdue_balance: (currentBalance + invoiceAmount).toFixed(2),
+        overdue_balance: result?.total ?? "0",
         updated_at: new Date(),
       })
       .where(eq(customers.id, invoice.customer_id))
@@ -448,27 +454,31 @@ export async function handleChargeRefunded(
     return
   }
 
-  // Check idempotency -- look for existing refund record for this charge
+  // Check idempotency -- look for existing refund record for this specific charge.
+  // Uses failure_reason to store the charge ID for refund records, ensuring
+  // partial refund sequences on the same invoice are not blocked.
   const existingRefunds = await adminDb
     .select({ id: paymentRecords.id })
     .from(paymentRecords)
     .where(
       and(
         eq(paymentRecords.invoice_id, originalRecord.invoice_id),
-        eq(paymentRecords.status, "refunded")
+        eq(paymentRecords.status, "refunded"),
+        eq(paymentRecords.failure_reason, charge.id)
       )
     )
     .limit(1)
 
   if (existingRefunds.length > 0) {
-    console.log("[handleChargeRefunded] Refund already recorded, skipping:", charge.id)
+    console.log("[handleChargeRefunded] Refund already recorded for charge, skipping:", charge.id)
     return
   }
 
   const refundedAmountCents = charge.amount_refunded ?? 0
   const refundedAmount = (refundedAmountCents / 100).toFixed(2)
 
-  // Create refund record with negative amount
+  // Create refund record with negative amount.
+  // Store charge.id in failure_reason for idempotency checks.
   await adminDb.insert(paymentRecords).values({
     org_id: originalRecord.org_id,
     invoice_id: originalRecord.invoice_id,
@@ -476,6 +486,7 @@ export async function handleChargeRefunded(
     method: originalRecord.method,
     status: "refunded",
     stripe_payment_intent_id: paymentIntentId,
+    failure_reason: charge.id,
     settled_at: new Date(),
   })
 

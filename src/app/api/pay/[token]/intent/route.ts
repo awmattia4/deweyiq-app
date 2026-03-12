@@ -9,11 +9,11 @@
  * Returns the PaymentIntent client_secret for Stripe Elements.
  */
 
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { verifyPayToken } from "@/lib/pay-token"
 import { adminDb } from "@/lib/db"
 import { invoices, customers, orgSettings, paymentRecords } from "@/lib/db/schema"
-import { eq, and } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { getStripe } from "@/lib/stripe/client"
 
 export async function POST(
@@ -21,15 +21,6 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
-
-  // Parse request body for optional saveMethod flag (AutoPay opt-in)
-  let saveMethod = false
-  try {
-    const body = await req.json()
-    saveMethod = body?.saveMethod === true
-  } catch {
-    // Empty body is fine -- defaults to no AutoPay
-  }
 
   // ── 1. Verify pay token ──────────────────────────────────────────────────
   const payload = await verifyPayToken(token)
@@ -111,7 +102,7 @@ export async function POST(
 
   // ── 5. Calculate amount ──────────────────────────────────────────────────
   const invoiceTotal = parseFloat(invoice.total)
-  let totalCents = Math.round(invoiceTotal * 100)
+  const baseCents = Math.round(invoiceTotal * 100)
 
   let surchargeAmountCents = 0
   const surchargeEnabled = settings.cc_surcharge_enabled && settings.cc_surcharge_pct
@@ -119,13 +110,13 @@ export async function POST(
 
   if (surchargeEnabled) {
     surchargeRate = parseFloat(settings.cc_surcharge_pct!)
-    surchargeAmountCents = Math.round(invoiceTotal * surchargeRate * 100)
-    // Note: The surcharge is added to the total for card payments.
-    // For ACH, the surcharge is not applied -- this is handled client-side
-    // by not adding surcharge to the displayed total for ACH payments.
-    // The application_fee_amount on PaymentIntent ensures the platform
-    // collects the surcharge when the customer pays by card.
+    surchargeAmountCents = Math.round(baseCents * surchargeRate)
   }
+
+  // Total charged to the customer includes the surcharge.
+  // The surcharge goes to the platform via application_fee_amount.
+  // For ACH, the surcharge is not shown client-side -- handled in pay-client.tsx.
+  const totalCents = surchargeEnabled ? baseCents + surchargeAmountCents : baseCents
 
   // ── 6. Create PaymentIntent ──────────────────────────────────────────────
   // If there's already a PaymentIntent on this invoice, reuse it
@@ -160,14 +151,15 @@ export async function POST(
       currency: "usd",
       customer: stripeCustomerId,
       payment_method_types: ["card", "us_bank_account"],
-      // When customer opts into AutoPay, save the payment method for future off-session charges
-      ...(saveMethod ? { setup_future_usage: "off_session" as const } : {}),
+      // Always allow saving the payment method. The client only calls
+      // enableAutoPay() if the customer checks the AutoPay checkbox, so
+      // non-AutoPay payments simply won't save the method.
+      setup_future_usage: "off_session",
       application_fee_amount: surchargeEnabled ? surchargeAmountCents : undefined,
       metadata: {
         invoice_id: invoice.id,
         org_id: invoice.org_id,
         customer_id: customer.id,
-        autopay: saveMethod ? "true" : "false",
       },
     },
     { stripeAccount: stripeAccountId }

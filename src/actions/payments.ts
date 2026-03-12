@@ -157,8 +157,8 @@ export async function recordManualPayment(
       )
     }
 
-    revalidatePath("/work-orders")
-    revalidatePath(`/work-orders/${invoiceId}`)
+    revalidatePath("/reports")
+    revalidatePath("/customers")
 
     return { success: true }
   } catch (err) {
@@ -279,8 +279,8 @@ export async function voidInvoice(
         .where(eq(invoices.id, invoiceId))
     )
 
-    revalidatePath("/work-orders")
-    revalidatePath(`/work-orders/${invoiceId}`)
+    revalidatePath("/reports")
+    revalidatePath("/customers")
 
     return { success: true }
   } catch (err) {
@@ -518,25 +518,35 @@ export async function chargeAutoPay(
 
     // -- 4. Calculate amount ------------------------------------------------
     const invoiceTotal = parseFloat(invoice.total)
-    const totalCents = Math.round(invoiceTotal * 100)
+    const baseCents = Math.round(invoiceTotal * 100)
 
-    if (totalCents <= 0) {
+    if (baseCents <= 0) {
       return { success: false, error: "Invoice total is zero" }
     }
 
-    // Apply surcharge for card payments if enabled
+    // Only apply surcharge for card payment methods, not ACH
+    const stripe = getStripe()
     let applicationFee: number | undefined
+    let chargeAmount = baseCents
+
     if (settings.cc_surcharge_enabled && settings.cc_surcharge_pct) {
-      const surchargeRate = parseFloat(settings.cc_surcharge_pct)
-      applicationFee = Math.round(invoiceTotal * surchargeRate * 100)
+      // Check if the saved payment method is a card
+      const pm = await stripe.paymentMethods.retrieve(
+        customer.autopay_method_id,
+        { stripeAccount: stripeAccountId }
+      )
+      if (pm.type === "card") {
+        const surchargeRate = parseFloat(settings.cc_surcharge_pct)
+        const surchargeAmountCents = Math.round(baseCents * surchargeRate)
+        applicationFee = surchargeAmountCents
+        chargeAmount = baseCents + surchargeAmountCents
+      }
     }
 
     // -- 5. Create off-session PaymentIntent --------------------------------
-    const stripe = getStripe()
-
     const paymentIntent = await stripe.paymentIntents.create(
       {
-        amount: totalCents,
+        amount: chargeAmount,
         currency: "usd",
         customer: customer.stripe_customer_id,
         payment_method: customer.autopay_method_id,

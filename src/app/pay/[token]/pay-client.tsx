@@ -8,7 +8,7 @@
  * Shows invoice summary, surcharge disclosure, and PaymentElement.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { loadStripe, type Stripe as StripeType } from "@stripe/stripe-js"
 import {
   Elements,
@@ -84,12 +84,8 @@ export function PayClient(props: PayClientProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoPayChecked, setAutoPayChecked] = useState(false)
-  const autoPayRef = useRef(false)
 
-  // Track autoPayChecked in a ref so the intent creation can read it
-  autoPayRef.current = autoPayChecked
-
-  // Fetch PaymentIntent on mount (and re-fetch when AutoPay toggled to set setup_future_usage)
+  // Fetch PaymentIntent on mount
   useEffect(() => {
     let cancelled = false
 
@@ -98,8 +94,6 @@ export function PayClient(props: PayClientProps) {
         setLoading(true)
         const res = await fetch(`/api/pay/${props.token}/intent`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ saveMethod: autoPayRef.current }),
         })
 
         if (!res.ok) {
@@ -201,6 +195,8 @@ function PaymentForm(
     "idle" | "processing" | "succeeded" | "autopay-enabled"
   >("idle")
   const [autoPaySaved, setAutoPaySaved] = useState(false)
+  // Track selected payment method type to toggle surcharge display
+  const [selectedMethodType, setSelectedMethodType] = useState<string>("card")
 
   // Check for return status from redirect (ACH processing)
   useEffect(() => {
@@ -221,7 +217,7 @@ function PaymentForm(
             const pmId = typeof paymentIntent.payment_method === "string"
               ? paymentIntent.payment_method
               : paymentIntent.payment_method.id
-            await enableAutoPay(props.customerId, pmId)
+            await enableAutoPay(props.token, props.customerId, pmId)
             setAutoPaySaved(true)
           }
         } else if (paymentIntent?.status === "processing") {
@@ -229,7 +225,7 @@ function PaymentForm(
         }
       })
     }
-  }, [stripe, props.customerId])
+  }, [stripe, props.customerId, props.token])
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -269,7 +265,7 @@ function PaymentForm(
             ? paymentIntent.payment_method
             : paymentIntent.payment_method.id
           try {
-            await enableAutoPay(props.customerId, pmId)
+            await enableAutoPay(props.token, props.customerId, pmId)
             setAutoPaySaved(true)
           } catch (err) {
             console.error("Failed to enable AutoPay:", err)
@@ -320,11 +316,13 @@ function PaymentForm(
     )
   }
 
-  // ── Surcharge calculation ──────────────────────────────────────────────
-  const surchargeAmount = props.ccSurchargeEnabled
+  // ── Surcharge calculation (card only — no surcharge for ACH) ──────────
+  const isCardSelected = selectedMethodType === "card"
+  const surchargeAmount = props.ccSurchargeEnabled && isCardSelected
     ? props.total * props.ccSurchargePct
     : 0
   const totalWithSurcharge = props.total + surchargeAmount
+  const showSurcharge = props.ccSurchargeEnabled && isCardSelected && surchargeAmount > 0
 
   return (
     <div className="space-y-6">
@@ -391,7 +389,7 @@ function PaymentForm(
             )}
 
             {/* Surcharge line (card only) */}
-            {props.ccSurchargeEnabled && surchargeAmount > 0 && (
+            {showSurcharge && (
               <div className="flex justify-between text-sm text-amber-700">
                 <span>
                   Credit Card Fee ({(props.ccSurchargePct * 100).toFixed(2)}%)
@@ -403,7 +401,7 @@ function PaymentForm(
             <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-200">
               <span>Total</span>
               <span className="tabular-nums">
-                {props.ccSurchargeEnabled
+                {showSurcharge
                   ? fmt(totalWithSurcharge)
                   : fmt(props.total)}
               </span>
@@ -446,6 +444,12 @@ function PaymentForm(
           <PaymentElement
             options={{
               layout: "tabs",
+            }}
+            onChange={(event) => {
+              // Track which payment method type is selected (card vs us_bank_account)
+              if (event.value?.type) {
+                setSelectedMethodType(event.value.type === "us_bank_account" ? "ach" : "card")
+              }
             }}
           />
 
@@ -492,7 +496,7 @@ function PaymentForm(
             ) : (
               <>
                 Pay{" "}
-                {props.ccSurchargeEnabled
+                {showSurcharge
                   ? fmt(totalWithSurcharge)
                   : fmt(props.total)}
               </>
