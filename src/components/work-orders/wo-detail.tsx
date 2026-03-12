@@ -4,9 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
-  WrenchIcon,
   UserIcon,
-  CalendarIcon,
   ClockIcon,
   ChevronLeftIcon,
   PencilIcon,
@@ -31,8 +29,13 @@ import {
   updateWorkOrder,
   createFollowUpWorkOrder,
 } from "@/actions/work-orders"
-import type { WorkOrderDetail, TechProfile } from "@/actions/work-orders"
+import type { WorkOrderDetail, WorkOrderLineItem } from "@/actions/work-orders"
 import { prepareInvoice } from "@/actions/invoices"
+import { LineItemEditor } from "@/components/work-orders/line-item-editor"
+import { QuoteBuilder } from "@/components/work-orders/quote-builder"
+import { WoLaborSection } from "@/components/work-orders/wo-labor-section"
+import type { OrgSettings } from "@/actions/company-settings"
+import type { QuoteDetail } from "@/actions/quotes"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,15 +49,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  pump: "⚙️",
-  filter: "🔧",
-  heater: "🔥",
-  plumbing_leak: "💧",
-  surface: "🏊",
-  electrical: "⚡",
-  other: "📋",
-}
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -99,28 +93,28 @@ const PRIORITY_LEFT_BORDER: Record<string, string> = {
   low: "border-l-zinc-500",
 }
 
-const ACTIVITY_ICONS: Record<string, string> = {
-  created: "📝",
-  updated: "✏️",
-  status_draft: "📋",
-  status_quoted: "📧",
-  status_approved: "✅",
-  status_scheduled: "📅",
-  status_in_progress: "🔧",
-  status_complete: "✔️",
-  status_invoiced: "🧾",
-  status_cancelled: "❌",
-  assigned: "👤",
-  reassigned: "🔄",
-  note_added: "💬",
-  quote_sent: "📧",
-  quote_approved: "✅",
-  quote_declined: "❌",
-  changes_requested: "🔁",
-  completed: "✔️",
-  cancelled: "❌",
-  follow_up_created: "🔗",
-  invoiced: "🧾",
+const ACTIVITY_DOT_COLORS: Record<string, string> = {
+  created: "bg-zinc-400",
+  updated: "bg-zinc-400",
+  status_draft: "bg-zinc-500",
+  status_quoted: "bg-blue-400",
+  status_approved: "bg-green-400",
+  status_scheduled: "bg-purple-400",
+  status_in_progress: "bg-amber-400",
+  status_complete: "bg-emerald-400",
+  status_invoiced: "bg-slate-400",
+  status_cancelled: "bg-red-400",
+  assigned: "bg-blue-400",
+  reassigned: "bg-blue-400",
+  note_added: "bg-zinc-400",
+  quote_sent: "bg-blue-400",
+  quote_approved: "bg-green-400",
+  quote_declined: "bg-red-400",
+  changes_requested: "bg-amber-400",
+  completed: "bg-emerald-400",
+  cancelled: "bg-red-400",
+  follow_up_created: "bg-purple-400",
+  invoiced: "bg-slate-400",
 }
 
 const ACTIVITY_DESCRIPTIONS: Record<string, string> = {
@@ -167,8 +161,11 @@ const PRIORITY_OPTIONS = [
 
 interface WoDetailProps {
   workOrder: WorkOrderDetail
-  techs: TechProfile[]
   invoiceInfo?: { id: string; invoice_number: string | null; status: string } | null
+  orgSettings?: OrgSettings | null
+  latestQuote?: QuoteDetail | null
+  /** Customer phone number — passed to QuoteBuilder for SMS delivery option */
+  customerPhone?: string | null
 }
 
 /**
@@ -184,13 +181,19 @@ interface WoDetailProps {
  */
 export function WoDetail({
   workOrder: initialWo,
-  techs,
   invoiceInfo,
+  orgSettings,
+  latestQuote,
+  customerPhone,
 }: WoDetailProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [wo, setWo] = useState(initialWo)
   const [prepareInvoicePending, setPrepareInvoicePending] = useState(false)
+  const [showQuoteBuilder, setShowQuoteBuilder] = useState(false)
+  const initLaborHours = parseFloat(wo.labor_hours ?? "0") || 0
+  const initLaborRate = parseFloat(wo.labor_rate ?? "0") || 0
+  const [laborCost, setLaborCost] = useState(initLaborHours * initLaborRate)
 
   // Edit mode state
   const [isEditing, setIsEditing] = useState(false)
@@ -202,9 +205,6 @@ export function WoDetail({
   // Dialog state
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
-  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false)
-  const [scheduleTechId, setScheduleTechId] = useState("")
-  const [scheduleDate, setScheduleDate] = useState("")
   const [approveDialogOpen, setApproveDialogOpen] = useState(false)
   const [followUpPending, setFollowUpPending] = useState(false)
 
@@ -289,32 +289,6 @@ export function WoDetail({
     })
   }
 
-  async function handleSchedule() {
-    if (!scheduleTechId) {
-      toast.error("Please select a technician")
-      return
-    }
-    if (!scheduleDate) {
-      toast.error("Please select a target date")
-      return
-    }
-    startTransition(async () => {
-      const result = await updateWorkOrderStatus(wo.id, "scheduled", {
-        assignedTechId: scheduleTechId,
-        targetDate: scheduleDate,
-      })
-      if (result.success) {
-        toast.success("Work order scheduled")
-        setScheduleDialogOpen(false)
-        setScheduleTechId("")
-        setScheduleDate("")
-        router.refresh()
-      } else {
-        toast.error(result.error ?? "Failed to schedule work order")
-      }
-    })
-  }
-
   async function handleCreateFollowUp() {
     setFollowUpPending(true)
     const newWoId = await createFollowUpWorkOrder(wo.id)
@@ -349,6 +323,12 @@ export function WoDetail({
     }
   }
 
+  // ── Line items change handler ──────────────────────────────────────────
+
+  function handleLineItemsChange(items: WorkOrderLineItem[]) {
+    setWo((prev) => ({ ...prev, lineItems: items }))
+  }
+
   // ── Derived values ──────────────────────────────────────────────────────
 
   const statusLabel = STATUS_LABELS[wo.status] ?? wo.status
@@ -357,7 +337,7 @@ export function WoDetail({
   const priorityColor = PRIORITY_COLORS[wo.priority] ?? PRIORITY_COLORS.normal
   const borderColor = PRIORITY_LEFT_BORDER[wo.priority] ?? "border-l-zinc-500"
   const categoryLabel = CATEGORY_LABELS[wo.category] ?? wo.category
-  const categoryIcon = CATEGORY_ICONS[wo.category] ?? "📋"
+  // Category icon removed — user prefers clean text-only UI
 
   const createdAt = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -367,18 +347,11 @@ export function WoDetail({
     minute: "2-digit",
   }).format(new Date(wo.created_at))
 
-  const targetDateDisplay = wo.target_date
+  const scheduledDateDisplay = wo.target_date
     ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(
         new Date(wo.target_date + "T00:00:00")
       )
     : null
-
-  // Line item totals
-  const lineItemTotal = wo.lineItems.reduce((sum, li) => {
-    const qty = parseFloat(li.quantity) || 0
-    const price = parseFloat(li.unit_price ?? "0") || 0
-    return sum + qty * price
-  }, 0)
 
   return (
     <div className="flex flex-col gap-6">
@@ -493,10 +466,7 @@ export function WoDetail({
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-lg" aria-hidden="true">{categoryIcon}</span>
-                  <h1 className="text-xl font-bold tracking-tight truncate">{wo.title}</h1>
-                </div>
+                <h1 className="text-xl font-bold tracking-tight truncate">{wo.title}</h1>
                 <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
                   <Link
                     href={`/customers/${wo.customer_id}`}
@@ -560,14 +530,24 @@ export function WoDetail({
         )}
       </div>
 
+      {/* ── Draft guidance banner ─────────────────────────────────────────── */}
+      {wo.status === "draft" && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+          <p className="text-sm font-medium text-primary">
+            {wo.lineItems.length === 0 && !wo.labor_hours
+              ? "Step 1: Set labor hours and add parts & materials below."
+              : "Items added. Next: Create a quote to send to the customer, or skip quoting and approve directly."}
+          </p>
+        </div>
+      )}
+
       {/* ── Status action bar ────────────────────────────────────────────── */}
       <StatusActionBar
         wo={wo}
-        techs={techs}
         isPending={isPending}
         onSkipQuoteApprove={() => setApproveDialogOpen(true)}
+        onCreateQuote={() => setShowQuoteBuilder(true)}
         onCancel={() => setCancelDialogOpen(true)}
-        onSchedule={() => setScheduleDialogOpen(true)}
         onFollowUp={handleCreateFollowUp}
         followUpPending={followUpPending}
         onPrepareInvoice={handlePrepareInvoice}
@@ -578,43 +558,21 @@ export function WoDetail({
       {/* ── Assignment section ───────────────────────────────────────────── */}
       <Section title="Assignment">
         {wo.techName ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20">
-                <UserIcon className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">{wo.techName}</p>
-                {targetDateDisplay && (
-                  <p className="text-xs text-muted-foreground">Target: {targetDateDisplay}</p>
-                )}
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20">
+              <UserIcon className="h-4 w-4 text-primary" />
             </div>
-            {(wo.status === "approved" || wo.status === "scheduled") && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setScheduleDialogOpen(true)}
-                disabled={isPending}
-              >
-                Reassign
-              </Button>
-            )}
+            <div>
+              <p className="text-sm font-medium">{wo.techName}</p>
+              {scheduledDateDisplay && (
+                <p className="text-xs text-muted-foreground">Scheduled: {scheduledDateDisplay}</p>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground italic">No technician assigned</p>
-            {(wo.status === "approved" || wo.status === "scheduled") && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setScheduleDialogOpen(true)}
-                disabled={isPending}
-              >
-                Assign Tech
-              </Button>
-            )}
-          </div>
+          <p className="text-sm text-muted-foreground italic">
+            Not assigned — assign via the Schedule page
+          </p>
         )}
         {wo.status === "cancelled" && wo.cancel_reason && (
           <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
@@ -624,80 +582,47 @@ export function WoDetail({
         )}
       </Section>
 
-      {/* ── Line items section ───────────────────────────────────────────── */}
-      <Section title="Line Items">
-        {wo.lineItems.length === 0 ? (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground italic">No line items yet</p>
-            {wo.status !== "invoiced" && wo.status !== "cancelled" && (
-              <Button size="sm" variant="outline" disabled>
-                Add Items
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {/* Line items table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 font-medium">Description</th>
-                    <th className="pb-2 font-medium text-right">Qty</th>
-                    <th className="pb-2 font-medium text-right">Unit Price</th>
-                    <th className="pb-2 font-medium text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {wo.lineItems.map((li) => {
-                    const qty = parseFloat(li.quantity) || 0
-                    const unitPrice = parseFloat(li.unit_price ?? "0") || 0
-                    const lineTotal = qty * unitPrice
-                    return (
-                      <tr key={li.id}>
-                        <td className="py-2">
-                          <p className="font-medium text-foreground">{li.description}</p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {li.item_type}{li.labor_type ? ` · ${li.labor_type}` : ""}
-                          </p>
-                        </td>
-                        <td className="py-2 text-right text-muted-foreground">
-                          {li.quantity} {li.unit}
-                        </td>
-                        <td className="py-2 text-right text-muted-foreground">
-                          {li.unit_price ? `$${parseFloat(li.unit_price).toFixed(2)}` : "—"}
-                        </td>
-                        <td className="py-2 text-right font-medium">
-                          {lineTotal > 0 ? `$${lineTotal.toFixed(2)}` : "—"}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                {lineItemTotal > 0 && (
-                  <tfoot>
-                    <tr className="border-t border-border">
-                      <td colSpan={3} className="pt-2 text-right text-sm font-medium text-muted-foreground">
-                        Subtotal
-                      </td>
-                      <td className="pt-2 text-right text-sm font-bold">
-                        ${lineItemTotal.toFixed(2)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-            {wo.status !== "invoiced" && wo.status !== "cancelled" && (
-              <div className="flex justify-end">
-                <Button size="sm" variant="outline" disabled>
-                  Add Line Item
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+      {/* ── Labor section ──────────────────────────────────────────────── */}
+      <Section title="Labor">
+        <WoLaborSection
+          workOrderId={wo.id}
+          laborHours={wo.labor_hours}
+          laborRate={wo.labor_rate}
+          laborActualHours={wo.labor_actual_hours}
+          defaultHourlyRate={(orgSettings?.default_hourly_rate as string | null | undefined) ?? null}
+          editable={wo.status !== "invoiced" && wo.status !== "cancelled"}
+          showActualHours={wo.status === "in_progress" || wo.status === "complete"}
+          onLaborChange={setLaborCost}
+        />
       </Section>
+
+      {/* ── Line items section ───────────────────────────────────────────── */}
+      <Section title="Parts & Materials">
+        <LineItemEditor
+          workOrderId={wo.id}
+          lineItems={wo.lineItems}
+          orgSettings={orgSettings ?? null}
+          editable={wo.status !== "invoiced" && wo.status !== "cancelled"}
+          onLineItemsChange={handleLineItemsChange}
+          laborCost={laborCost}
+        />
+      </Section>
+
+      {/* ── Quote builder section ─────────────────────────────────────────── */}
+      {(showQuoteBuilder || latestQuote) &&
+        wo.status !== "cancelled" &&
+        orgSettings && (
+          <Section title="Quote">
+            <QuoteBuilder
+              workOrder={wo}
+              orgSettings={orgSettings}
+              existingQuote={latestQuote}
+              customerPhone={customerPhone}
+              onQuoteCreated={() => router.refresh()}
+              onSent={() => router.refresh()}
+            />
+          </Section>
+        )}
 
       {/* ── Photos section ───────────────────────────────────────────────── */}
       {wo.completion_photo_paths && wo.completion_photo_paths.length > 0 && (
@@ -777,7 +702,7 @@ export function WoDetail({
         ) : (
           <div className="flex flex-col gap-0">
             {[...wo.activity_log].reverse().map((event, idx) => {
-              const icon = ACTIVITY_ICONS[event.type] ?? "📌"
+              const dotColor = ACTIVITY_DOT_COLORS[event.type] ?? "bg-zinc-400"
               const description =
                 ACTIVITY_DESCRIPTIONS[event.type] ??
                 event.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -793,8 +718,8 @@ export function WoDetail({
                 <div key={idx} className="flex gap-3">
                   {/* Timeline line + dot */}
                   <div className="flex flex-col items-center">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-card text-xs">
-                      {icon}
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-card">
+                      <div className={cn("h-2.5 w-2.5 rounded-full", dotColor)} />
                     </div>
                     {idx < (wo.activity_log?.length ?? 0) - 1 && (
                       <div className="w-px flex-1 bg-border my-1" />
@@ -879,69 +804,6 @@ export function WoDetail({
         </DialogContent>
       </Dialog>
 
-      {/* ── Schedule / assign dialog ──────────────────────────────────────── */}
-      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {wo.techName ? "Reassign Technician" : "Schedule Work Order"}
-            </DialogTitle>
-            <DialogDescription>
-              Select a technician and target date for this work order.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Technician
-              </label>
-              <select
-                value={scheduleTechId}
-                onChange={(e) => setScheduleTechId(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Select a technician...</option>
-                {techs.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.full_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Target Date
-              </label>
-              <input
-                type="date"
-                value={scheduleDate}
-                onChange={(e) => setScheduleDate(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setScheduleDialogOpen(false)
-                  setScheduleTechId("")
-                  setScheduleDate("")
-                }}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSchedule}
-                disabled={isPending || !scheduleTechId || !scheduleDate}
-              >
-                {isPending && <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />}
-                {wo.techName ? "Reassign" : "Schedule"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -950,11 +812,10 @@ export function WoDetail({
 
 interface StatusActionBarProps {
   wo: WorkOrderDetail
-  techs: TechProfile[]
   isPending: boolean
   onSkipQuoteApprove: () => void
+  onCreateQuote: () => void
   onCancel: () => void
-  onSchedule: () => void
   onFollowUp: () => void
   followUpPending: boolean
   onPrepareInvoice: () => void
@@ -966,8 +827,8 @@ function StatusActionBar({
   wo,
   isPending,
   onSkipQuoteApprove,
+  onCreateQuote,
   onCancel,
-  onSchedule,
   onFollowUp,
   followUpPending,
   onPrepareInvoice,
@@ -1000,13 +861,16 @@ function StatusActionBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card/50 px-4 py-3">
-      <WrenchIcon className="h-4 w-4 text-muted-foreground" />
-      <span className="text-sm font-medium text-muted-foreground">Actions:</span>
       <div className="flex flex-1 flex-wrap items-center gap-2 justify-end">
         {/* Draft status actions */}
         {wo.status === "draft" && (
           <>
-            <Button size="sm" variant="outline" disabled>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onCreateQuote}
+              disabled={isPending || wo.lineItems.length === 0}
+            >
               Create Quote
             </Button>
             <Button
@@ -1044,38 +908,28 @@ function StatusActionBar({
 
         {/* Approved status actions */}
         {wo.status === "approved" && (
-          <>
-            <Button size="sm" onClick={onSchedule} disabled={isPending}>
-              Schedule
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-              onClick={onCancel}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            onClick={onCancel}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
         )}
 
         {/* Scheduled status actions */}
         {wo.status === "scheduled" && (
-          <>
-            <Button size="sm" variant="outline" onClick={onSchedule} disabled={isPending}>
-              Reassign
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-              onClick={onCancel}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            onClick={onCancel}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
         )}
 
         {/* In progress status */}

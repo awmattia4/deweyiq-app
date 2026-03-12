@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useTransition } from "react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -74,10 +75,14 @@ interface QuoteBuilderProps {
     | "quote_number_prefix"
   >
   existingQuote?: QuoteDetail | null
+  /** Customer phone number — if present, enables SMS delivery option */
+  customerPhone?: string | null
   /** Called after successful create/send so parent can refresh */
   onQuoteCreated?: (quoteId: string) => void
   onSent?: () => void
 }
+
+type QuoteDeliveryMethod = "email" | "sms" | "both"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -144,6 +149,7 @@ export function QuoteBuilder({
   workOrder,
   orgSettings,
   existingQuote,
+  customerPhone,
   onQuoteCreated,
   onSent,
 }: QuoteBuilderProps) {
@@ -198,15 +204,24 @@ export function QuoteBuilder({
 
   // UI state
   const [showSendDialog, setShowSendDialog] = useState(false)
+  const [deliveryMethod, setDeliveryMethod] = useState<QuoteDeliveryMethod>("email")
+  const hasPhone = !!customerPhone
 
   // ── Calculations ──────────────────────────────────────────────────────
   const taxRate = parseFloat(orgSettings.default_tax_rate ?? "0.0875")
 
-  const subtotal = lineItems.reduce((sum, li) => {
+  // WO-level labor cost (not taxable)
+  const laborHours = parseFloat(workOrder.labor_hours ?? "0") || 0
+  const laborRate = parseFloat(workOrder.labor_rate ?? "0") || 0
+  const laborCost = laborHours * laborRate
+
+  const partsSubtotal = lineItems.reduce((sum, li) => {
     const qty = parseFloat(li.quantity) || 0
     const price = parseFloat(li.unit_price ?? "0") || 0
     return sum + qty * price
   }, 0)
+
+  const subtotal = partsSubtotal + laborCost
 
   const taxableSubtotal = lineItems
     .filter((li) => li.is_taxable)
@@ -300,11 +315,15 @@ export function QuoteBuilder({
         terms,
       })
 
-      // Send the quote
-      const result = await sendQuote(targetQuoteId)
+      // Send the quote with selected delivery method
+      const smsEnabled = deliveryMethod === "sms" || deliveryMethod === "both"
+      const result = await sendQuote(targetQuoteId, { smsEnabled })
       if (result.success) {
         setQuoteStatus("sent")
-        toast.success("Quote sent to customer")
+        const methodLabel = deliveryMethod === "both"
+          ? "email + SMS"
+          : deliveryMethod
+        toast.success(`Quote sent via ${methodLabel}`)
         onSent?.()
       } else {
         toast.error(result.error ?? "Failed to send quote")
@@ -519,10 +538,20 @@ export function QuoteBuilder({
       <div className="rounded-lg border bg-muted/20 p-4">
         <h4 className="text-sm font-medium mb-3">Totals</h4>
         <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
-          </div>
+          {partsSubtotal > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Parts & Materials</span>
+              <span>{formatCurrency(partsSubtotal)}</span>
+            </div>
+          )}
+          {laborCost > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                Labor ({laborHours} hrs × ${laborRate.toFixed(2)}/hr)
+              </span>
+              <span>{formatCurrency(laborCost)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">
               Tax ({(taxRate * 100).toFixed(2)}%)
@@ -620,6 +649,75 @@ export function QuoteBuilder({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Expires</span>
               <span>{expirationDateStr}</span>
+            </div>
+          </div>
+
+          {/* ── Delivery method selector ──────────────────────────────── */}
+          <div className="space-y-2">
+            <Label className="text-sm">Delivery Method</Label>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod("email")}
+                className={cn(
+                  "cursor-pointer flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors text-left",
+                  deliveryMethod === "email"
+                    ? "border-blue-500 bg-blue-500/10 text-foreground"
+                    : "border-border hover:bg-muted/50 text-muted-foreground"
+                )}
+              >
+                <Send className="h-4 w-4 shrink-0" />
+                <div>
+                  <span className="font-medium text-foreground">Email</span>
+                  <span className="block text-xs text-muted-foreground">
+                    PDF attachment with approval link
+                  </span>
+                </div>
+              </button>
+
+              {hasPhone && (
+                <button
+                  type="button"
+                  onClick={() => setDeliveryMethod("sms")}
+                  className={cn(
+                    "cursor-pointer flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors text-left",
+                    deliveryMethod === "sms"
+                      ? "border-blue-500 bg-blue-500/10 text-foreground"
+                      : "border-border hover:bg-muted/50 text-muted-foreground"
+                  )}
+                >
+                  <Send className="h-4 w-4 shrink-0" />
+                  <div>
+                    <span className="font-medium text-foreground">SMS</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Text with approval link
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {hasPhone && (
+                <button
+                  type="button"
+                  onClick={() => setDeliveryMethod("both")}
+                  className={cn(
+                    "cursor-pointer flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors text-left",
+                    deliveryMethod === "both"
+                      ? "border-blue-500 bg-blue-500/10 text-foreground"
+                      : "border-border hover:bg-muted/50 text-muted-foreground"
+                  )}
+                >
+                  <Send className="h-4 w-4 shrink-0" />
+                  <div>
+                    <span className="font-medium text-foreground">
+                      Email + SMS
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Both channels for fastest response
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
 

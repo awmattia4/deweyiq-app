@@ -103,6 +103,8 @@ export async function createQuote(
           id: workOrders.id,
           description: workOrders.description,
           flagged_by_tech_id: workOrders.flagged_by_tech_id,
+          labor_hours: workOrders.labor_hours,
+          labor_rate: workOrders.labor_rate,
         })
         .from(workOrders)
         .where(and(eq(workOrders.id, workOrderId), eq(workOrders.org_id, orgId)))
@@ -169,6 +171,8 @@ export async function createQuote(
       scope_of_work: woData.wo.description ?? "",
       tax_rate: settings?.default_tax_rate ?? "0.0875",
       terms: settings?.quote_terms_and_conditions ?? null,
+      labor_hours: woData.wo.labor_hours,
+      labor_rate: woData.wo.labor_rate,
       line_items: woData.lineItems.map((li) => ({
         id: li.id,
         description: li.description,
@@ -246,7 +250,8 @@ export async function createQuote(
  * 8. Update WO status to 'quoted', append activity_log event: 'quote_sent'
  */
 export async function sendQuote(
-  quoteId: string
+  quoteId: string,
+  options?: { smsEnabled?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
@@ -280,6 +285,8 @@ export async function sendQuote(
         tax_exempt: workOrders.tax_exempt,
         discount_type: workOrders.discount_type,
         discount_value: workOrders.discount_value,
+        labor_hours: workOrders.labor_hours,
+        labor_rate: workOrders.labor_rate,
       })
       .from(workOrders)
       .where(eq(workOrders.id, quote.work_order_id))
@@ -293,6 +300,7 @@ export async function sendQuote(
         id: customers.id,
         full_name: customers.full_name,
         email: customers.email,
+        phone: customers.phone,
         address: customers.address,
       })
       .from(customers)
@@ -368,7 +376,13 @@ export async function sendQuote(
       }
     })
 
-    const subtotal = pdfLineItems.reduce((sum, li) => sum + li.total, 0)
+    // WO-level labor cost (not taxable)
+    const laborHours = parseFloat(wo.labor_hours ?? "0") || 0
+    const laborRate = parseFloat(wo.labor_rate ?? "0") || 0
+    const laborCost = laborHours * laborRate
+
+    const lineItemSubtotal = pdfLineItems.reduce((sum, li) => sum + li.total, 0)
+    const subtotal = lineItemSubtotal + laborCost
 
     // Apply WO-level discount
     let discountAmount: number | null = null
@@ -385,6 +399,7 @@ export async function sendQuote(
       ? subtotal - discountAmount
       : subtotal
 
+    // Only line items with is_taxable flag contribute to taxable subtotal (labor is not taxable)
     const taxableSubtotal = pdfLineItems
       .filter((li) => li.isTaxable)
       .reduce((sum, li) => sum + li.total, 0)
@@ -421,6 +436,9 @@ export async function sendQuote(
       taxRate,
       taxAmount,
       discountAmount,
+      laborHours: laborCost > 0 ? laborHours : null,
+      laborRate: laborCost > 0 ? laborRate : null,
+      laborCost: laborCost > 0 ? laborCost : null,
       grandTotal,
       termsAndConditions: settings?.quote_terms_and_conditions ?? null,
       flaggedByTechName,
@@ -455,32 +473,67 @@ export async function sendQuote(
       })
     )
 
-    // ── 6. Send via Resend SDK ─────────────────────────────────────────────
+    // ── 6. Send via Resend SDK (or log in dev) ────────────────────────────
     const resendApiKey = process.env.RESEND_API_KEY
+    const isDev = process.env.NODE_ENV === "development"
+
     if (!resendApiKey) {
-      return { success: false, error: "RESEND_API_KEY not configured" }
+      if (isDev) {
+        console.log("\n━━━ [DEV] Quote Email ━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        console.log(`To: ${customer.email}`)
+        console.log(`Subject: Quote #${quote.quote_number ?? quoteId} from ${companyName}`)
+        console.log(`Approval URL: ${approvalUrl}`)
+        console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+      } else {
+        return { success: false, error: "RESEND_API_KEY not configured" }
+      }
+    } else {
+      const resend = new Resend(resendApiKey)
+
+      const fromAddress = isDev
+        ? "PoolCo Dev <onboarding@resend.dev>"
+        : `${companyName} <quotes@poolco.app>`
+
+      const { error: resendError } = await resend.emails.send({
+        from: fromAddress,
+        to: isDev ? ["delivered@resend.dev"] : [customer.email],
+        subject: `Quote #${quote.quote_number ?? quoteId} from ${companyName}`,
+        html: emailHtml,
+        attachments: [
+          {
+            filename: `quote-${quote.quote_number ?? quoteId}.pdf`,
+            content: Buffer.from(pdfBuffer).toString("base64"),
+          },
+        ],
+      })
+
+      if (resendError) {
+        console.error("[sendQuote] Resend error:", resendError)
+        return {
+          success: false,
+          error: `Email delivery failed: ${resendError.message}`,
+        }
+      }
     }
 
-    const resend = new Resend(resendApiKey)
-
-    const { error: resendError } = await resend.emails.send({
-      from: `${companyName} <quotes@poolco.app>`,
-      to: [customer.email],
-      subject: `Quote #${quote.quote_number ?? quoteId} from ${companyName}`,
-      html: emailHtml,
-      attachments: [
-        {
-          filename: `quote-${quote.quote_number ?? quoteId}.pdf`,
-          content: Buffer.from(pdfBuffer).toString("base64"),
-        },
-      ],
-    })
-
-    if (resendError) {
-      console.error("[sendQuote] Resend error:", resendError)
-      return {
-        success: false,
-        error: `Email delivery failed: ${resendError.message}`,
+    // ── 6b. SMS delivery (if enabled and customer has phone) ────────────────
+    if (options?.smsEnabled && customer.phone) {
+      try {
+        const supabase = await createClient()
+        await supabase.functions.invoke("send-invoice-sms", {
+          body: {
+            phone: customer.phone,
+            approvalUrl,
+            quoteNumber: quote.quote_number ?? quoteId,
+            total: totalFormatted,
+            companyName,
+            type: "quote",
+          },
+        })
+      } catch (smsErr) {
+        // SMS failure is non-fatal — email was already sent
+        console.error("[sendQuote] SMS delivery error:", smsErr)
       }
     }
 
@@ -761,6 +814,9 @@ export interface QuotePublicData {
   taxRate: number
   taxAmount: number
   grandTotal: number
+  laborHours: number | null
+  laborRate: number | null
+  laborCost: number | null
   termsAndConditions: string | null
   expirationDate: string
   flaggedByTechName: string | null
@@ -792,6 +848,8 @@ export async function getQuotePublicData(
         tax_exempt: workOrders.tax_exempt,
         discount_type: workOrders.discount_type,
         discount_value: workOrders.discount_value,
+        labor_hours: workOrders.labor_hours,
+        labor_rate: workOrders.labor_rate,
       })
       .from(workOrders)
       .where(eq(workOrders.id, quote.work_order_id))
@@ -877,7 +935,13 @@ export async function getQuotePublicData(
       }
     })
 
-    const subtotal = lineItems.reduce((sum, li) => sum + li.total, 0)
+    // WO-level labor
+    const laborHours = parseFloat(wo.labor_hours ?? "0") || 0
+    const laborRateVal = parseFloat(wo.labor_rate ?? "0") || 0
+    const laborCost = laborHours * laborRateVal
+
+    const partsSubtotal = lineItems.reduce((sum, li) => sum + li.total, 0)
+    const subtotal = partsSubtotal + laborCost
 
     let discountAmount: number | null = null
     if (wo.discount_type && wo.discount_value) {
@@ -926,6 +990,9 @@ export async function getQuotePublicData(
       taxRate,
       taxAmount,
       grandTotal,
+      laborHours: laborCost > 0 ? laborHours : null,
+      laborRate: laborCost > 0 ? laborRateVal : null,
+      laborCost: laborCost > 0 ? laborCost : null,
       termsAndConditions: settings?.quote_terms_and_conditions ?? null,
       expirationDate,
       flaggedByTechName,
