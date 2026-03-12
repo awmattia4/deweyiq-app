@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 6 — Work Orders & Quoting (Phase 5 complete)
+**Current focus:** Phase 7 — Billing & Payments (Phase 6 complete)
 
 ## Current Position
 
-Phase: 6 of 11 (Work Orders & Quoting) — IN PROGRESS
-Plan: 7/7 complete (01, 02, 03, 04, 05, 06, 07 done)
-Status: Phase 6 Plan 07 complete — Invoice preparation screen, invoice PDF, invoice list page, multi-WO invoicing, atomic invoice number generation, WO detail wiring
-Last activity: 2026-03-11 — Phase 6 Plan 07 executed: work-order-to-invoice conversion flow, invoice PDF, invoice list
+Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
+Plan: 1/9 complete (01 done)
+Status: Phase 7 Plan 01 complete — Schema extensions (payment_records, dunning_config, expenses), billing model per customer, single + bulk invoice generation
+Last activity: 2026-03-12 — Phase 7 Plan 01 executed: schema extensions, billing model server actions, bulk invoice generation
 
-Progress: [██████████] 100%
+Progress: [█---------] 11%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Progress: [██████████] 100%
 | Phase 06-work-orders-quoting P05 | 10 | 2 tasks | 7 files |
 | Phase 06-work-orders-quoting P06 | 4 | 2 tasks | 4 files |
 | Phase 06-work-orders-quoting P07 | 11 | 2 tasks | 10 files |
+| Phase 07-billing-payments P01 | 14 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -216,6 +217,11 @@ Recent decisions affecting current work:
 - [Phase 06-07]: Invoice line_total pre-calculated per row — recalculateInvoiceTotals helper called after any line item mutation; same pattern as WO line items
 - [Phase 06-07]: WoInvoicesTabShell both panels in DOM with hidden/visible toggle — preserves local filter state when switching tabs without refetching (same as ScheduleTabs)
 - [Phase 06-07]: handlePrepareInvoice in WoDetail creates invoice on first click, navigates to existing on subsequent — server pre-fetches invoiceInfo for the WO
+- [Phase 07-01]: Per-stop rate uses org_settings.default_hourly_rate — shared with WO labor rate, avoids adding a separate per-stop rate column
+- [Phase 07-01]: Bulk invoice generation processes sequentially (not Promise.all) — prevents race conditions on invoice number generation per research Pitfall 6
+- [Phase 07-01]: Plus-chemicals chemical line items default to unit_price=0 — office fills in cost per unit before finalizing (prices vary by supplier/date)
+- [Phase 07-01]: sendInvoice delegates to existing finalizeInvoice for draft-to-sent transition — Plan 02 extends with email/SMS delivery
+- [Phase 07-01]: Billing model update is a separate server action from updateCustomer — keeps billing concerns isolated from core customer CRUD
 
 ### Pending Todos
 
@@ -234,6 +240,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: Completed 06-07-PLAN.md — Invoice preparation screen, invoice PDF, invoice list, multi-WO invoicing, atomic invoice numbers, WO detail wiring
-Resume file: N/A — Phase 6 complete (all 7 plans executed); begin Phase 7 (Billing & Payments)
+Last session: 2026-03-12
+Stopped at: Completed 07-01-PLAN.md — Schema extensions, billing model server actions, bulk invoice generation
+Resume file: .planning/phases/07-billing-payments/07-02-PLAN.md
