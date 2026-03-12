@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 4/9 complete (01, 02, 03, 04 done)
-Status: Phase 7 Plan 04 complete — Payment processing, Stripe webhooks, manual payment recording
-Last activity: 2026-03-12 — Phase 7 Plan 04 executed: Branded payment page, Stripe Elements, webhook handlers
+Plan: 5/9 complete (01, 02, 03, 04, 06 done)
+Status: Phase 7 Plan 06 complete — QBO bidirectional sync with OAuth2, entity mappers, webhook handler
+Last activity: 2026-03-12 — Phase 7 Plan 06 executed: QBO sync actions, webhook handler, settings UI
 
-Progress: [████------] 44%
+Progress: [█████-----] 56%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [████------] 44%
 | Phase 07-billing-payments P01 | 14 | 2 tasks | 13 files |
 | Phase 07-billing-payments P03 | 8 | 2 tasks | 9 files |
 | Phase 07 P02 | 18 | 2 tasks | 11 files |
+| Phase 07-billing-payments P06 | 16 | 2 tasks | 14 files |
 | Phase 07-billing-payments P04 | 8 | 2 tasks | 6 files |
 
 ## Accumulated Context
@@ -232,6 +233,10 @@ Recent decisions affecting current work:
 - [Phase 07-02]: Single Edge Function (send-invoice-sms) handles both invoice and quote SMS types
 - [Phase 07-02]: Pay token uses separate INVOICE_TOKEN_SECRET with 365-day expiry for long-lived payment links
 - [Phase 07-02]: SMS delivery is non-fatal — email is primary channel, SMS failure does not fail the send operation
+- [Phase 07-06]: adminDb for all QBO sync operations — sync runs as fire-and-forget side effect without user session; QBO failure never blocks primary PoolCo operations
+- [Phase 07-06]: Advisory lock for token refresh uses pg_advisory_xact_lock(hashtext('qbo_refresh_' || orgId)) — prevents concurrent refresh races across multiple requests
+- [Phase 07-06]: PoolCo is source of truth — QBO Customer and Invoice webhook events are ignored; only Payment events are processed inbound
+- [Phase 07-06]: QBO webhook returns 200 immediately and processes asynchronously — Intuit requires fast response times
 - [Phase 07-04]: PaymentIntent reuse — if invoice already has a PI in usable state, reuse instead of creating new to prevent orphaned PIs
 - [Phase 07-04]: Stripe Customer created on connected account (not platform) for proper payment association
 - [Phase 07-04]: Webhook returns 200 on handler errors to prevent Stripe retry loops on permanent failures
@@ -249,12 +254,12 @@ Recent decisions affecting current work:
 ### Blockers/Concerns
 
 - [Phase 3]: Chemistry engine built — CSI formula and CYA correction implemented and tested; formula values should be validated against CPO curriculum or TFP calculator before shipping to real customer pools (liability risk if wrong)
-- [Phase 7]: QBO bi-directional sync conflict resolution strategy must be mapped before building invoice UI — define which system wins per entity type
+- [Phase 7 RESOLVED]: QBO sync conflict resolution: PoolCo is source of truth — Customer/Invoice changes push one-way to QBO, only Payment events pulled inbound via webhook
 - [Phase 10]: AI route optimization algorithm choice (OSRM self-hosted vs. Google Routes Optimization API at $4-6/call) needs break-even analysis before Phase 10 planning
 - [Phase 10]: Predictive chemistry alerts require 3+ months of per-pool reading history — cannot launch until that data exists
 
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-04-PLAN.md — Payment processing, Stripe webhooks, manual payment recording
-Resume file: .planning/phases/07-billing-payments/07-05-PLAN.md
+Stopped at: Completed 07-06-PLAN.md — QBO bidirectional sync, OAuth2, entity mappers, webhook handler
+Resume file: .planning/phases/07-billing-payments/07-07-PLAN.md
