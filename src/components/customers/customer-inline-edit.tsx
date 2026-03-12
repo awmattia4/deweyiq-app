@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from "react"
 import { updateCustomer } from "@/actions/customers"
+import { updateCustomerBillingModel } from "@/actions/billing"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete"
 import {
   Select,
   SelectContent,
@@ -19,6 +21,13 @@ import { Pencil } from "lucide-react"
 
 type CustomerStatus = "active" | "paused" | "cancelled"
 
+const BILLING_MODEL_LABELS: Record<string, string> = {
+  per_stop: "Per Stop",
+  flat_rate: "Monthly Flat Rate",
+  plus_chemicals: "Plus Chemicals",
+  custom: "Custom Line Items",
+}
+
 interface CustomerInlineEditProps {
   customer: {
     id: string
@@ -32,6 +41,8 @@ interface CustomerInlineEditProps {
     route_name: string | null
     assigned_tech_id: string | null
     assignedTech?: { id: string; full_name: string | null } | null
+    billing_model: string | null
+    flat_rate_amount: string | null
   }
   techs: Array<{ id: string; full_name: string | null }>
 }
@@ -46,6 +57,8 @@ type FormState = {
   status: CustomerStatus
   route_name: string
   assigned_tech_id: string
+  billing_model: string
+  flat_rate_amount: string
 }
 
 // ─── Helper: build form state from customer ────────────────────────────────────
@@ -61,6 +74,8 @@ function customerToForm(customer: CustomerInlineEditProps["customer"]): FormStat
     status: customer.status,
     route_name: customer.route_name ?? "",
     assigned_tech_id: customer.assigned_tech_id ?? "",
+    billing_model: customer.billing_model ?? "",
+    flat_rate_amount: customer.flat_rate_amount ?? "",
   }
 }
 
@@ -87,6 +102,7 @@ function ReadField({ label, value }: { label: string; value: string | null | und
 export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<FormState>(() => customerToForm(customer))
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -97,12 +113,14 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
   function handleEdit() {
     // Reset form to current customer values before editing
     setForm(customerToForm(customer))
+    setCoords(null)
     setError(null)
     setIsEditing(true)
   }
 
   function handleCancel() {
     setForm(customerToForm(customer))
+    setCoords(null)
     setError(null)
     setIsEditing(false)
   }
@@ -116,10 +134,13 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
     setError(null)
 
     startTransition(async () => {
+      // Update core customer fields
       const result = await updateCustomer({
         id: customer.id,
         full_name: form.full_name.trim(),
         address: form.address.trim() || undefined,
+        lat: coords?.lat,
+        lng: coords?.lng,
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
         gate_code: form.gate_code.trim() || undefined,
@@ -129,11 +150,24 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
         assigned_tech_id: form.assigned_tech_id || null,
       })
 
-      if (result.success) {
-        setIsEditing(false)
-      } else {
+      if (!result.success) {
         setError(result.error ?? "Failed to save. Please try again.")
+        return
       }
+
+      // Update billing model separately
+      const billingResult = await updateCustomerBillingModel(
+        customer.id,
+        form.billing_model || null,
+        form.flat_rate_amount || undefined
+      )
+
+      if (!billingResult.success) {
+        setError(billingResult.error ?? "Failed to save billing model.")
+        return
+      }
+
+      setIsEditing(false)
     })
   }
 
@@ -144,6 +178,15 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
       techs.find((t) => t.id === customer.assigned_tech_id)?.full_name ??
       customer.assignedTech?.full_name ??
       null
+
+    const billingModelLabel = customer.billing_model
+      ? BILLING_MODEL_LABELS[customer.billing_model] ?? customer.billing_model
+      : null
+
+    const flatRateDisplay =
+      customer.billing_model === "flat_rate" && customer.flat_rate_amount
+        ? `$${parseFloat(customer.flat_rate_amount).toFixed(2)}/mo`
+        : null
 
     return (
       <div className="flex flex-col gap-6">
@@ -178,6 +221,19 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <ReadField label="Gate Code" value={customer.gate_code} />
             <ReadField label="Access Notes" value={customer.access_notes} />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Billing */}
+        <div className="space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Billing
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <ReadField label="Billing Model" value={billingModelLabel} />
+            {flatRateDisplay && <ReadField label="Flat Rate" value={flatRateDisplay} />}
           </div>
         </div>
 
@@ -266,12 +322,14 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="edit-address">Address</Label>
-          <Input
+          <AddressAutocomplete
             id="edit-address"
             value={form.address}
-            onChange={(e) => update("address", e.target.value)}
+            onChange={(address, newCoords) => {
+              update("address", address)
+              if (newCoords) setCoords(newCoords)
+            }}
             disabled={isPending}
-            placeholder="123 Main St, City, ST 12345"
           />
         </div>
       </div>
@@ -305,6 +363,53 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
             disabled={isPending}
             placeholder="Dog in backyard, use side gate..."
           />
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Billing */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Billing
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-billing-model">Billing Model</Label>
+            <Select
+              value={form.billing_model || "none"}
+              onValueChange={(v) => update("billing_model", v === "none" ? "" : v)}
+              disabled={isPending}
+            >
+              <SelectTrigger id="edit-billing-model">
+                <SelectValue placeholder="Not Set" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not Set</SelectItem>
+                <SelectItem value="per_stop">Per Stop</SelectItem>
+                <SelectItem value="flat_rate">Monthly Flat Rate</SelectItem>
+                <SelectItem value="plus_chemicals">Plus Chemicals</SelectItem>
+                <SelectItem value="custom">Custom Line Items</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {form.billing_model === "flat_rate" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-flat-rate">Monthly Rate ($)</Label>
+              <Input
+                id="edit-flat-rate"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.flat_rate_amount}
+                onChange={(e) => update("flat_rate_amount", e.target.value)}
+                disabled={isPending}
+                placeholder="150.00"
+              />
+            </div>
+          )}
         </div>
       </div>
 

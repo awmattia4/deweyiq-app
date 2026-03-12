@@ -200,6 +200,8 @@ export async function prepareInvoice(
           tax_exempt: workOrders.tax_exempt,
           discount_type: workOrders.discount_type,
           discount_value: workOrders.discount_value,
+          labor_hours: workOrders.labor_hours,
+          labor_rate: workOrders.labor_rate,
         })
         .from(workOrders)
         .where(and(eq(workOrders.id, workOrderId), eq(workOrders.org_id, orgId)))
@@ -240,6 +242,11 @@ export async function prepareInvoice(
     const taxRate = parseFloat(settings?.default_tax_rate ?? "0.0875")
     const taxExempt = woData.wo.tax_exempt
 
+    // ── 2b. Compute WO-level labor ──────────────────────────────────────────
+    const laborHours = parseFloat(woData.wo.labor_hours ?? "0") || 0
+    const laborRateVal = parseFloat(woData.wo.labor_rate ?? "0") || 0
+    const laborCost = laborHours * laborRateVal
+
     // ── 3. Calculate WO-level discount ────────────────────────────────────
     let orderDiscountAmount = 0
     if (woData.wo.discount_type && woData.wo.discount_value) {
@@ -250,14 +257,20 @@ export async function prepareInvoice(
           const price = parseFloat(li.unit_price ?? "0") || 0
           return sum + qty * price
         }, 0)
-        orderDiscountAmount = raw * (discVal / 100)
+        orderDiscountAmount = (raw + laborCost) * (discVal / 100)
       } else {
         orderDiscountAmount = discVal
       }
     }
 
-    // ── 4. Prepare line items data ─────────────────────────────────────────
-    const lineItemsForCalc = woData.lineItems.map((li) => ({
+    // ── 4. Prepare line items data (includes labor as a line item for invoice) ──
+    const allLineItemsForCalc: Array<{
+      quantity: string
+      unit_price: string
+      discount_type: string | null
+      discount_value: string | null
+      is_taxable: boolean
+    }> = woData.lineItems.map((li) => ({
       quantity: li.quantity ?? "1",
       unit_price: li.unit_price ?? "0",
       discount_type: li.discount_type,
@@ -265,9 +278,20 @@ export async function prepareInvoice(
       is_taxable: li.is_taxable,
     }))
 
+    // Add WO-level labor as a virtual line item for totals calculation
+    if (laborCost > 0) {
+      allLineItemsForCalc.push({
+        quantity: String(laborHours),
+        unit_price: String(laborRateVal),
+        discount_type: null,
+        discount_value: null,
+        is_taxable: false, // labor is not taxable
+      })
+    }
+
     // ── 5. Calculate totals ────────────────────────────────────────────────
     const totals = calculateTotals({
-      lineItems: lineItemsForCalc,
+      lineItems: allLineItemsForCalc,
       taxRate,
       taxExempt,
       discountAmount: orderDiscountAmount,
@@ -294,41 +318,60 @@ export async function prepareInvoice(
       const newInvoiceId = inserted[0]?.id
       if (!newInvoiceId) return null
 
-      // Copy WO line items to invoice_line_items
-      if (woData.lineItems.length > 0) {
-        await db.insert(invoiceLineItems).values(
-          woData.lineItems.map((li, idx) => {
-            const qty = parseFloat(li.quantity ?? "1") || 0
-            const unitPrice = parseFloat(li.unit_price ?? "0") || 0
-            let lineTotal = qty * unitPrice
+      // Build invoice line items from WO line items
+      const invoiceLineItemValues = woData.lineItems.map((li, idx) => {
+        const qty = parseFloat(li.quantity ?? "1") || 0
+        const unitPrice = parseFloat(li.unit_price ?? "0") || 0
+        let lineTotal = qty * unitPrice
 
-            // Apply per-line discount
-            if (li.discount_type && li.discount_value) {
-              const discVal = parseFloat(li.discount_value) || 0
-              if (li.discount_type === "percent") {
-                lineTotal = lineTotal * (1 - discVal / 100)
-              } else {
-                lineTotal = Math.max(0, lineTotal - discVal)
-              }
-            }
+        // Apply per-line discount
+        if (li.discount_type && li.discount_value) {
+          const discVal = parseFloat(li.discount_value) || 0
+          if (li.discount_type === "percent") {
+            lineTotal = lineTotal * (1 - discVal / 100)
+          } else {
+            lineTotal = Math.max(0, lineTotal - discVal)
+          }
+        }
 
-            return {
-              org_id: orgId,
-              invoice_id: newInvoiceId,
-              description: li.description,
-              item_type: li.item_type ?? "part",
-              quantity: li.quantity ?? "1",
-              unit: li.unit ?? "each",
-              unit_price: li.unit_price ?? "0",
-              discount_type: li.discount_type,
-              discount_value: li.discount_value,
-              is_taxable: li.is_taxable,
-              line_total: lineTotal.toFixed(2),
-              sort_order: idx,
-              created_at: new Date(),
-            }
-          })
-        )
+        return {
+          org_id: orgId,
+          invoice_id: newInvoiceId,
+          description: li.description,
+          item_type: li.item_type ?? "part",
+          quantity: li.quantity ?? "1",
+          unit: li.unit ?? "each",
+          unit_price: li.unit_price ?? "0",
+          discount_type: li.discount_type,
+          discount_value: li.discount_value,
+          is_taxable: li.is_taxable,
+          line_total: lineTotal.toFixed(2),
+          sort_order: idx,
+          created_at: new Date(),
+        }
+      })
+
+      // Add WO-level labor as an invoice line item
+      if (laborCost > 0) {
+        invoiceLineItemValues.push({
+          org_id: orgId,
+          invoice_id: newInvoiceId,
+          description: `Labor — ${laborHours} hrs × $${laborRateVal.toFixed(2)}/hr`,
+          item_type: "labor",
+          quantity: String(laborHours),
+          unit: "hour",
+          unit_price: String(laborRateVal),
+          discount_type: null,
+          discount_value: null,
+          is_taxable: false,
+          line_total: laborCost.toFixed(2),
+          sort_order: woData.lineItems.length,
+          created_at: new Date(),
+        })
+      }
+
+      if (invoiceLineItemValues.length > 0) {
+        await db.insert(invoiceLineItems).values(invoiceLineItemValues)
       }
 
       return newInvoiceId
@@ -948,6 +991,84 @@ export async function finalizeInvoice(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to finalize invoice",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// sendInvoice
+// ---------------------------------------------------------------------------
+
+/**
+ * Sends an invoice to the customer.
+ *
+ * 1. If still draft, finalizes (assigns invoice number via existing logic).
+ * 2. Sets status to 'sent' and issued_at/sent_at to now.
+ * 3. Returns the invoice with token for Plan 02 to handle actual email/SMS delivery.
+ *
+ * Plan 02 will extend this to send email/SMS. For now, it just updates status.
+ */
+export async function sendInvoice(
+  invoiceId: string
+): Promise<{ success: boolean; invoiceNumber?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    // ── 1. Fetch invoice ───────────────────────────────────────────────────
+    const invoiceRows = await withRls(token, async (db) =>
+      db
+        .select()
+        .from(invoices)
+        .where(and(eq(invoices.id, invoiceId), eq(invoices.org_id, orgId)))
+        .limit(1)
+    )
+
+    const invoice = invoiceRows[0]
+    if (!invoice) return { success: false, error: "Invoice not found" }
+
+    // If already sent or paid, return current state
+    if (invoice.status === "sent" || invoice.status === "paid") {
+      return { success: true, invoiceNumber: invoice.invoice_number ?? undefined }
+    }
+
+    // ── 2. If draft, finalize first (assign invoice number) ────────────────
+    let invoiceNumber = invoice.invoice_number
+    if (invoice.status === "draft") {
+      const finalizeResult = await finalizeInvoice(invoiceId)
+      if (!finalizeResult.success) {
+        return { success: false, error: finalizeResult.error ?? "Failed to finalize invoice" }
+      }
+      invoiceNumber = finalizeResult.invoiceNumber ?? null
+    }
+
+    // ── 3. Update sent_at timestamp ────────────────────────────────────────
+    const now = new Date()
+    await withRls(token, async (db) => {
+      await db
+        .update(invoices)
+        .set({
+          sent_at: now,
+          updated_at: now,
+        })
+        .where(eq(invoices.id, invoiceId))
+    })
+
+    // Plan 02 will add email/SMS delivery here
+
+    revalidatePath("/work-orders")
+    return { success: true, invoiceNumber: invoiceNumber ?? undefined }
+  } catch (err) {
+    console.error("[sendInvoice] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to send invoice",
     }
   }
 }
