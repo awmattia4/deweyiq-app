@@ -71,6 +71,7 @@ export default async function CustomerProfilePage({
         ? sv.visited_at.toISOString()
         : String(sv.visited_at),
       notes: sv.notes,
+      chemistry_readings: sv.chemistry_readings as Record<string, number | null> | null,
       pool: { id: pool.id, name: pool.name },
       tech: null as { id: string; full_name: string | null } | null,
     }))
@@ -92,7 +93,7 @@ export default async function CustomerProfilePage({
 
         {/* Overview — inline edit for customer fields */}
         <TabsContent value="overview" className="mt-6">
-          <CustomerInlineEdit customer={customer} techs={techs} />
+          <CustomerInlineEdit customer={customer} techs={techs} userRole={user.role} />
         </TabsContent>
 
         {/* Pools — pool cards with Add Pool modal */}

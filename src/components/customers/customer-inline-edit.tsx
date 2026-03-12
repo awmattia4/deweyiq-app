@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Pencil } from "lucide-react"
+import { AlertTriangleIcon, Pencil } from "lucide-react"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,8 +43,11 @@ interface CustomerInlineEditProps {
     assignedTech?: { id: string; full_name: string | null } | null
     billing_model: string | null
     flat_rate_amount: string | null
+    overdue_balance?: string | null
   }
   techs: Array<{ id: string; full_name: string | null }>
+  /** User role — overdue balance is only shown to office/owner, not tech */
+  userRole?: string
 }
 
 type FormState = {
@@ -99,7 +102,7 @@ function ReadField({ label, value }: { label: string; value: string | null | und
  * No react-hook-form — follows the established codebase pattern (ProfileForm,
  * AddCustomerDialog).
  */
-export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps) {
+export function CustomerInlineEdit({ customer, techs, userRole }: CustomerInlineEditProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<FormState>(() => customerToForm(customer))
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
@@ -188,8 +191,21 @@ export function CustomerInlineEdit({ customer, techs }: CustomerInlineEditProps)
         ? `$${parseFloat(customer.flat_rate_amount).toFixed(2)}/mo`
         : null
 
+    const overdueAmount = parseFloat(customer.overdue_balance ?? "0")
+    const showOverdueBanner = overdueAmount > 0 && userRole !== "tech"
+
     return (
       <div className="flex flex-col gap-6">
+        {/* Overdue balance banner — visible to office and owner only */}
+        {showOverdueBanner && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+            <AlertTriangleIcon className="h-4 w-4 text-destructive shrink-0" />
+            <p className="text-sm font-medium text-destructive">
+              Overdue Balance: ${overdueAmount.toFixed(2)}
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Customer Details</h2>
           <Button variant="outline" size="sm" onClick={handleEdit}>

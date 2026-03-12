@@ -21,7 +21,7 @@ import {
   alerts,
   orgs,
 } from "@/lib/db/schema"
-import { eq, and } from "drizzle-orm"
+import { eq, and, sql } from "drizzle-orm"
 import { syncPaymentToQbo } from "@/actions/qbo-sync"
 import { createElement } from "react"
 import { render as renderEmail } from "@react-email/render"
@@ -102,6 +102,43 @@ export async function handlePaymentSucceeded(
       updated_at: now,
     })
     .where(eq(invoices.id, invoiceId))
+
+  // Recalculate customer overdue_balance after payment success
+  try {
+    const [paidInvoice] = await adminDb
+      .select({ customer_id: invoices.customer_id })
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1)
+
+    if (paidInvoice) {
+      // Recalculate from remaining overdue invoices
+      const [result] = await adminDb
+        .select({
+          total: sql<string>`COALESCE(SUM(${invoices.total}::numeric), 0)::text`,
+        })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.customer_id, paidInvoice.customer_id),
+            sql`${invoices.status} IN ('sent', 'overdue')`,
+            sql`${invoices.paid_at} IS NULL`,
+            sql`${invoices.due_date} < now()::date`
+          )
+        )
+
+      await adminDb
+        .update(customers)
+        .set({
+          overdue_balance: result?.total ?? "0",
+          updated_at: now,
+        })
+        .where(eq(customers.id, paidInvoice.customer_id))
+    }
+  } catch (overdueErr) {
+    // Non-fatal -- overdue balance recalculation should never block payment success
+    console.error("[handlePaymentSucceeded] Overdue balance recalc error (non-blocking):", overdueErr)
+  }
 
   // Fire-and-forget QBO sync for the settled payment
   const settledRecords = await adminDb

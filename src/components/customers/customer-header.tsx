@@ -15,6 +15,7 @@ interface CustomerHeaderProps {
     status: "active" | "paused" | "cancelled"
     route_name: string | null
     assignedTech?: { id: string; full_name: string | null } | null
+    overdue_balance?: string | null
   }
 }
 
@@ -45,6 +46,8 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
 export function CustomerHeader({ customer }: CustomerHeaderProps) {
   const statusLabel = STATUS_LABELS[customer.status] ?? customer.status
   const statusVariant = STATUS_VARIANTS[customer.status] ?? "outline"
+  const overdueAmount = parseFloat(customer.overdue_balance ?? "0")
+  const hasOverdue = overdueAmount > 0
 
   return (
     <div className="rounded-lg border border-border bg-card p-5 flex flex-col gap-4">
@@ -59,14 +62,27 @@ export function CustomerHeader({ customer }: CustomerHeaderProps) {
             </Link>
           </Button>
 
-          {/* Customer name */}
-          <h1 className="text-2xl font-bold tracking-tight truncate">{customer.full_name}</h1>
+          {/* Customer name with optional overdue dot */}
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight truncate">{customer.full_name}</h1>
+            {hasOverdue && (
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 shrink-0" title="Overdue balance" />
+            )}
+          </div>
         </div>
 
-        {/* Status badge */}
-        <Badge variant={statusVariant} className="shrink-0 mt-8">
-          {statusLabel}
-        </Badge>
+        <div className="flex items-center gap-2 mt-8 shrink-0">
+          {/* Overdue badge */}
+          {hasOverdue && (
+            <Badge variant="destructive" className="shrink-0">
+              Overdue
+            </Badge>
+          )}
+          {/* Status badge */}
+          <Badge variant={statusVariant} className="shrink-0">
+            {statusLabel}
+          </Badge>
+        </div>
       </div>
 
       {/* ── Detail row: address, phone, route, tech ───────────────────────── */}

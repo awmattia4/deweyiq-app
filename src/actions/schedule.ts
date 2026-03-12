@@ -11,8 +11,10 @@ import {
   customers,
   pools,
   profiles,
+  workOrders,
 } from "@/lib/db/schema"
-import { and, eq, gt, gte, lte, inArray } from "drizzle-orm"
+import { and, eq, gt, gte, lte, inArray, isNull } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,8 +168,8 @@ async function generateStopsForRule(
     const windowEnd = new Date(today)
     windowEnd.setDate(today.getDate() + 28)
 
-    const todayStr = today.toISOString().split("T")[0]
-    const windowEndStr = windowEnd.toISOString().split("T")[0]
+    const todayStr = toLocalDateString(today)
+    const windowEndStr = toLocalDateString(windowEnd)
 
     // Fetch org holidays within the window
     const orgHolidays = await db
@@ -188,8 +190,25 @@ async function generateStopsForRule(
 
     // Upsert each date that is not a holiday
     for (const date of dates) {
-      const dateStr = date.toISOString().split("T")[0]
+      const dateStr = toLocalDateString(date)
       if (holidaySet.has(dateStr)) continue
+
+      // Find max sort_index for this tech+date to append after existing stops
+      const existing = rule.tech_id
+        ? await db
+            .select({ sort_index: routeStops.sort_index })
+            .from(routeStops)
+            .where(
+              and(
+                eq(routeStops.org_id, orgId),
+                eq(routeStops.tech_id, rule.tech_id),
+                eq(routeStops.scheduled_date, dateStr)
+              )
+            )
+        : []
+      const maxIdx = existing.length > 0
+        ? Math.max(...existing.map((s) => s.sort_index))
+        : 0
 
       await db
         .insert(routeStops)
@@ -200,7 +219,7 @@ async function generateStopsForRule(
           tech_id: rule.tech_id,
           schedule_rule_id: rule.id,
           scheduled_date: dateStr,
-          sort_index: 999,
+          sort_index: maxIdx + 1,
           status: "scheduled",
         })
         .onConflictDoNothing()
@@ -420,7 +439,7 @@ export async function updateScheduleRule(
 
       // Destructive regeneration on frequency change: delete future stops, regenerate
       if (frequencyChanged) {
-        const today = new Date().toISOString().split("T")[0]
+        const today = toLocalDateString()
         await db
           .delete(routeStops)
           .where(
@@ -465,7 +484,7 @@ export async function deleteScheduleRule(
   }
 
   try {
-    const today = new Date().toISOString().split("T")[0]
+    const today = toLocalDateString()
 
     await withRls(token, async (db) => {
       // Soft delete the rule
@@ -714,6 +733,12 @@ export async function getStopsForDay(
     lat: number | null
     /** Customer geocoded longitude — for map markers */
     lng: number | null
+    /** Work order linked to this stop (null for regular service stops) */
+    workOrderId: string | null
+    /** Work order title for display */
+    workOrderTitle: string | null
+    /** Customer overdue balance for overdue flag display */
+    overdueBalance: number | null
   }>
 > {
   const token = await getRlsToken()
@@ -750,6 +775,7 @@ export async function getStopsForDay(
                 address: customers.address,
                 lat: customers.lat,
                 lng: customers.lng,
+                overdue_balance: customers.overdue_balance,
               })
               .from(customers)
               .where(inArray(customers.id, customerIds))
@@ -765,9 +791,20 @@ export async function getStopsForDay(
       const customerMap = new Map(customerRows.map((c) => [c.id, c]))
       const poolMap = new Map(poolRows.map((p) => [p.id, p.name]))
 
+      // Batch fetch work order titles for WO stops
+      const woIds = [...new Set(stops.flatMap((s) => (s.work_order_id ? [s.work_order_id] : [])))]
+      const woMap = new Map<string, string>()
+      if (woIds.length > 0) {
+        const woRows = await db
+          .select({ id: workOrders.id, title: workOrders.title })
+          .from(workOrders)
+          .where(inArray(workOrders.id, woIds))
+        for (const wo of woRows) woMap.set(wo.id, wo.title)
+      }
+
       return stops
         .sort((a, b) => a.sort_index - b.sort_index)
-        .map((stop) => {
+        .map((stop, idx) => {
           const customer = customerMap.get(stop.customer_id)
           return {
             id: stop.id,
@@ -776,7 +813,7 @@ export async function getStopsForDay(
             poolId: stop.pool_id,
             scheduleRuleId: stop.schedule_rule_id,
             scheduledDate: stop.scheduled_date,
-            sortIndex: stop.sort_index,
+            sortIndex: idx + 1, // Position-based, not raw sort_index
             positionLocked: stop.position_locked,
             windowStart: stop.window_start,
             windowEnd: stop.window_end,
@@ -786,6 +823,9 @@ export async function getStopsForDay(
             address: customer?.address ?? null,
             lat: customer?.lat ?? null,
             lng: customer?.lng ?? null,
+            workOrderId: stop.work_order_id ?? null,
+            workOrderTitle: stop.work_order_id ? (woMap.get(stop.work_order_id) ?? null) : null,
+            overdueBalance: customer?.overdue_balance ? parseFloat(customer.overdue_balance) : null,
           }
         })
     })
@@ -901,6 +941,28 @@ export async function removeStopFromRoute(
 
   try {
     await withRls(token, async (db) => {
+      // Fetch the stop to check for linked WO
+      const [stop] = await db
+        .select({ id: routeStops.id, work_order_id: routeStops.work_order_id })
+        .from(routeStops)
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+        .limit(1)
+
+      if (!stop) return
+
+      // If the stop has a linked WO, revert it back to approved
+      if (stop.work_order_id) {
+        await db
+          .update(workOrders)
+          .set({
+            status: "approved",
+            assigned_tech_id: null,
+            target_date: null,
+            updated_at: new Date(),
+          })
+          .where(eq(workOrders.id, stop.work_order_id))
+      }
+
       await db
         .delete(routeStops)
         .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
@@ -989,9 +1051,10 @@ export async function getUnassignedCustomers(
 
       if (allCustomers.length === 0) return []
 
-      // Fetch customer_ids already assigned to this tech+date (LEFT JOIN avoids RLS correlated subquery pitfall)
+      // Fetch assigned stops for this tech+date — track both customer_id AND pool_id
+      // so we can identify which specific pools are already assigned
       const assignedStops = await db
-        .select({ customer_id: routeStops.customer_id })
+        .select({ customer_id: routeStops.customer_id, pool_id: routeStops.pool_id })
         .from(routeStops)
         .where(
           and(
@@ -1001,35 +1064,58 @@ export async function getUnassignedCustomers(
           )
         )
 
-      const assignedCustomerIds = new Set(assignedStops.map((s) => s.customer_id))
+      // Build set of assigned customer:pool pairs
+      const assignedPairs = new Set(
+        assignedStops.map((s) => `${s.customer_id}:${s.pool_id ?? ""}`)
+      )
+      // Also track customers that have a null-pool stop assigned
+      const assignedNullPoolCustomers = new Set(
+        assignedStops.filter((s) => !s.pool_id).map((s) => s.customer_id)
+      )
 
-      // Filter out assigned customers
-      const unassignedCustomers = allCustomers.filter((c) => !assignedCustomerIds.has(c.id))
-      if (unassignedCustomers.length === 0) return []
+      const customerIds = allCustomers.map((c) => c.id)
 
-      const unassignedIds = unassignedCustomers.map((c) => c.id)
-
-      // Fetch pools for unassigned customers
+      // Fetch ALL pools for ALL customers (we need to check per-pool assignment)
       const allPools = await db
         .select({ id: pools.id, name: pools.name, customer_id: pools.customer_id })
         .from(pools)
-        .where(and(eq(pools.org_id, orgId), inArray(pools.customer_id, unassignedIds)))
+        .where(and(eq(pools.org_id, orgId), inArray(pools.customer_id, customerIds)))
 
-      // Group pools by customer_id
+      // Group pools by customer_id, filtering out already-assigned ones
       const poolsByCustomer = new Map<string, Array<{ id: string; name: string }>>()
+      const totalPoolsByCustomer = new Map<string, number>()
       for (const pool of allPools) {
+        // Track total pool count
+        totalPoolsByCustomer.set(pool.customer_id, (totalPoolsByCustomer.get(pool.customer_id) ?? 0) + 1)
+
+        // Skip pools that already have a stop assigned
+        if (assignedPairs.has(`${pool.customer_id}:${pool.id}`)) continue
+
         const existing = poolsByCustomer.get(pool.customer_id) ?? []
         existing.push({ id: pool.id, name: pool.name })
         poolsByCustomer.set(pool.customer_id, existing)
       }
 
-      return unassignedCustomers.map((c) => ({
-        id: c.id,
-        name: c.full_name,
-        address: c.address,
-        pools: poolsByCustomer.get(c.id) ?? [],
-        poolCount: poolsByCustomer.get(c.id)?.length ?? 0,
-      }))
+      // A customer is "unassigned" if they have at least one unassigned pool,
+      // OR if they have no pools at all and no null-pool stop assigned
+      return allCustomers
+        .filter((c) => {
+          const unassignedPools = poolsByCustomer.get(c.id)
+          const totalPools = totalPoolsByCustomer.get(c.id) ?? 0
+          if (totalPools === 0) {
+            // No pools — show if no null-pool stop assigned
+            return !assignedNullPoolCustomers.has(c.id)
+          }
+          // Has pools — show if any pool is unassigned
+          return unassignedPools && unassignedPools.length > 0
+        })
+        .map((c) => ({
+          id: c.id,
+          name: c.full_name,
+          address: c.address,
+          pools: poolsByCustomer.get(c.id) ?? [],
+          poolCount: totalPoolsByCustomer.get(c.id) ?? 0,
+        }))
     })
   } catch (error) {
     console.error("[getUnassignedCustomers] Error:", error)
@@ -1245,5 +1331,420 @@ export async function migrateRouteDaysToRouteStops(): Promise<{
   } catch (error) {
     console.error("[migrateRouteDaysToRouteStops] Error:", error)
     return { success: false, migrated: 0, error: "Migration failed" }
+  }
+}
+
+// ─── Stop management actions (skip, move, reassign) ───────────────────────────
+
+/**
+ * skipStop — mark a route_stop as "skipped" for this occurrence only.
+ *
+ * Owner/office only. The recurring rule stays intact — the next generation
+ * cycle will create a new stop for the next scheduled date.
+ */
+export async function skipStop(
+  routeStopId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(routeStops)
+        .set({ status: "skipped", updated_at: new Date() })
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("[skipStop] Error:", error)
+    return { success: false, error: "Failed to skip stop" }
+  }
+}
+
+/**
+ * unskipStop — revert a skipped stop back to "scheduled".
+ *
+ * Owner/office only.
+ */
+export async function unskipStop(
+  routeStopId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(routeStops)
+        .set({ status: "scheduled", updated_at: new Date() })
+        .where(
+          and(
+            eq(routeStops.id, routeStopId),
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.status, "skipped")
+          )
+        )
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error("[unskipStop] Error:", error)
+    return { success: false, error: "Failed to unskip stop" }
+  }
+}
+
+/**
+ * moveStop — move a single route_stop to a different tech and/or date.
+ *
+ * Owner/office only. Deletes the original stop and creates a new one at the
+ * target tech+date. The recurring rule stays intact — this only affects this
+ * single occurrence (e.g., "move Wednesday's stop to Thursday this week").
+ *
+ * The new stop gets appended at the end of the target day's route.
+ */
+export async function moveStop(
+  routeStopId: string,
+  targetTechId: string,
+  targetDate: string
+): Promise<{ success: boolean; newStopId?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    let newStopId: string | undefined
+
+    await withRls(token, async (db) => {
+      // Fetch the original stop
+      const [original] = await db
+        .select()
+        .from(routeStops)
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+        .limit(1)
+
+      if (!original) throw new Error("Stop not found")
+
+      // Check if already on the target tech+date
+      if (original.tech_id === targetTechId && original.scheduled_date === targetDate) {
+        throw new Error("Stop is already on this tech and date")
+      }
+
+      // Find max sort_index for target tech+date
+      const existing = await db
+        .select({ sort_index: routeStops.sort_index })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, targetTechId),
+            eq(routeStops.scheduled_date, targetDate)
+          )
+        )
+      const maxIdx = existing.length > 0
+        ? Math.max(...existing.map((s) => s.sort_index))
+        : 0
+
+      // Delete the original stop
+      await db
+        .delete(routeStops)
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+
+      // Create a new stop at the target
+      const [inserted] = await db
+        .insert(routeStops)
+        .values({
+          org_id: orgId,
+          customer_id: original.customer_id,
+          pool_id: original.pool_id,
+          tech_id: targetTechId,
+          schedule_rule_id: original.schedule_rule_id,
+          scheduled_date: targetDate,
+          sort_index: maxIdx + 1,
+          position_locked: false,
+          status: "scheduled",
+        })
+        .onConflictDoNothing()
+        .returning({ id: routeStops.id })
+
+      newStopId = inserted?.id
+    })
+
+    return { success: true, newStopId }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to move stop"
+    console.error("[moveStop] Error:", error)
+    return { success: false, error: msg }
+  }
+}
+
+// ─── Work order schedule integration ──────────────────────────────────────────
+
+export interface UnassignedWorkOrder {
+  id: string
+  title: string
+  customerId: string
+  customerName: string
+  address: string | null
+  poolId: string | null
+  poolName: string | null
+  priority: string
+  category: string
+}
+
+/**
+ * getApprovedWorkOrders — fetch approved WOs ready to be scheduled.
+ *
+ * Returns WOs with status "approved" (not yet assigned to a route).
+ * Owner/office only.
+ */
+export async function getApprovedWorkOrders(): Promise<UnassignedWorkOrder[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return []
+  if (userRole !== "owner" && userRole !== "office") return []
+
+  try {
+    return await withRls(token, async (db) => {
+      const wos = await db
+        .select()
+        .from(workOrders)
+        .where(
+          and(
+            eq(workOrders.org_id, orgId),
+            eq(workOrders.status, "approved")
+          )
+        )
+
+      if (wos.length === 0) return []
+
+      // Batch fetch customer + pool names
+      const customerIds = [...new Set(wos.map((w) => w.customer_id))]
+      const poolIds = [...new Set(wos.flatMap((w) => (w.pool_id ? [w.pool_id] : [])))]
+
+      const [customerRows, poolRows] = await Promise.all([
+        db
+          .select({ id: customers.id, full_name: customers.full_name, address: customers.address })
+          .from(customers)
+          .where(inArray(customers.id, customerIds)),
+        poolIds.length > 0
+          ? db
+              .select({ id: pools.id, name: pools.name })
+              .from(pools)
+              .where(inArray(pools.id, poolIds))
+          : Promise.resolve([]),
+      ])
+
+      const customerMap = new Map(customerRows.map((c) => [c.id, c]))
+      const poolMap = new Map(poolRows.map((p) => [p.id, p.name]))
+
+      return wos.map((wo): UnassignedWorkOrder => {
+        const customer = customerMap.get(wo.customer_id)
+        return {
+          id: wo.id,
+          title: wo.title,
+          customerId: wo.customer_id,
+          customerName: customer?.full_name ?? "Unknown",
+          address: customer?.address ?? null,
+          poolId: wo.pool_id,
+          poolName: wo.pool_id ? (poolMap.get(wo.pool_id) ?? null) : null,
+          priority: wo.priority,
+          category: wo.category,
+        }
+      })
+    })
+  } catch (error) {
+    console.error("[getApprovedWorkOrders] Error:", error)
+    return []
+  }
+}
+
+/**
+ * assignWorkOrderToRoute — assign an approved WO to a tech's route on a specific date.
+ *
+ * 1. Creates a route_stop for the WO's customer+pool with work_order_id set.
+ *    If a stop already exists for that customer+pool+date (recurring service),
+ *    merges the WO into the existing stop via onConflictDoUpdate.
+ * 2. Updates the WO: assigned_tech_id, target_date, status → "scheduled".
+ *
+ * Owner/office only.
+ */
+export async function assignWorkOrderToRoute(
+  workOrderId: string,
+  techId: string,
+  date: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, async (db) => {
+      // Fetch the WO
+      const [wo] = await db
+        .select()
+        .from(workOrders)
+        .where(and(eq(workOrders.id, workOrderId), eq(workOrders.org_id, orgId)))
+        .limit(1)
+
+      if (!wo) throw new Error("Work order not found")
+      if (wo.status !== "approved") throw new Error("Work order must be approved to schedule")
+
+      // Find max sort_index for tech+date
+      const existing = await db
+        .select({ sort_index: routeStops.sort_index })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            eq(routeStops.tech_id, techId),
+            eq(routeStops.scheduled_date, date)
+          )
+        )
+      const maxIdx = existing.length > 0
+        ? Math.max(...existing.map((s) => s.sort_index))
+        : 0
+
+      // Insert route_stop. If customer+pool+date already exists (recurring stop),
+      // merge the WO into the existing stop.
+      await db
+        .insert(routeStops)
+        .values({
+          org_id: orgId,
+          customer_id: wo.customer_id,
+          pool_id: wo.pool_id,
+          tech_id: techId,
+          scheduled_date: date,
+          sort_index: maxIdx + 1,
+          work_order_id: workOrderId,
+          status: "scheduled",
+        })
+        .onConflictDoUpdate({
+          target: [routeStops.org_id, routeStops.customer_id, routeStops.pool_id, routeStops.scheduled_date],
+          set: { work_order_id: workOrderId, updated_at: new Date() },
+        })
+
+      // Update the WO status
+      await db
+        .update(workOrders)
+        .set({
+          assigned_tech_id: techId,
+          target_date: date,
+          status: "scheduled",
+          updated_at: new Date(),
+        })
+        .where(eq(workOrders.id, workOrderId))
+    })
+
+    revalidatePath("/schedule")
+    revalidatePath("/work-orders")
+    return { success: true }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Failed to assign work order"
+    console.error("[assignWorkOrderToRoute] Error:", error)
+    return { success: false, error: msg }
+  }
+}
+
+/**
+ * removeWorkOrderFromRoute — unschedule a WO stop and revert WO to approved.
+ *
+ * If the stop was a merged stop (has schedule_rule_id), just clears work_order_id.
+ * If the stop was created solely for the WO, deletes the entire stop.
+ * Reverts the WO status back to "approved" and clears assigned_tech_id/target_date.
+ *
+ * Owner/office only.
+ */
+export async function removeWorkOrderFromRoute(
+  routeStopId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token" }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, async (db) => {
+      // Fetch the stop
+      const [stop] = await db
+        .select()
+        .from(routeStops)
+        .where(and(eq(routeStops.id, routeStopId), eq(routeStops.org_id, orgId)))
+        .limit(1)
+
+      if (!stop || !stop.work_order_id) return
+
+      // Revert WO to approved
+      await db
+        .update(workOrders)
+        .set({
+          status: "approved",
+          assigned_tech_id: null,
+          target_date: null,
+          updated_at: new Date(),
+        })
+        .where(eq(workOrders.id, stop.work_order_id))
+
+      if (stop.schedule_rule_id) {
+        // Merged stop — just clear work_order_id, keep the regular service stop
+        await db
+          .update(routeStops)
+          .set({ work_order_id: null, updated_at: new Date() })
+          .where(eq(routeStops.id, routeStopId))
+      } else {
+        // WO-only stop — delete entirely
+        await db
+          .delete(routeStops)
+          .where(eq(routeStops.id, routeStopId))
+      }
+    })
+
+    revalidatePath("/schedule")
+    revalidatePath("/work-orders")
+    return { success: true }
+  } catch (error) {
+    console.error("[removeWorkOrderFromRoute] Error:", error)
+    return { success: false, error: "Failed to remove work order from route" }
   }
 }

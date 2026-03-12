@@ -25,10 +25,21 @@ import {
   MapPinIcon,
   CheckCircleIcon,
   SkipForwardIcon,
+  MoreVerticalIcon,
+  ArrowRightLeftIcon,
+  UndoIcon,
+  WrenchIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { updateStopOrder } from "@/actions/schedule"
 import { StopLockToggle } from "./stop-lock-toggle"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { ScheduleStop } from "./route-map"
 
 // ─── SortableStopRow ──────────────────────────────────────────────────────────
@@ -38,6 +49,9 @@ interface SortableStopRowProps {
   isLocked: boolean
   onToggleLock: (stopId: string) => void
   onRemoveStop: (stopId: string) => void
+  onSkipStop?: (stopId: string) => void
+  onUnskipStop?: (stopId: string) => void
+  onMoveStop?: (stopId: string) => void
   onSelectStop?: (stopId: string) => void
   isSelected: boolean
 }
@@ -47,6 +61,9 @@ function SortableStopRow({
   isLocked,
   onToggleLock,
   onRemoveStop,
+  onSkipStop,
+  onUnskipStop,
+  onMoveStop,
   onSelectStop,
   isSelected,
 }: SortableStopRowProps) {
@@ -69,6 +86,7 @@ function SortableStopRow({
 
   const isComplete = stop.status === "complete" || stop.status === "skipped"
   const isHoliday = stop.status === "holiday"
+  const isWorkOrder = !!stop.workOrderId
 
   // Status icon
   const StatusIcon =
@@ -89,7 +107,9 @@ function SortableStopRow({
           ? "border-border/80 bg-card shadow-2xl shadow-black/60 opacity-90"
           : isSelected
             ? "border-primary/50 bg-primary/5"
-            : "border-border bg-card hover:border-border/80 hover:bg-muted/20",
+            : isWorkOrder
+              ? "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50 hover:bg-amber-500/10"
+              : "border-border bg-card hover:border-border/80 hover:bg-muted/20",
         (isComplete || isHoliday) && "opacity-60"
       )}
     >
@@ -123,9 +143,27 @@ function SortableStopRow({
 
       {/* ── Stop info ─────────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0">
-        <p className={cn("font-medium truncate leading-snug", isComplete && "line-through decoration-muted-foreground/40")}>
-          {stop.customerName}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className={cn("font-medium truncate leading-snug", isComplete && "line-through decoration-muted-foreground/40")}>
+            {stop.customerName}
+          </p>
+          {(stop.overdueBalance ?? 0) > 0 && (
+            <span className="inline-flex shrink-0 items-center rounded-full bg-red-500/15 border border-red-500/30 px-1.5 py-0 text-[9px] font-medium text-red-400 leading-relaxed">
+              Overdue
+            </span>
+          )}
+          {isWorkOrder && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0 text-[9px] font-medium text-amber-300 leading-relaxed">
+              <WrenchIcon className="h-2.5 w-2.5" />
+              WO
+            </span>
+          )}
+        </div>
+        {isWorkOrder && stop.workOrderTitle && (
+          <p className="text-xs font-medium text-amber-300/70 truncate leading-snug">
+            {stop.workOrderTitle}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground truncate leading-snug">
           {stop.poolName}
           {stop.address && (
@@ -157,18 +195,55 @@ function SortableStopRow({
         className="flex-shrink-0"
       />
 
-      {/* ── Remove button ─────────────────────────────────────────────────── */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemoveStop(stop.id)
-        }}
-        aria-label={`Remove ${stop.customerName} from route`}
-        className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
-      >
-        <XIcon className="h-3.5 w-3.5" />
-      </button>
+      {/* ── Actions menu ──────────────────────────────────────────────────── */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Actions for ${stop.customerName}`}
+            className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+          >
+            <MoreVerticalIcon className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          {stop.status === "skipped" ? (
+            <DropdownMenuItem
+              onClick={() => onUnskipStop?.(stop.id)}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              <UndoIcon className="h-3.5 w-3.5" />
+              Unskip
+            </DropdownMenuItem>
+          ) : stop.status === "scheduled" ? (
+            <DropdownMenuItem
+              onClick={() => onSkipStop?.(stop.id)}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              <SkipForwardIcon className="h-3.5 w-3.5" />
+              Skip this stop
+            </DropdownMenuItem>
+          ) : null}
+          {stop.status !== "complete" && (
+            <DropdownMenuItem
+              onClick={() => onMoveStop?.(stop.id)}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              <ArrowRightLeftIcon className="h-3.5 w-3.5" />
+              Move to...
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => onRemoveStop(stop.id)}
+            className="gap-2 text-xs text-destructive focus:text-destructive cursor-pointer"
+          >
+            <XIcon className="h-3.5 w-3.5" />
+            Remove from route
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -180,6 +255,9 @@ interface RouteStopListProps {
   onReorder: (newOrder: ScheduleStop[]) => void
   onToggleLock: (stopId: string) => void
   onRemoveStop: (stopId: string) => void
+  onSkipStop?: (stopId: string) => void
+  onUnskipStop?: (stopId: string) => void
+  onMoveStop?: (stopId: string) => void
   onSelectStop?: (stopId: string) => void
   selectedStopId?: string
 }
@@ -207,6 +285,9 @@ export function RouteStopList({
   onReorder,
   onToggleLock,
   onRemoveStop,
+  onSkipStop,
+  onUnskipStop,
+  onMoveStop,
   onSelectStop,
   selectedStopId,
 }: RouteStopListProps) {
@@ -296,6 +377,9 @@ export function RouteStopList({
               isLocked={stop.positionLocked}
               onToggleLock={onToggleLock}
               onRemoveStop={onRemoveStop}
+              onSkipStop={onSkipStop}
+              onUnskipStop={onUnskipStop}
+              onMoveStop={onMoveStop}
               onSelectStop={onSelectStop}
               isSelected={stop.id === selectedStopId}
             />
