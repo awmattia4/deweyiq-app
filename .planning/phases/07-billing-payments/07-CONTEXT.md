@@ -22,9 +22,15 @@ Invoice customers across multiple billing models (per-stop, flat rate, plus-chem
 
 ### Customer payment flow
 - Dual payment access: email link for quick pay (no login required, branded payment page) AND portal for full invoice history/management (Phase 8)
+- Invoice delivery via email AND SMS — SMS sends a short text with payment link (uses existing Twilio infrastructure from Phase 5)
 - AutoPay is opt-in per customer — office or customer enables it; saved card/ACH charged automatically on invoice generation with receipt email
 - Supported payment methods: credit/debit card, ACH bank transfer (via Stripe), plus manual recording for check and cash payments
 - Branded payment page: shows the pool company's logo and brand color — looks like their own billing page, not generic platform branding
+
+### Quote delivery via SMS
+- Add SMS delivery option for quotes (Phase 6 quotes currently email-only) — customer receives text with quote approval link
+- Same Twilio infrastructure as pre-arrival notifications and invoice SMS
+- Office chooses email, SMS, or both when sending a quote
 
 ### QBO sync behavior
 - Conflict resolution: PoolCo wins — PoolCo is the source of truth, QBO gets overwritten on sync
