@@ -64,6 +64,7 @@ Progress: [███-------] 33%
 | Phase 06-work-orders-quoting P07 | 11 | 2 tasks | 10 files |
 | Phase 07-billing-payments P01 | 14 | 2 tasks | 13 files |
 | Phase 07-billing-payments P03 | 8 | 2 tasks | 9 files |
+| Phase 07 P02 | 18 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -227,6 +228,9 @@ Recent decisions affecting current work:
 - [Phase 07-03]: Standard connected accounts (type: "standard") — maximum merchant control over their Stripe dashboard
 - [Phase 07-03]: Stripe return URL is API route (GET handler) — checks account status and redirects with query params for toast notifications
 - [Phase 07-03]: Surcharge stored as decimal (2.99% -> 0.0299) — UI displays as percentage, DB stores as fraction for calculation
+- [Phase 07-02]: Single Edge Function (send-invoice-sms) handles both invoice and quote SMS types
+- [Phase 07-02]: Pay token uses separate INVOICE_TOKEN_SECRET with 365-day expiry for long-lived payment links
+- [Phase 07-02]: SMS delivery is non-fatal — email is primary channel, SMS failure does not fail the send operation
 
 ### Pending Todos
 
