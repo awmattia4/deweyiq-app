@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 5/9 complete (01, 02, 03, 04, 06 done)
-Status: Phase 7 Plan 06 complete — QBO bidirectional sync with OAuth2, entity mappers, webhook handler
-Last activity: 2026-03-12 — Phase 7 Plan 06 executed: QBO sync actions, webhook handler, settings UI
+Plan: 6/9 complete (01, 02, 03, 04, 05, 06 done)
+Status: Phase 7 Plan 05 complete — AutoPay enrollment, off-session charging, receipt emails, configurable dunning engine
+Last activity: 2026-03-12 — Phase 7 Plan 05 executed: AutoPay + dunning engine with retry and reminder emails
 
-Progress: [█████-----] 56%
+Progress: [██████----] 67%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [█████-----] 56%
 | Phase 07 P02 | 18 | 2 tasks | 11 files |
 | Phase 07-billing-payments P06 | 16 | 2 tasks | 14 files |
 | Phase 07-billing-payments P04 | 8 | 2 tasks | 6 files |
+| Phase 07-billing-payments P05 | 14 | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,11 @@ Recent decisions affecting current work:
 - [Phase 07-04]: Webhook returns 200 on handler errors to prevent Stripe retry loops on permanent failures
 - [Phase 07-04]: ACH shows processing state (2-3 business days) — distinct from card success
 - [Phase 07-04]: Surcharge collected as application_fee_amount on PaymentIntent (standard Connect approach)
+- [Phase 07-05]: setup_future_usage on PaymentIntent instead of separate SetupIntent flow — simpler, single payment action saves method automatically when AutoPay opted-in
+- [Phase 07-05]: Manual dunning retry replaces Stripe Smart Retries — Smart Retries only work with Stripe Billing/Subscriptions, not standalone PaymentIntents on connected accounts
+- [Phase 07-05]: Receipt email sent from webhook handler (handlePaymentSucceeded) — ensures ALL payments (manual and AutoPay) get receipts consistently
+- [Phase 07-05]: redirect: "if_required" on confirmPayment — card payments handled inline for immediate AutoPay save, redirect only for ACH/3DS
+- [Phase 07-05]: CRON_SECRET Bearer token auth for internal cron API routes — Edge Function calls Next.js API with secret header
 
 ### Pending Todos
 
@@ -261,5 +267,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-06-PLAN.md — QBO bidirectional sync, OAuth2, entity mappers, webhook handler
+Stopped at: Completed 07-05-PLAN.md — AutoPay enrollment, off-session charging, receipt emails, configurable dunning engine
 Resume file: .planning/phases/07-billing-payments/07-07-PLAN.md
