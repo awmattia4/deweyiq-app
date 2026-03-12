@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 1/9 complete (01 done)
-Status: Phase 7 Plan 01 complete — Schema extensions (payment_records, dunning_config, expenses), billing model per customer, single + bulk invoice generation
-Last activity: 2026-03-12 — Phase 7 Plan 01 executed: schema extensions, billing model server actions, bulk invoice generation
+Plan: 3/9 complete (01, 02, 03 done)
+Status: Phase 7 Plan 03 complete — Stripe Connect onboarding, payment stack selector, surcharge config
+Last activity: 2026-03-12 — Phase 7 Plan 03 executed: Stripe singleton, Connect onboarding API, Billing settings tab
 
-Progress: [█---------] 11%
+Progress: [███-------] 33%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█---------] 11%
 | Phase 06-work-orders-quoting P06 | 4 | 2 tasks | 4 files |
 | Phase 06-work-orders-quoting P07 | 11 | 2 tasks | 10 files |
 | Phase 07-billing-payments P01 | 14 | 2 tasks | 13 files |
+| Phase 07-billing-payments P03 | 8 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -222,6 +223,10 @@ Recent decisions affecting current work:
 - [Phase 07-01]: Plus-chemicals chemical line items default to unit_price=0 — office fills in cost per unit before finalizing (prices vary by supplier/date)
 - [Phase 07-01]: sendInvoice delegates to existing finalizeInvoice for draft-to-sent transition — Plan 02 extends with email/SMS delivery
 - [Phase 07-01]: Billing model update is a separate server action from updateCustomer — keeps billing concerns isolated from core customer CRUD
+- [Phase 07-03]: Lazy Stripe singleton via Proxy pattern — avoids build-time errors when STRIPE_SECRET_KEY not set; getStripe() creates instance on first access
+- [Phase 07-03]: Standard connected accounts (type: "standard") — maximum merchant control over their Stripe dashboard
+- [Phase 07-03]: Stripe return URL is API route (GET handler) — checks account status and redirects with query params for toast notifications
+- [Phase 07-03]: Surcharge stored as decimal (2.99% -> 0.0299) — UI displays as percentage, DB stores as fraction for calculation
 
 ### Pending Todos
 
@@ -241,5 +246,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-01-PLAN.md — Schema extensions, billing model server actions, bulk invoice generation
-Resume file: .planning/phases/07-billing-payments/07-02-PLAN.md
+Stopped at: Completed 07-03-PLAN.md — Stripe Connect onboarding, payment stack selector, surcharge config
+Resume file: .planning/phases/07-billing-payments/07-04-PLAN.md
