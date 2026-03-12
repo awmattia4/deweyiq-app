@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 3/9 complete (01, 02, 03 done)
-Status: Phase 7 Plan 03 complete — Stripe Connect onboarding, payment stack selector, surcharge config
-Last activity: 2026-03-12 — Phase 7 Plan 03 executed: Stripe singleton, Connect onboarding API, Billing settings tab
+Plan: 4/9 complete (01, 02, 03, 04 done)
+Status: Phase 7 Plan 04 complete — Payment processing, Stripe webhooks, manual payment recording
+Last activity: 2026-03-12 — Phase 7 Plan 04 executed: Branded payment page, Stripe Elements, webhook handlers
 
-Progress: [███-------] 33%
+Progress: [████------] 44%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [███-------] 33%
 | Phase 07-billing-payments P01 | 14 | 2 tasks | 13 files |
 | Phase 07-billing-payments P03 | 8 | 2 tasks | 9 files |
 | Phase 07 P02 | 18 | 2 tasks | 11 files |
+| Phase 07-billing-payments P04 | 8 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -231,6 +232,11 @@ Recent decisions affecting current work:
 - [Phase 07-02]: Single Edge Function (send-invoice-sms) handles both invoice and quote SMS types
 - [Phase 07-02]: Pay token uses separate INVOICE_TOKEN_SECRET with 365-day expiry for long-lived payment links
 - [Phase 07-02]: SMS delivery is non-fatal — email is primary channel, SMS failure does not fail the send operation
+- [Phase 07-04]: PaymentIntent reuse — if invoice already has a PI in usable state, reuse instead of creating new to prevent orphaned PIs
+- [Phase 07-04]: Stripe Customer created on connected account (not platform) for proper payment association
+- [Phase 07-04]: Webhook returns 200 on handler errors to prevent Stripe retry loops on permanent failures
+- [Phase 07-04]: ACH shows processing state (2-3 business days) — distinct from card success
+- [Phase 07-04]: Surcharge collected as application_fee_amount on PaymentIntent (standard Connect approach)
 
 ### Pending Todos
 
@@ -250,5 +256,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-03-PLAN.md — Stripe Connect onboarding, payment stack selector, surcharge config
-Resume file: .planning/phases/07-billing-payments/07-04-PLAN.md
+Stopped at: Completed 07-04-PLAN.md — Payment processing, Stripe webhooks, manual payment recording
+Resume file: .planning/phases/07-billing-payments/07-05-PLAN.md
