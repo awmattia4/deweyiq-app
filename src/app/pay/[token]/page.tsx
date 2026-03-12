@@ -169,6 +169,7 @@ export default async function PayTokenPage({ params }: Props) {
         billingPeriodStart={invoice.billing_period_start}
         billingPeriodEnd={invoice.billing_period_end}
         customerName={customerName}
+        customerId={invoice.customer_id}
         subtotal={parseFloat(invoice.subtotal)}
         taxAmount={parseFloat(invoice.tax_amount)}
         total={parseFloat(invoice.total)}

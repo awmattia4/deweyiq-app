@@ -22,6 +22,15 @@ export async function POST(
 ) {
   const { token } = await params
 
+  // Parse request body for optional saveMethod flag (AutoPay opt-in)
+  let saveMethod = false
+  try {
+    const body = await req.json()
+    saveMethod = body?.saveMethod === true
+  } catch {
+    // Empty body is fine -- defaults to no AutoPay
+  }
+
   // ── 1. Verify pay token ──────────────────────────────────────────────────
   const payload = await verifyPayToken(token)
   if (!payload) {
@@ -151,11 +160,14 @@ export async function POST(
       currency: "usd",
       customer: stripeCustomerId,
       payment_method_types: ["card", "us_bank_account"],
+      // When customer opts into AutoPay, save the payment method for future off-session charges
+      ...(saveMethod ? { setup_future_usage: "off_session" as const } : {}),
       application_fee_amount: surchargeEnabled ? surchargeAmountCents : undefined,
       metadata: {
         invoice_id: invoice.id,
         org_id: invoice.org_id,
         customer_id: customer.id,
+        autopay: saveMethod ? "true" : "false",
       },
     },
     { stripeAccount: stripeAccountId }

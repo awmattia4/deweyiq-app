@@ -28,6 +28,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, and, gte, lte, sql, isNotNull } from "drizzle-orm"
 import { syncInvoiceToQbo } from "@/actions/qbo-sync"
+import { chargeAutoPay } from "@/actions/payments"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +51,7 @@ interface BulkGenerationResult {
   created: number
   skipped: number
   errors: string[]
+  autoPay?: { charged: number; failed: number }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +227,7 @@ export async function generateInvoiceForCustomer(
           billing_model: customers.billing_model,
           flat_rate_amount: customers.flat_rate_amount,
           tax_exempt: customers.tax_exempt,
+          autopay_enabled: customers.autopay_enabled,
         })
         .from(customers)
         .where(and(eq(customers.id, customerId), eq(customers.org_id, orgId)))
@@ -412,6 +415,21 @@ export async function generateInvoiceForCustomer(
       syncInvoiceToQbo(invoiceId).catch((err) =>
         console.error("[generateInvoiceForCustomer] QBO sync error:", err)
       )
+
+      // AutoPay: If customer has AutoPay enabled, charge immediately.
+      // Wrap in try/catch -- AutoPay failure must NOT block invoice creation.
+      if (cust.autopay_enabled) {
+        try {
+          const result = await chargeAutoPay(invoiceId)
+          if (result.success) {
+            console.log("[generateInvoiceForCustomer] AutoPay charged:", invoiceId)
+          } else {
+            console.warn("[generateInvoiceForCustomer] AutoPay failed:", result.error)
+          }
+        } catch (autoPayErr) {
+          console.error("[generateInvoiceForCustomer] AutoPay error (non-blocking):", autoPayErr)
+        }
+      }
 
       revalidatePath("/work-orders")
     }

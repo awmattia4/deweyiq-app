@@ -19,9 +19,14 @@ import {
   orgSettings,
   customers,
   alerts,
+  orgs,
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { syncPaymentToQbo } from "@/actions/qbo-sync"
+import { createElement } from "react"
+import { render as renderEmail } from "@react-email/render"
+import { ReceiptEmail } from "@/lib/emails/receipt-email"
+import { Resend } from "resend"
 
 // ---------------------------------------------------------------------------
 // handlePaymentSucceeded
@@ -111,7 +116,94 @@ export async function handlePaymentSucceeded(
     )
   }
 
-  // TODO(Plan-05): Send receipt email via ReceiptEmail template
+  // -- Send receipt email -------------------------------------------------------
+  try {
+    // Fetch customer, org, and invoice details for receipt email
+    const [invoice] = await adminDb
+      .select({
+        total: invoices.total,
+        invoice_number: invoices.invoice_number,
+        customer_id: invoices.customer_id,
+        org_id: invoices.org_id,
+      })
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1)
+
+    if (invoice) {
+      const [customer] = await adminDb
+        .select({
+          email: customers.email,
+          full_name: customers.full_name,
+        })
+        .from(customers)
+        .where(eq(customers.id, invoice.customer_id))
+        .limit(1)
+
+      const [org] = await adminDb
+        .select({ name: orgs.name })
+        .from(orgs)
+        .where(eq(orgs.id, invoice.org_id))
+        .limit(1)
+
+      if (customer?.email && org) {
+        // Get payment method last4 if available
+        let paymentLast4: string | null = null
+        if (
+          paymentIntent.latest_charge &&
+          typeof paymentIntent.latest_charge === "object"
+        ) {
+          const charge = paymentIntent.latest_charge as Stripe.Charge
+          const pmDetails = charge.payment_method_details
+          if (pmDetails?.type === "card" && pmDetails.card) {
+            paymentLast4 = pmDetails.card.last4 ?? null
+          } else if (pmDetails?.type === "us_bank_account" && pmDetails.us_bank_account) {
+            paymentLast4 = pmDetails.us_bank_account.last4 ?? null
+          }
+        }
+
+        const paidAt = now.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+
+        const totalFormatted = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(parseFloat(invoice.total))
+
+        const emailHtml = await renderEmail(
+          createElement(ReceiptEmail, {
+            companyName: org.name,
+            customerName: customer.full_name,
+            invoiceNumber: invoice.invoice_number ?? "N/A",
+            totalAmount: totalFormatted,
+            paymentMethod: paymentMethod as "card" | "ach" | "check" | "cash",
+            paidAt,
+            paymentLast4,
+          })
+        )
+
+        const resendApiKey = process.env.RESEND_API_KEY
+        if (resendApiKey) {
+          const resend = new Resend(resendApiKey)
+          await resend.emails.send({
+            from: `${org.name} <billing@poolco.app>`,
+            to: [customer.email],
+            subject: `Payment Receipt: Invoice ${invoice.invoice_number ?? ""}`,
+            html: emailHtml,
+          })
+          console.log("[handlePaymentSucceeded] Receipt email sent to:", customer.email)
+        } else {
+          console.warn("[handlePaymentSucceeded] RESEND_API_KEY not set, skipping receipt email")
+        }
+      }
+    }
+  } catch (receiptErr) {
+    // Receipt email failure must NOT block payment success flow
+    console.error("[handlePaymentSucceeded] Receipt email error (non-blocking):", receiptErr)
+  }
 
   console.log("[handlePaymentSucceeded] Invoice paid:", invoiceId, "via", paymentMethod)
 }

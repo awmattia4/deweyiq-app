@@ -8,7 +8,7 @@
  * Shows invoice summary, surcharge disclosure, and PaymentElement.
  */
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { loadStripe, type Stripe as StripeType } from "@stripe/stripe-js"
 import {
   Elements,
@@ -16,7 +16,8 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js"
-import { Loader2, CheckCircle, CreditCard, Building2 } from "lucide-react"
+import { Loader2, CheckCircle, CreditCard, Building2, ShieldCheck } from "lucide-react"
+import { enableAutoPay } from "@/actions/payments"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +29,7 @@ export interface PayClientProps {
   billingPeriodStart: string | null
   billingPeriodEnd: string | null
   customerName: string
+  customerId: string
   subtotal: number
   taxAmount: number
   total: number
@@ -81,16 +83,23 @@ export function PayClient(props: PayClientProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [autoPayChecked, setAutoPayChecked] = useState(false)
+  const autoPayRef = useRef(false)
 
-  // Fetch PaymentIntent on mount
+  // Track autoPayChecked in a ref so the intent creation can read it
+  autoPayRef.current = autoPayChecked
+
+  // Fetch PaymentIntent on mount (and re-fetch when AutoPay toggled to set setup_future_usage)
   useEffect(() => {
     let cancelled = false
 
     async function createIntent() {
       try {
+        setLoading(true)
         const res = await fetch(`/api/pay/${props.token}/intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ saveMethod: autoPayRef.current }),
         })
 
         if (!res.ok) {
@@ -165,7 +174,11 @@ export function PayClient(props: PayClientProps) {
         },
       }}
     >
-      <PaymentForm {...props} />
+      <PaymentForm
+        {...props}
+        autoPayChecked={autoPayChecked}
+        onAutoPayChange={setAutoPayChecked}
+      />
     </Elements>
   )
 }
@@ -174,14 +187,20 @@ export function PayClient(props: PayClientProps) {
 // PaymentForm -- inner form with Stripe hooks
 // ---------------------------------------------------------------------------
 
-function PaymentForm(props: PayClientProps) {
+function PaymentForm(
+  props: PayClientProps & {
+    autoPayChecked: boolean
+    onAutoPayChange: (checked: boolean) => void
+  }
+) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
   const [payError, setPayError] = useState<string | null>(null)
   const [paymentStatus, setPaymentStatus] = useState<
-    "idle" | "processing" | "succeeded"
+    "idle" | "processing" | "succeeded" | "autopay-enabled"
   >("idle")
+  const [autoPaySaved, setAutoPaySaved] = useState(false)
 
   // Check for return status from redirect (ACH processing)
   useEffect(() => {
@@ -194,15 +213,23 @@ function PaymentForm(props: PayClientProps) {
     // Also check if Stripe redirected back with payment_intent_client_secret
     const piClientSecret = url.searchParams.get("payment_intent_client_secret")
     if (piClientSecret && stripe) {
-      stripe.retrievePaymentIntent(piClientSecret).then(({ paymentIntent }) => {
+      stripe.retrievePaymentIntent(piClientSecret).then(async ({ paymentIntent }) => {
         if (paymentIntent?.status === "succeeded") {
           setPaymentStatus("succeeded")
+          // If AutoPay was opted-in, save the payment method
+          if (url.searchParams.get("autopay") === "true" && paymentIntent.payment_method) {
+            const pmId = typeof paymentIntent.payment_method === "string"
+              ? paymentIntent.payment_method
+              : paymentIntent.payment_method.id
+            await enableAutoPay(props.customerId, pmId)
+            setAutoPaySaved(true)
+          }
         } else if (paymentIntent?.status === "processing") {
           setPaymentStatus("processing")
         }
       })
     }
-  }, [stripe])
+  }, [stripe, props.customerId])
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -213,21 +240,47 @@ function PaymentForm(props: PayClientProps) {
       setSubmitting(true)
       setPayError(null)
 
-      const { error } = await stripe.confirmPayment({
+      const returnUrl = new URL(`${window.location.origin}/pay/${props.token}`)
+      returnUrl.searchParams.set("status", "processing")
+      if (props.autoPayChecked) {
+        returnUrl.searchParams.set("autopay", "true")
+      }
+
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/pay/${props.token}?status=processing`,
+          return_url: returnUrl.toString(),
         },
+        redirect: "if_required",
       })
 
       if (error) {
         // Error is shown inline when redirect doesn't happen (e.g. card errors)
         setPayError(error.message ?? "Payment failed. Please try again.")
         setSubmitting(false)
+        return
       }
-      // If successful, the page will redirect to the return_url
+
+      // For card payments that don't require redirect
+      if (paymentIntent?.status === "succeeded") {
+        // If AutoPay was opted-in, save the payment method
+        if (props.autoPayChecked && paymentIntent.payment_method) {
+          const pmId = typeof paymentIntent.payment_method === "string"
+            ? paymentIntent.payment_method
+            : paymentIntent.payment_method.id
+          try {
+            await enableAutoPay(props.customerId, pmId)
+            setAutoPaySaved(true)
+          } catch (err) {
+            console.error("Failed to enable AutoPay:", err)
+          }
+        }
+        setPaymentStatus("succeeded")
+      } else if (paymentIntent?.status === "processing") {
+        setPaymentStatus("processing")
+      }
     },
-    [stripe, elements, props.token]
+    [stripe, elements, props.token, props.autoPayChecked, props.customerId]
   )
 
   // ── Success state ──────────────────────────────────────────────────────
@@ -241,6 +294,12 @@ function PaymentForm(props: PayClientProps) {
         <p className="text-gray-600 max-w-md mx-auto">
           Thank you for your payment. You will receive a receipt via email.
         </p>
+        {autoPaySaved && (
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 max-w-md mx-auto">
+            <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+            <span>AutoPay enabled. Future invoices will be charged automatically.</span>
+          </div>
+        )}
       </div>
     )
   }
@@ -389,6 +448,26 @@ function PaymentForm(props: PayClientProps) {
               layout: "tabs",
             }}
           />
+
+          {/* AutoPay opt-in */}
+          <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors select-none">
+            <input
+              type="checkbox"
+              checked={props.autoPayChecked}
+              onChange={(e) => props.onAutoPayChange(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-900">
+                Enable AutoPay
+              </span>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Save this payment method for future automatic payments.
+                Your card or bank account will be charged automatically
+                when future invoices are generated.
+              </p>
+            </div>
+          </label>
 
           {/* Error message */}
           {payError && (
