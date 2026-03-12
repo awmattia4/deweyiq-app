@@ -1,23 +1,34 @@
 "use client"
 
 /**
- * invoice-list.tsx — Filterable invoice list component.
+ * invoice-list.tsx — Filterable invoice list component with send capabilities.
  *
  * Displayed as a tab on the /work-orders page (Invoices tab).
  * Supports filtering by status, customer name search, and date range.
  *
- * Each row: invoice number, customer, date, total, status badge, PDF link.
+ * Each row: invoice number, customer, date, total, status badge, PDF link, Send button.
+ * Top bar: "Send All" button when draft invoices exist (for batch billing flow).
+ *
+ * Send options dropdown: Email Only, SMS Only, Email + SMS.
+ * SMS options only shown if customer has phone number on file.
  */
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
 import {
+  ChevronDownIcon,
   ExternalLinkIcon,
+  Loader2Icon,
+  MailIcon,
+  MessageSquareIcon,
   ReceiptIcon,
   SearchIcon,
+  SendIcon,
   XIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { sendInvoice, sendAllInvoices } from "@/actions/invoices"
 import type { InvoiceSummary } from "@/actions/invoices"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -42,15 +53,20 @@ const ALL_STATUSES = ["draft", "sent", "paid", "void"]
 
 interface InvoiceListProps {
   invoices: InvoiceSummary[]
+  /** Customer phone map: customerId -> phone | null. Used to gate SMS option. */
+  customerPhones?: Record<string, string | null>
 }
+
+type DeliveryMethod = "email" | "sms" | "both"
 
 // ─── InvoiceList ──────────────────────────────────────────────────────────────
 
-export function InvoiceList({ invoices }: InvoiceListProps) {
+export function InvoiceList({ invoices, customerPhones = {} }: InvoiceListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [isBatchSending, startBatchTransition] = useTransition()
 
   // ── Filtering ───────────────────────────────────────────────────────────
 
@@ -110,6 +126,26 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
     dateFrom ||
     dateTo
 
+  // Draft invoices in current filtered view
+  const draftInvoiceIds = filtered
+    .filter((inv) => inv.status === "draft")
+    .map((inv) => inv.id)
+
+  function handleSendAll() {
+    if (draftInvoiceIds.length === 0) return
+    startBatchTransition(async () => {
+      const result = await sendAllInvoices(draftInvoiceIds)
+      if (result.failed === 0) {
+        toast.success(`${result.sent} invoice${result.sent !== 1 ? "s" : ""} sent`)
+      } else {
+        toast.error(
+          `${result.sent} sent, ${result.failed} failed`,
+          { description: result.errors[0] }
+        )
+      }
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
@@ -135,7 +171,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
           )}
         </div>
 
-        {/* Status chips */}
+        {/* Status chips + Send All */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted-foreground mr-1">Status:</span>
           {ALL_STATUSES.map((status) => (
@@ -153,6 +189,23 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
               {STATUS_LABELS[status]}
             </button>
           ))}
+
+          {/* Send All button — visible when there are draft invoices */}
+          {draftInvoiceIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleSendAll}
+              disabled={isBatchSending}
+              className="ml-auto flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {isBatchSending ? (
+                <Loader2Icon className="h-3 w-3 animate-spin" />
+              ) : (
+                <SendIcon className="h-3 w-3" />
+              )}
+              Send All ({draftInvoiceIds.length})
+            </button>
+          )}
         </div>
 
         {/* Date range */}
@@ -200,14 +253,18 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
           {!hasFilters && (
             <p className="text-xs text-muted-foreground/60 max-w-xs">
               Invoices are created from completed work orders. Open a completed WO
-              and click "Prepare Invoice" to get started.
+              and click &quot;Prepare Invoice&quot; to get started.
             </p>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           {filtered.map((inv) => (
-            <InvoiceRow key={inv.id} invoice={inv} />
+            <InvoiceRow
+              key={inv.id}
+              invoice={inv}
+              hasPhone={!!customerPhones[inv.customer_id]}
+            />
           ))}
         </div>
       )}
@@ -217,7 +274,16 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
 
 // ─── InvoiceRow ───────────────────────────────────────────────────────────────
 
-function InvoiceRow({ invoice }: { invoice: InvoiceSummary }) {
+function InvoiceRow({
+  invoice,
+  hasPhone,
+}: {
+  invoice: InvoiceSummary
+  hasPhone: boolean
+}) {
+  const [showSendMenu, setShowSendMenu] = useState(false)
+  const [isSending, startTransition] = useTransition()
+
   const statusLabel = STATUS_LABELS[invoice.status] ?? invoice.status
   const statusColor = STATUS_COLORS[invoice.status] ?? "bg-zinc-700 text-zinc-200"
 
@@ -235,6 +301,28 @@ function InvoiceRow({ invoice }: { invoice: InvoiceSummary }) {
         day: "numeric",
       }).format(new Date(invoice.issued_at))
     : null
+
+  const canSend = invoice.status === "draft" || invoice.status === "sent"
+
+  function handleSend(method: DeliveryMethod) {
+    setShowSendMenu(false)
+    startTransition(async () => {
+      const options = {
+        email: method === "email" || method === "both",
+        sms: method === "sms" || method === "both",
+      }
+      const result = await sendInvoice(invoice.id, options)
+      if (result.success) {
+        toast.success(
+          `Invoice ${result.invoiceNumber ?? ""} sent via ${
+            method === "both" ? "email + SMS" : method
+          }`
+        )
+      } else {
+        toast.error(result.error ?? "Failed to send invoice")
+      }
+    })
+  }
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:bg-card/80 transition-colors">
@@ -282,6 +370,67 @@ function InvoiceRow({ invoice }: { invoice: InvoiceSummary }) {
           >
             <ExternalLinkIcon className="h-4 w-4" />
           </Link>
+        )}
+
+        {/* Send button with dropdown */}
+        {canSend && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSendMenu(!showSendMenu)}
+              disabled={isSending}
+              className="cursor-pointer flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              {isSending ? (
+                <Loader2Icon className="h-3 w-3 animate-spin" />
+              ) : (
+                <SendIcon className="h-3 w-3" />
+              )}
+              Send
+              <ChevronDownIcon className="h-3 w-3 ml-0.5" />
+            </button>
+
+            {showSendMenu && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowSendMenu(false)}
+                />
+                {/* Dropdown menu */}
+                <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border border-border bg-popover p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleSend("email")}
+                    className="cursor-pointer flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                  >
+                    <MailIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    Email Only
+                  </button>
+                  {hasPhone && (
+                    <button
+                      type="button"
+                      onClick={() => handleSend("sms")}
+                      className="cursor-pointer flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <MessageSquareIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      SMS Only
+                    </button>
+                  )}
+                  {hasPhone && (
+                    <button
+                      type="button"
+                      onClick={() => handleSend("both")}
+                      className="cursor-pointer flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <SendIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      Email + SMS
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

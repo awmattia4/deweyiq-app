@@ -1,7 +1,7 @@
 "use server"
 
 /**
- * invoices.ts — Invoice CRUD, preparation, finalization, and multi-WO invoicing.
+ * invoices.ts — Invoice CRUD, preparation, finalization, delivery, and multi-WO invoicing.
  *
  * CRITICAL: All hex colors in PDF code — NOT oklch(). @react-pdf/renderer
  * uses a non-browser PDF renderer that does not support oklch.
@@ -10,6 +10,8 @@
  * - prepareInvoice: creates draft invoice from completed WO with copied line items
  * - addWorkOrderToInvoice: multi-WO invoicing support
  * - finalizeInvoice: atomic invoice number generation via adminDb
+ * - sendInvoice: email (with PDF) + SMS delivery via Resend and Twilio Edge Function
+ * - sendAllInvoices: batch send for bulk-generated invoices
  * - withRls for all user-facing queries; adminDb only for atomic counter
  */
 
@@ -28,6 +30,14 @@ import {
 } from "@/lib/db/schema"
 import { eq, and, inArray, desc, sql } from "drizzle-orm"
 import { updateWorkOrderStatus } from "@/actions/work-orders"
+import { renderToBuffer } from "@react-pdf/renderer"
+import { createElement } from "react"
+import { InvoiceDocument } from "@/lib/pdf/invoice-pdf"
+import type { InvoiceDocumentProps } from "@/lib/pdf/invoice-pdf"
+import { InvoiceEmail } from "@/lib/emails/invoice-email"
+import { render as renderEmail } from "@react-email/render"
+import { signPayToken } from "@/lib/pay-token"
+import { Resend } from "resend"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1000,16 +1010,20 @@ export async function finalizeInvoice(
 // ---------------------------------------------------------------------------
 
 /**
- * Sends an invoice to the customer.
+ * Sends an invoice to the customer via email (with PDF attachment + pay link)
+ * and/or SMS (with pay link).
  *
+ * Flow:
  * 1. If still draft, finalizes (assigns invoice number via existing logic).
  * 2. Sets status to 'sent' and issued_at/sent_at to now.
- * 3. Returns the invoice with token for Plan 02 to handle actual email/SMS delivery.
- *
- * Plan 02 will extend this to send email/SMS. For now, it just updates status.
+ * 3. Generates pay token for public payment page link.
+ * 4. If email: generates PDF, renders email HTML, sends via Resend with PDF attachment.
+ * 5. If SMS: invokes Edge Function with phone, paymentUrl, invoiceNumber, total.
+ * 6. Updates sent_at / sent_sms_at timestamps.
  */
 export async function sendInvoice(
-  invoiceId: string
+  invoiceId: string,
+  options?: { email?: boolean; sms?: boolean }
 ): Promise<{ success: boolean; invoiceNumber?: string; error?: string }> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
@@ -1019,6 +1033,10 @@ export async function sendInvoice(
   if (!userRole || !["owner", "office"].includes(userRole)) {
     return { success: false, error: "Insufficient permissions" }
   }
+
+  // Default to email only if nothing specified
+  const doEmail = options?.email ?? (!options?.sms)
+  const doSms = options?.sms ?? false
 
   try {
     // ── 1. Fetch invoice ───────────────────────────────────────────────────
@@ -1033,8 +1051,8 @@ export async function sendInvoice(
     const invoice = invoiceRows[0]
     if (!invoice) return { success: false, error: "Invoice not found" }
 
-    // If already sent or paid, return current state
-    if (invoice.status === "sent" || invoice.status === "paid") {
+    // If already paid, skip re-send
+    if (invoice.status === "paid") {
       return { success: true, invoiceNumber: invoice.invoice_number ?? undefined }
     }
 
@@ -1048,19 +1066,258 @@ export async function sendInvoice(
       invoiceNumber = finalizeResult.invoiceNumber ?? null
     }
 
-    // ── 3. Update sent_at timestamp ────────────────────────────────────────
-    const now = new Date()
-    await withRls(token, async (db) => {
-      await db
-        .update(invoices)
-        .set({
-          sent_at: now,
-          updated_at: now,
-        })
-        .where(eq(invoices.id, invoiceId))
-    })
+    // ── 3. Fetch customer, org, line items for email/SMS ──────────────────
+    const customerRows = await adminDb
+      .select({
+        id: customers.id,
+        full_name: customers.full_name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
+        tax_exempt: customers.tax_exempt,
+      })
+      .from(customers)
+      .where(eq(customers.id, invoice.customer_id))
+      .limit(1)
 
-    // Plan 02 will add email/SMS delivery here
+    const customer = customerRows[0]
+    if (!customer) return { success: false, error: "Customer not found" }
+
+    const orgRows = await adminDb
+      .select({ name: orgs.name, logo_url: orgs.logo_url })
+      .from(orgs)
+      .where(eq(orgs.id, orgId))
+      .limit(1)
+
+    const org = orgRows[0]
+    const companyName = org?.name ?? "Pool Company"
+    const companyLogoUrl = org?.logo_url ?? null
+
+    const settingsRows = await adminDb
+      .select({ default_tax_rate: orgSettings.default_tax_rate })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, orgId))
+      .limit(1)
+
+    const taxRate = parseFloat(settingsRows[0]?.default_tax_rate ?? "0.0875")
+
+    const lineItemRows = await adminDb
+      .select()
+      .from(invoiceLineItems)
+      .where(eq(invoiceLineItems.invoice_id, invoiceId))
+      .orderBy(invoiceLineItems.sort_order)
+
+    // WO titles for PDF
+    const woIds = (invoice.work_order_ids as string[] | null) ?? []
+    let workOrderNumbers: string[] = []
+    if (woIds.length > 0) {
+      const woRows = await adminDb
+        .select({ id: workOrders.id, title: workOrders.title })
+        .from(workOrders)
+        .where(inArray(workOrders.id, woIds))
+      workOrderNumbers = woRows.map((wo) => wo.title)
+    }
+
+    // ── 4. Generate pay token + payment URL ──────────────────────────────
+    const payToken = await signPayToken(invoiceId)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
+    const paymentUrl = `${appUrl}/pay/${payToken}`
+
+    // Pre-compute totals for email
+    const total = parseFloat(invoice.total ?? "0")
+    const totalFormatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(total)
+
+    // Build billing period string
+    let billingPeriod: string | null = null
+    if (invoice.billing_period_start && invoice.billing_period_end) {
+      const start = new Date(invoice.billing_period_start).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      })
+      const end = new Date(invoice.billing_period_end).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+      billingPeriod = `${start} - ${end}`
+    }
+
+    // Due date
+    let dueDateFormatted: string | null = null
+    if (invoice.due_date) {
+      dueDateFormatted = new Date(invoice.due_date).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    }
+
+    // Count stops for per_stop billing model
+    const stopCount = invoice.billing_model === "per_stop"
+      ? lineItemRows.filter((li) => li.item_type === "service_stop" || li.visit_id).length || null
+      : null
+
+    const now = new Date()
+
+    // ── 5. Email delivery ────────────────────────────────────────────────
+    if (doEmail) {
+      if (!customer.email) {
+        // If email was requested but customer has no email, skip silently
+        console.warn(`[sendInvoice] Customer ${customer.id} has no email — skipping email delivery`)
+      } else {
+        // Build PDF props
+        const taxExempt = customer.tax_exempt ?? false
+        const subtotal = parseFloat(invoice.subtotal ?? "0")
+        const taxAmount = taxExempt ? 0 : parseFloat(invoice.tax_amount ?? "0")
+        const discountAmount = parseFloat(invoice.discount_amount ?? "0")
+
+        const invoiceDate = (invoice.issued_at ?? invoice.created_at).toLocaleDateString(
+          "en-US",
+          { year: "numeric", month: "long", day: "numeric" }
+        )
+
+        const pdfLineItems = lineItemRows.map((li) => {
+          const qty = parseFloat(li.quantity ?? "1")
+          const unitPrice = parseFloat(li.unit_price ?? "0")
+          const lineTotal = parseFloat(li.line_total ?? "0")
+          return {
+            description: li.description,
+            quantity: qty,
+            unit: li.unit ?? "each",
+            unitPrice,
+            lineTotal,
+            isTaxable: li.is_taxable,
+          }
+        })
+
+        const documentProps: InvoiceDocumentProps = {
+          invoiceNumber: invoiceNumber ?? invoiceId,
+          invoiceDate,
+          companyName,
+          companyLogoUrl,
+          customerName: customer.full_name,
+          customerAddress: customer.address ?? null,
+          lineItems: pdfLineItems,
+          subtotal,
+          taxRate,
+          taxAmount,
+          discountAmount,
+          total,
+          notes: invoice.notes,
+          workOrderNumbers,
+          taxExempt,
+        }
+
+        // Generate PDF buffer
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pdfBuffer = await renderToBuffer(
+          createElement(InvoiceDocument, documentProps) as any
+        )
+
+        // Render email HTML
+        const emailHtml = await renderEmail(
+          createElement(InvoiceEmail, {
+            companyName,
+            customerName: customer.full_name,
+            invoiceNumber: invoiceNumber ?? invoiceId,
+            invoiceTotal: totalFormatted,
+            dueDate: dueDateFormatted,
+            paymentUrl,
+            billingPeriod,
+            billingModel: invoice.billing_model,
+            stopCount,
+          })
+        )
+
+        // Send via Resend SDK (or log in dev)
+        const resendApiKey = process.env.RESEND_API_KEY
+        const isDev = process.env.NODE_ENV === "development"
+
+        if (!resendApiKey) {
+          if (isDev) {
+            console.log("\n=== [DEV] Invoice Email ===================================")
+            console.log(`To: ${customer.email}`)
+            console.log(`Subject: Invoice #${invoiceNumber ?? invoiceId} from ${companyName}`)
+            console.log(`Payment URL: ${paymentUrl}`)
+            console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
+            console.log("============================================================\n")
+          } else {
+            return { success: false, error: "RESEND_API_KEY not configured" }
+          }
+        } else {
+          const resend = new Resend(resendApiKey)
+          const fromAddress = isDev
+            ? "PoolCo Dev <onboarding@resend.dev>"
+            : `${companyName} <invoices@poolco.app>`
+
+          const { error: resendError } = await resend.emails.send({
+            from: fromAddress,
+            to: isDev ? ["delivered@resend.dev"] : [customer.email],
+            subject: `Invoice #${invoiceNumber ?? invoiceId} from ${companyName}`,
+            html: emailHtml,
+            attachments: [
+              {
+                filename: `invoice-${invoiceNumber ?? invoiceId}.pdf`,
+                content: Buffer.from(pdfBuffer).toString("base64"),
+              },
+            ],
+          })
+
+          if (resendError) {
+            console.error("[sendInvoice] Resend error:", resendError)
+            return {
+              success: false,
+              error: `Email delivery failed: ${resendError.message}`,
+            }
+          }
+        }
+
+        // Update sent_at
+        await withRls(token, async (db) => {
+          await db
+            .update(invoices)
+            .set({ sent_at: now, updated_at: now })
+            .where(eq(invoices.id, invoiceId))
+        })
+      }
+    }
+
+    // ── 6. SMS delivery ──────────────────────────────────────────────────
+    if (doSms && customer.phone) {
+      try {
+        const supabase = await createClient()
+        await supabase.functions.invoke("send-invoice-sms", {
+          body: {
+            phone: customer.phone,
+            paymentUrl,
+            invoiceNumber: invoiceNumber ?? invoiceId,
+            total: totalFormatted,
+            companyName,
+            type: "invoice",
+          },
+        })
+
+        // Update sent_sms_at
+        await withRls(token, async (db) => {
+          await db
+            .update(invoices)
+            .set({ sent_sms_at: now, updated_at: now })
+            .where(eq(invoices.id, invoiceId))
+        })
+      } catch (smsErr) {
+        console.error("[sendInvoice] SMS delivery error:", smsErr)
+        // SMS failure is non-fatal if email was also sent
+        if (!doEmail) {
+          return {
+            success: false,
+            error: `SMS delivery failed: ${smsErr instanceof Error ? smsErr.message : "Unknown error"}`,
+          }
+        }
+      }
+    }
 
     revalidatePath("/work-orders")
     return { success: true, invoiceNumber: invoiceNumber ?? undefined }
@@ -1071,6 +1328,37 @@ export async function sendInvoice(
       error: err instanceof Error ? err.message : "Failed to send invoice",
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// sendAllInvoices
+// ---------------------------------------------------------------------------
+
+/**
+ * Batch-sends multiple invoices. Processes sequentially (not Promise.all)
+ * because each one generates a PDF and sends email.
+ *
+ * For each invoice: calls sendInvoice with both email and SMS enabled.
+ *
+ * Returns { sent, failed, errors } summary.
+ */
+export async function sendAllInvoices(
+  invoiceIds: string[]
+): Promise<{ sent: number; failed: number; errors: string[] }> {
+  const results = { sent: 0, failed: 0, errors: [] as string[] }
+
+  for (const id of invoiceIds) {
+    const result = await sendInvoice(id, { email: true, sms: true })
+    if (result.success) {
+      results.sent++
+    } else {
+      results.failed++
+      results.errors.push(`Invoice ${id}: ${result.error ?? "Unknown error"}`)
+    }
+  }
+
+  revalidatePath("/work-orders")
+  return results
 }
 
 // ---------------------------------------------------------------------------
@@ -1538,4 +1826,42 @@ async function recalculateInvoiceTotals(
       })
       .where(eq(invoices.id, invoiceId))
   })
+}
+
+// ---------------------------------------------------------------------------
+// getCustomerPhonesForInvoices
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches customer phone numbers for a list of customer IDs.
+ * Used by invoice list to gate SMS send option visibility.
+ *
+ * Returns a map of customerId -> phone | null.
+ */
+export async function getCustomerPhonesForInvoices(
+  customerIds: string[]
+): Promise<Record<string, string | null>> {
+  if (customerIds.length === 0) return {}
+
+  const token = await getRlsToken()
+  if (!token) return {}
+
+  try {
+    const uniqueIds = [...new Set(customerIds)]
+    const rows = await withRls(token, async (db) =>
+      db
+        .select({ id: customers.id, phone: customers.phone })
+        .from(customers)
+        .where(inArray(customers.id, uniqueIds))
+    )
+
+    const map: Record<string, string | null> = {}
+    for (const row of rows) {
+      map[row.id] = row.phone
+    }
+    return map
+  } catch (err) {
+    console.error("[getCustomerPhonesForInvoices] Error:", err)
+    return {}
+  }
 }

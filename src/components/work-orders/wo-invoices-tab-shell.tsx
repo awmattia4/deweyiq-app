@@ -20,11 +20,14 @@ import type { InvoiceSummary } from "@/actions/invoices"
 interface WoInvoicesTabShellProps {
   workOrders: WorkOrderSummary[]
   invoices: InvoiceSummary[]
+  /** Customer phone map: customerId -> phone | null. Used to gate SMS option in InvoiceList. */
+  customerPhones?: Record<string, string | null>
 }
 
 export function WoInvoicesTabShell({
   workOrders,
   invoices,
+  customerPhones,
 }: WoInvoicesTabShellProps) {
   const [activeTab, setActiveTab] = useState<"work-orders" | "invoices">(
     "work-orders"
@@ -89,7 +92,7 @@ export function WoInvoicesTabShell({
         <WoList workOrders={workOrders} />
       </div>
       <div className={activeTab === "invoices" ? "block" : "hidden"}>
-        <InvoiceList invoices={invoices} />
+        <InvoiceList invoices={invoices} customerPhones={customerPhones} />
       </div>
     </div>
   )
