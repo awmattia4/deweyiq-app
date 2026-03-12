@@ -2,7 +2,7 @@
 
 ## Overview
 
-Eleven phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features close out the roadmap because they require accumulated operational data to be useful rather than theatrical.
+Twelve phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Subscription billing closes out the roadmap as it gates the business model but has no feature dependencies beyond auth.
 
 ## Phases
 
@@ -22,7 +22,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 8: Customer Portal** - Full self-service portal — service history, invoice payment, service requests, and messaging
 - [ ] **Phase 9: Reporting & Team Analytics** - Owner dashboards, technician scorecards, chemical profitability, and financial reporting
 - [ ] **Phase 10: Smart Features & AI** - AI route optimization, predictive chemistry alerts, and automated workload balancing
-- [ ] **Phase 11: Subscription Billing** - Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
+- [ ] **Phase 11: Payroll, Team Management & Full Accounting** - Native payroll (direct deposit, checks, tax filing, W-2/1099), time tracking, PTO, certifications, full double-entry accounting, bank reconciliation via Plaid, payment reconciliation, financial statements — complete QuickBooks replacement
+- [ ] **Phase 12: Subscription Billing** - Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
 
 ## Phase Details
 
@@ -149,26 +150,30 @@ Plans:
 - [ ] 06-08-PLAN.md — Phase 6 end-to-end human verification checkpoint
 
 ### Phase 7: Billing & Payments
-**Goal**: The company can invoice customers across multiple billing models, collect payments automatically via Stripe, handle failed payments gracefully, sync with QuickBooks, and run financial reports — all without leaving the platform
+**Goal**: The company can invoice customers across multiple billing models, collect payments via Stripe Connect (company's own Stripe) or QuickBooks Payments, handle failed payments gracefully, sync bidirectionally with QuickBooks Online, and run built-in financial reports — companies choose their payment stack or use both
 **Depends on**: Phase 6
-**Requirements**: BILL-01, BILL-02, BILL-03, BILL-04, BILL-05, BILL-06, BILL-07, BILL-08, BILL-09
+**Requirements**: BILL-01, BILL-02, BILL-03, BILL-04, BILL-05, BILL-06, BILL-07, BILL-08, BILL-09, BILL-10
 **Success Criteria** (what must be TRUE):
   1. Office staff can generate a single invoice or batch-invoice all customers for a period, using per-stop, monthly flat rate, plus-chemicals, or custom line item billing models
-  2. A customer on AutoPay is automatically charged on invoice generation via saved card or ACH — and the invoice is only marked paid after Stripe's webhook confirms settlement (not at authorization)
-  3. Failed payments trigger a configurable dunning sequence (retry schedule + reminder emails) without any manual office action
-  4. Invoices, payments, and customers sync bidirectionally with QuickBooks Online — a payment recorded in QBO reflects in the platform and vice versa
-  5. The company can add a credit card surcharge/convenience fee that is disclosed to customers and passed through automatically on card payments
-  6. Office staff can export financial data for tax prep and view P&L, revenue by customer, and expense reports within the platform
-**Plans**: TBD
+  2. A pool company can connect their Stripe account via Stripe Connect in under 2 minutes — guided onboarding, KYC handled by Stripe
+  3. A customer on AutoPay is automatically charged on invoice generation via saved card or ACH — and the invoice is only marked paid after webhook confirms settlement
+  4. Failed payments trigger a configurable dunning sequence (retry schedule + reminder emails) without any manual office action
+  5. Invoices, payments, and customers sync bidirectionally with QuickBooks Online — a payment recorded in QBO reflects in the platform and vice versa
+  6. Companies can use Stripe Connect for direct payment processing, QuickBooks Payments via QBO sync, or both simultaneously — the system handles reconciliation for whichever path is active
+  7. The company can add a credit card surcharge/convenience fee per payment method, with legally required disclosure on invoices and payment pages
+  8. Office staff can export financial data for tax prep and view P&L, revenue by customer, and expense reports within the platform
+**Plans**: 8 plans
 
 Plans:
-- [ ] 07-01: Invoice model — multiple billing models, line items, bulk generation, PDF output
-- [ ] 07-02: Stripe integration — credit card + ACH AutoPay, saved payment methods, Stripe Customer Portal
-- [ ] 07-03: Stripe webhook handler — payment_intent.succeeded, payment_intent.payment_failed, charge.failed (ACH async)
-- [ ] 07-04: Dunning engine — configurable retry schedule, automated reminder emails, failed payment notifications
-- [ ] 07-05: QuickBooks Online bi-directional sync — OAuth, entity mapping, webhook handler, conflict resolution
-- [ ] 07-06: Surcharging — credit card convenience fee calculation, disclosure, passthrough
-- [ ] 07-07: Built-in accounting and reporting — P&L, expense tracking, revenue reports, tax export
+- [ ] 07-01-PLAN.md — Schema foundation: billing model columns, payment_records + dunning_config tables, Stripe packages, billing model actions, bulk invoice generation
+- [ ] 07-02-PLAN.md — Invoice delivery: invoice email template with PDF + pay link, pay token system, SMS Edge Function, quote SMS delivery, batch send
+- [ ] 07-03-PLAN.md — Stripe Connect: Stripe singleton, Connect onboarding API routes, payment stack selector, surcharge config with legal disclaimer
+- [ ] 07-04-PLAN.md — Payment processing: branded /pay/[token] page, PaymentIntent creation, Stripe webhook handler (succeeded/failed/refunded), manual payment recording
+- [ ] 07-05-PLAN.md — AutoPay + dunning: SetupIntent for saving methods, off-session auto-charge, configurable dunning sequence, pg_cron daily scan, dunning email template
+- [ ] 07-06-PLAN.md — QBO sync: OAuth2 flow, entity mappers (customer/invoice/payment), real-time push, QBO webhook handler, settings UI
+- [ ] 07-07-PLAN.md — Reports + overdue flags: AR aging (30/60/90 day buckets), revenue by customer, P&L, CSV export, overdue balance flags on customer profiles and route stops
+- [ ] 07-08-PLAN.md — Phase 7 end-to-end verification checkpoint
+
 
 ### Phase 8: Customer Portal
 **Goal**: Customers can view their entire service history, pay invoices, request jobs, and message the company — all from a branded self-service portal on any device
@@ -226,7 +231,53 @@ Plans:
 - [ ] 10-04: ML route optimization — algorithm selection (OSRM vs. Google ROA), Upstash QStash async job, before/after comparison UI
 - [ ] 10-05: Smart customer creation — intelligent suggestions when adding pools/equipment (pool+spa auto-notes, service frequency recommendations, common equipment combos, gate code reminders)
 
-### Phase 11: Subscription Billing
+### Phase 11: Payroll, Team Management & Full Accounting
+**Goal**: The platform is a complete QuickBooks replacement for pool companies — owner runs native payroll with direct deposit, check printing, and automatic tax filing; tracks employee time, PTO, certifications, and break compliance; manages full double-entry accounting with bank reconciliation via Plaid; and gets payment reconciliation from whichever payment path (Stripe Connect or QBO) they chose in Phase 7
+**Depends on**: Phase 9 (tech scorecards, per-stop metrics), Phase 7 (billing/payments, Stripe Connect or QBO integration), Phase 3 (field tech route timestamps)
+**Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05, TEAM-06, TEAM-07, TEAM-08, TEAM-09, TEAM-10, TEAM-11, TEAM-12, PAYRL-01, PAYRL-02, PAYRL-03, PAYRL-04, PAYRL-05, PAYRL-06, PAYRL-07, PAYRL-08, PAYRL-09, PAYRL-10, PAYRL-11, PAYRL-12, PAYRL-13, PAYRL-14, PAYRL-15, ACCT-01, ACCT-02, ACCT-03, ACCT-04, ACCT-05, ACCT-06, ACCT-07, ACCT-08, ACCT-09, ACCT-10, ACCT-11, ACCT-12, ACCT-13, ACCT-14, ACCT-15, PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07
+**Success Criteria** (what must be TRUE):
+  1. A tech can clock in and clock out from the app — clock-in records GPS location and timestamp, clock-out closes the shift; system auto-calculates drive time vs. on-site time from route timestamps
+  2. The owner can view and approve weekly timesheets per employee — auto-populated with regular hours, overtime, drive time, on-site time, breaks, and PTO
+  3. The owner can run payroll in one click — system calculates gross-to-net for each employee with federal, state, and local tax withholding, Social Security, Medicare, and all configured deductions
+  4. Employees receive pay via direct deposit (ACH) or printed checks — employees set up bank accounts in-app, owner chooses payment method per employee
+  5. System auto-files quarterly payroll taxes (Form 941, state equivalents) and generates year-end W-2s for employees and 1099-NECs for contractors
+  6. The owner has a full chart of accounts pre-seeded for pool service — every invoice, payment, payroll run, and expense auto-creates balanced double-entry journal entries
+  7. The owner can generate P&L, Balance Sheet, and Cash Flow statements for any date range with period comparison — replacing QuickBooks financial reports entirely
+  8. The owner can connect bank accounts via Plaid, auto-import transactions daily, and reconcile against book entries
+  9. Payment transactions from Stripe Connect or QBO Payments auto-reconcile to accounting entries with per-transaction fee tracking
+  10. The owner can track expenses with receipt photos, manage accounts payable with vendor bills, and log mileage — all categorized against the chart of accounts
+  11. The owner can manage PTO balances with accrual rules, request/approval workflow, employee certifications with expiration alerts, and break compliance tracking
+  12. The owner can view a team dashboard with all employees (clock status, hours, PTO, overtime alerts, cert warnings) and a financial dashboard with cash position, revenue trends, AR/AP aging, and payroll cost breakdown
+  13. The owner can configure deductions (health insurance, retirement, HSA), garnishments, commission structures (per upsell, per WO), and bonus payroll runs — every edge case covered
+  14. The owner can offer payment plans for large invoices and apply customer credits/prepayments to future invoices
+**Plans**: TBD
+
+Plans:
+- [ ] 11-01: Schema foundation — time_entries, pay_rates, pay_periods, payroll_runs, employees, journal_entries, accounts, bank_connections tables + RLS
+- [ ] 11-02: Clock in/out system — GPS stamp capture, tech app UI, shift management server actions
+- [ ] 11-03: Auto time tracking — drive time vs. on-site time from route timestamps, break detection, time categorization engine
+- [ ] 11-04: Timesheet UI — weekly view per employee, auto-populated, editable, approvable, overtime calculation, PTO entries
+- [ ] 11-05: Pay rate management — per-employee rate config (hourly/per-stop/hybrid), overtime rules, rate history, effective dates, W-2 vs 1099 classification
+- [ ] 11-06: Tax calculation engine — federal income tax, state/local tax, Social Security, Medicare, FUTA/SUTA, employer-side FICA match, multi-state support
+- [ ] 11-07: Payroll run processing — gross-to-net calculation, deductions, garnishments, pay stubs, pay period auto-close, bonus payroll runs
+- [ ] 11-08: Direct deposit & checks — ACH integration for direct deposit, employee bank account setup, printable check generation with pay stub
+- [ ] 11-09: Tax filing & year-end — quarterly 941 filing, W-2/W-3 generation, 1099-NEC generation, state equivalent filings
+- [ ] 11-10: PTO & scheduling — accrual rules, balance tracking, request/approval flow, availability windows, blocked dates
+- [ ] 11-11: Commission & bonus tracking — per upsell, per WO completion, configurable rates, running totals, bonus payroll runs
+- [ ] 11-12: Certifications & documents — CPO, license, insurance tracking, expiration alerts, document upload to Supabase Storage
+- [ ] 11-13: Chart of accounts & double-entry engine — pre-seeded accounts, auto journal entries for all transactions, manual journal entries, audit trail
+- [ ] 11-14: Financial statements — P&L, Balance Sheet, Cash Flow, custom date ranges, period comparison, budget vs. actual
+- [ ] 11-15: Bank feeds & reconciliation — Plaid integration, auto-import transactions, categorization suggestions, reconciliation workflow
+- [ ] 11-16: Expense tracking & AP — expense categorization, receipt photo capture, mileage logging, vendor bills, AP aging
+- [ ] 11-17: Payment reconciliation — Stripe payout reconciliation, QBO payment reconciliation, fee tracking, net deposit matching
+- [ ] 11-18: Advanced collections — payment plans, customer credits/prepayments, auto-apply balances, collections dashboard
+- [ ] 11-19: Sales tax management — tax liability tracking by jurisdiction, filing-ready reports, due date reminders
+- [ ] 11-20: Team & financial dashboards — employee overview (clock, hours, PTO, certs), financial overview (cash, revenue, AR/AP, payroll costs), labor cost analysis
+- [ ] 11-21: Payroll reports — payroll register, tax liability summary, deduction summary, labor distribution, retroactive adjustments
+- [ ] 11-22: Period close & audit — monthly/quarterly/annual close, closing entries, complete audit trail, tax prep exports
+- [ ] 11-23: End-to-end verification checkpoint
+
+### Phase 12: Subscription Billing
 **Goal**: Pool companies pay for using the PoolCo SaaS platform via tiered subscriptions based on pool count — Stripe handles checkout, payment methods, and subscription lifecycle; the app enforces tier limits and handles failed payments gracefully
 **Depends on**: Phase 1 (auth, multi-tenant RLS, org model)
 **Requirements**: SUB-01, SUB-02, SUB-03, SUB-04, SUB-05, SUB-06, SUB-07, SUB-08, SUB-09, SUB-10
@@ -241,18 +292,18 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Schema + Stripe setup: subscriptions table with enums, src/lib/stripe.ts client singleton, tier config constants
-- [ ] 11-02-PLAN.md — Checkout & onboarding: createCheckoutSession, trial creation on signup, success/cancel pages
-- [ ] 11-03-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling 6 event types (checkout, subscription lifecycle, invoices, trial ending)
-- [ ] 11-04-PLAN.md — Billing management UI: /billing page with plan card, usage bar, invoice history, cancel/reactivate, trial + restricted banners
-- [ ] 11-05-PLAN.md — Usage tracking & tier enforcement: pool count tracking, limit checking with grace periods, upgrade prompt dialog
-- [ ] 11-06-PLAN.md — Failed payment & dunning: grace period management, account restriction (read-only mode), recovery flow
-- [ ] 11-07-PLAN.md — End-to-end verification checkpoint: 7 manual test scenarios with Stripe test mode
+- [ ] 12-01-PLAN.md — Schema + Stripe setup: subscriptions table with enums, src/lib/stripe.ts client singleton, tier config constants
+- [ ] 12-02-PLAN.md — Checkout & onboarding: createCheckoutSession, trial creation on signup, success/cancel pages
+- [ ] 12-03-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling 6 event types (checkout, subscription lifecycle, invoices, trial ending)
+- [ ] 12-04-PLAN.md — Billing management UI: /billing page with plan card, usage bar, invoice history, cancel/reactivate, trial + restricted banners
+- [ ] 12-05-PLAN.md — Usage tracking & tier enforcement: pool count tracking, limit checking with grace periods, upgrade prompt dialog
+- [ ] 12-06-PLAN.md — Failed payment & dunning: grace period management, account restriction (read-only mode), recovery flow
+- [ ] 12-07-PLAN.md — End-to-end verification checkpoint: 7 manual test scenarios with Stripe test mode
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -262,8 +313,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 4. Scheduling & Routing | 7/7 | Complete | 2026-03-09 |
 | 5. Office Operations & Dispatch | 0/6 | Not started | - |
 | 6. Work Orders & Quoting | 0/8 | Not started | - |
-| 7. Billing & Payments | 0/7 | Not started | - |
+| 7. Billing & Payments | 0/8 | Not started | - |
 | 8. Customer Portal | 0/5 | Not started | - |
 | 9. Reporting & Team Analytics | 0/5 | Not started | - |
 | 10. Smart Features & AI | 0/4 | Not started | - |
-| 11. Subscription Billing | 0/7 | Not started | - |
+| 11. Payroll, Team Mgmt & Accounting | 0/23 | Not started | - |
+| 12. Subscription Billing | 0/7 | Not started | - |
