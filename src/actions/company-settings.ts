@@ -44,6 +44,15 @@ export interface OrgSettings {
   wo_notify_office_on_flag: boolean
   wo_notify_customer_on_scheduled: boolean
   wo_notify_customer_on_complete: boolean
+  // Phase 7: Billing & Payments
+  stripe_account_id: string | null
+  stripe_onboarding_done: boolean
+  qbo_connected: boolean
+  payment_provider: string
+  cc_surcharge_enabled: boolean
+  cc_surcharge_pct: string | null
+  default_payment_terms_days: number
+  invoice_footer_text: string | null
   created_at: Date
   updated_at: Date
 }
@@ -85,6 +94,15 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   wo_notify_office_on_flag: true,
   wo_notify_customer_on_scheduled: true,
   wo_notify_customer_on_complete: true,
+  // Phase 7 defaults
+  stripe_account_id: null,
+  stripe_onboarding_done: false,
+  qbo_connected: false,
+  payment_provider: "none",
+  cc_surcharge_enabled: false,
+  cc_surcharge_pct: null,
+  default_payment_terms_days: 30,
+  invoice_footer_text: null,
 }
 
 // ---------------------------------------------------------------------------
