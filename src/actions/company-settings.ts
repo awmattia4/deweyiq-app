@@ -53,6 +53,12 @@ export interface OrgSettings {
   cc_surcharge_pct: string | null
   default_payment_terms_days: number
   invoice_footer_text: string | null
+  // Phase 7-08: Notification template merge tag sources
+  google_review_url: string | null
+  website_url: string | null
+  social_media_urls: Record<string, string> | null
+  custom_email_footer: string | null
+  custom_sms_signature: string | null
   created_at: Date
   updated_at: Date
 }
@@ -103,6 +109,12 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   cc_surcharge_pct: null,
   default_payment_terms_days: 30,
   invoice_footer_text: null,
+  // Phase 7-08 defaults
+  google_review_url: null,
+  website_url: null,
+  social_media_urls: null,
+  custom_email_footer: null,
+  custom_sms_signature: null,
 }
 
 // ---------------------------------------------------------------------------

@@ -80,6 +80,12 @@ export const orgSettings = pgTable(
     cc_surcharge_enabled: boolean("cc_surcharge_enabled").notNull().default(false),
     default_payment_terms_days: integer("default_payment_terms_days").notNull().default(30),
     invoice_footer_text: text("invoice_footer_text"),
+    // Phase 7-08: Notification template merge tag sources
+    google_review_url: text("google_review_url"),
+    website_url: text("website_url"),
+    social_media_urls: jsonb("social_media_urls").$type<Record<string, string>>(),
+    custom_email_footer: text("custom_email_footer"),
+    custom_sms_signature: text("custom_sms_signature"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

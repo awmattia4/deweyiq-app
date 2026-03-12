@@ -30,6 +30,7 @@ import { invoices, invoiceLineItems } from "./invoices"
 import { paymentRecords } from "./payments"
 import { dunningConfig } from "./dunning"
 import { expenses } from "./expenses"
+import { notificationTemplates } from "./notification-templates"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -226,4 +227,10 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
     fields: [expenses.created_by],
     references: [profiles.id],
   }),
+}))
+
+// Phase 7-08 relations
+
+export const notificationTemplatesRelations = relations(notificationTemplates, ({ one }) => ({
+  org: one(orgs, { fields: [notificationTemplates.org_id], references: [orgs.id] }),
 }))
