@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 7/9 complete (01, 02, 03, 04, 05, 06, 07 done)
-Status: Phase 7 Plan 07 complete — Reports page with AR aging/revenue/P&L, expense entry, CSV export, overdue flags
-Last activity: 2026-03-12 — Phase 7 Plan 07 executed: Reports and overdue balance flags
+Plan: 8/9 complete (01, 02, 03, 04, 05, 06, 07, 08 done)
+Status: Phase 7 Plan 08 complete — Customizable notification templates with merge tag engine and template editor UI
+Last activity: 2026-03-12 — Phase 7 Plan 08 executed: Customizable email/SMS templates
 
-Progress: [████████--] 78%
+Progress: [█████████-] 89%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [████████--] 78%
 | Phase 07-billing-payments P04 | 8 | 2 tasks | 6 files |
 | Phase 07-billing-payments P05 | 14 | 2 tasks | 15 files |
 | Phase 07-billing-payments P07 | 9 | 2 tasks | 15 files |
+| Phase 07-billing-payments P08 | 25 | 2 tasks | 24 files |
 
 ## Accumulated Context
 
@@ -254,6 +255,11 @@ Recent decisions affecting current work:
 - [Phase 07-07]: Overdue banner on customer profile is office/owner only; overdue pill on route stops is visible to tech per locked decision
 - [Phase 07-07]: handlePaymentSucceeded recalculates overdue_balance by SUM of remaining unpaid past-due invoices (not subtractive approach) — avoids balance drift
 - [Phase 07-07]: Reports nav added to sidebar in Phase 7 (originally planned for Phase 9)
+- [Phase 07-08]: getResolvedTemplate uses adminDb (not withRls) -- send functions may run without user session (dunning cron, webhook handlers)
+- [Phase 07-08]: Template disabled (enabled=false) returns null -- send functions skip delivery entirely; clean opt-out mechanism
+- [Phase 07-08]: Dunning email has dual customization -- step-level subject/body takes priority, org-level template provides fallback and enabled toggle
+- [Phase 07-08]: Edge Functions accept optional customText/customSubject/customBody for backward compatibility -- existing callers unchanged
+- [Phase 07-08]: 5 new org_settings columns (google_review_url, website_url, social_media_urls, custom_email_footer, custom_sms_signature) for merge tag sources
 
 ### Pending Todos
 
@@ -273,5 +279,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Completed 07-07-PLAN.md — Reports page with AR aging/revenue/P&L, expense entry, CSV export, overdue flags
-Resume file: .planning/phases/07-billing-payments/07-08-PLAN.md
+Stopped at: Completed 07-08-PLAN.md — Customizable notification templates with merge tag engine and template editor UI
+Resume file: .planning/phases/07-billing-payments/07-09-PLAN.md
