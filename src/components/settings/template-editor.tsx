@@ -29,7 +29,7 @@ import { updateOrgSettings as updateOrgSettingsAction } from "@/actions/company-
 import { MERGE_TAGS, resolveTemplate } from "@/lib/notifications/template-engine"
 import type { TemplateRow } from "@/actions/notification-templates"
 import type { TemplateType } from "@/lib/notifications/default-templates"
-import { ALL_TEMPLATE_TYPES, TEMPLATE_TYPE_META } from "@/lib/notifications/default-templates"
+import { ALL_TEMPLATE_TYPES, DEFAULT_TEMPLATES, TEMPLATE_TYPE_META } from "@/lib/notifications/default-templates"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -173,19 +173,17 @@ export function TemplateEditor({ templates, orgTemplateSettings }: TemplateEdito
     startTransition(async () => {
       const result = await resetTemplate(selectedType)
       if (result.success) {
-        // Reload default values from the templates prop
-        const defaultTemplate = templates.find((t) => t.template_type === selectedType)
-        if (defaultTemplate) {
-          setEditState((prev) => ({
-            ...prev,
-            [selectedType]: {
-              subject: defaultTemplate.subject ?? "",
-              body_html: defaultTemplate.body_html ?? "",
-              sms_text: defaultTemplate.sms_text ?? "",
-              enabled: true,
-            },
-          }))
-        }
+        // Reload actual defaults (not from props, which may hold stale custom values)
+        const defaults = DEFAULT_TEMPLATES[selectedType]
+        setEditState((prev) => ({
+          ...prev,
+          [selectedType]: {
+            subject: defaults?.subject ?? "",
+            body_html: defaults?.body_html ?? "",
+            sms_text: defaults?.sms_text ?? "",
+            enabled: true,
+          },
+        }))
         toast.success("Template reset to default")
       } else {
         toast.error("Failed to reset template", { description: result.error })

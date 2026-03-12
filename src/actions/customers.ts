@@ -7,12 +7,15 @@ import { withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { customers } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import { syncCustomerToQbo } from "@/actions/qbo-sync"
 
 // ─── Input types ───────────────────────────────────────────────────────────────
 
 type CreateCustomerInput = {
   full_name: string
   address?: string
+  lat?: number
+  lng?: number
   phone?: string
   email?: string
   gate_code?: string
@@ -26,6 +29,8 @@ type UpdateCustomerInput = {
   id: string
   full_name?: string
   address?: string
+  lat?: number | null
+  lng?: number | null
   phone?: string
   email?: string
   gate_code?: string
@@ -86,6 +91,8 @@ export async function createCustomer(
           org_id: user.org_id,
           full_name: input.full_name.trim(),
           address: input.address?.trim() || null,
+          lat: input.lat ?? null,
+          lng: input.lng ?? null,
           phone: input.phone?.trim() || null,
           email: input.email?.trim() || null,
           gate_code: input.gate_code?.trim() || null,
@@ -98,6 +105,11 @@ export async function createCustomer(
     )
 
     revalidatePath("/customers")
+
+    // Fire-and-forget QBO sync -- never blocks customer creation
+    if (result[0]?.id) {
+      syncCustomerToQbo(result[0].id).catch(() => {})
+    }
 
     return { success: true, customerId: result[0]?.id }
   } catch (err) {
@@ -141,6 +153,8 @@ export async function updateCustomer(
 
   if (input.full_name !== undefined) updateValues.full_name = input.full_name.trim()
   if (input.address !== undefined) updateValues.address = input.address?.trim() || null
+  if (input.lat !== undefined) updateValues.lat = input.lat
+  if (input.lng !== undefined) updateValues.lng = input.lng
   if (input.phone !== undefined) updateValues.phone = input.phone?.trim() || null
   if (input.email !== undefined) updateValues.email = input.email?.trim() || null
   if (input.gate_code !== undefined) updateValues.gate_code = input.gate_code?.trim() || null
@@ -159,6 +173,9 @@ export async function updateCustomer(
 
     revalidatePath("/customers")
     revalidatePath(`/customers/${input.id}`)
+
+    // Fire-and-forget QBO sync -- never blocks customer update
+    syncCustomerToQbo(input.id).catch(() => {})
 
     return { success: true }
   } catch (err) {

@@ -26,7 +26,11 @@ import {
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { getStripe } from "@/lib/stripe/client"
+import { verifyPayToken } from "@/lib/pay-token"
 import { syncPaymentToQbo } from "@/actions/qbo-sync"
+import { getResolvedTemplate } from "@/actions/notification-templates"
+import { Resend } from "resend"
+import { orgs } from "@/lib/db/schema"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -246,8 +250,18 @@ export async function voidInvoice(
     // Cancel pending PaymentIntent if it exists
     if (invoice.stripe_payment_intent_id) {
       try {
+        // Fetch org's stripe_account_id -- PIs live on the connected account
+        const [settings] = await adminDb
+          .select({ stripe_account_id: orgSettings.stripe_account_id })
+          .from(orgSettings)
+          .where(eq(orgSettings.org_id, orgId))
+          .limit(1)
+
         const stripe = getStripe()
-        await stripe.paymentIntents.cancel(invoice.stripe_payment_intent_id)
+        await stripe.paymentIntents.cancel(
+          invoice.stripe_payment_intent_id,
+          { stripeAccount: settings?.stripe_account_id ?? undefined }
+        )
       } catch (stripeErr) {
         // Non-fatal -- PaymentIntent may already be canceled or in a terminal state
         console.warn("[voidInvoice] Could not cancel PaymentIntent:", stripeErr)
@@ -284,15 +298,36 @@ export async function voidInvoice(
 
 /**
  * Saves a payment method on a customer for future automatic charges.
- * Called from the public payment page after SetupIntent confirmation.
+ * Called from the public payment page after successful payment.
  * Uses adminDb -- no user session in public payment context.
+ *
+ * Authorization: requires a valid payToken. The token is verified and the
+ * invoice's customer_id must match the provided customerId.
  */
 export async function enableAutoPay(
+  payToken: string,
   customerId: string,
   paymentMethodId: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!customerId || !paymentMethodId) {
-    return { success: false, error: "Missing customer or payment method ID" }
+  if (!payToken || !customerId || !paymentMethodId) {
+    return { success: false, error: "Missing required parameters" }
+  }
+
+  // Verify the pay token
+  const tokenPayload = await verifyPayToken(payToken)
+  if (!tokenPayload) {
+    return { success: false, error: "Invalid or expired payment link" }
+  }
+
+  // Verify the customer matches the invoice
+  const [tokenInvoice] = await adminDb
+    .select({ customer_id: invoices.customer_id })
+    .from(invoices)
+    .where(eq(invoices.id, tokenPayload.invoiceId))
+    .limit(1)
+
+  if (!tokenInvoice || tokenInvoice.customer_id !== customerId) {
+    return { success: false, error: "Unauthorized" }
   }
 
   try {
@@ -306,6 +341,65 @@ export async function enableAutoPay(
       .where(eq(customers.id, customerId))
 
     console.log("[enableAutoPay] AutoPay enabled for customer:", customerId)
+
+    // Fire-and-forget: send AutoPay confirmation email
+    ;(async () => {
+      try {
+        // Fetch customer details for the email
+        const [customer] = await adminDb
+          .select({
+            email: customers.email,
+            full_name: customers.full_name,
+            org_id: customers.org_id,
+          })
+          .from(customers)
+          .where(eq(customers.id, customerId))
+          .limit(1)
+
+        if (!customer?.email || !customer.org_id) return
+
+        // Fetch org name for the from address
+        const [org] = await adminDb
+          .select({ name: orgs.name })
+          .from(orgs)
+          .where(eq(orgs.id, customer.org_id))
+          .limit(1)
+
+        const companyName = org?.name ?? "Your Pool Company"
+
+        const template = await getResolvedTemplate(customer.org_id, "autopay_confirmation_email", {
+          customer_name: customer.full_name,
+          company_name: companyName,
+        })
+
+        // Skip if template is disabled
+        if (!template) return
+
+        const resendApiKey = process.env.RESEND_API_KEY
+        if (!resendApiKey) {
+          console.log("[enableAutoPay] RESEND_API_KEY not set, skipping confirmation email")
+          return
+        }
+
+        const resend = new Resend(resendApiKey)
+        const isDev = process.env.NODE_ENV === "development"
+        const fromAddress = isDev
+          ? "PoolCo Dev <onboarding@resend.dev>"
+          : `${companyName} <billing@poolco.app>`
+
+        await resend.emails.send({
+          from: fromAddress,
+          to: isDev ? ["delivered@resend.dev"] : [customer.email],
+          subject: template.subject ?? `AutoPay Enabled -- ${companyName}`,
+          html: template.body_html ?? "",
+        })
+
+        console.log("[enableAutoPay] Confirmation email sent to:", customer.email)
+      } catch (emailErr) {
+        console.error("[enableAutoPay] Confirmation email error (non-blocking):", emailErr)
+      }
+    })()
+
     return { success: true }
   } catch (err) {
     console.error("[enableAutoPay] Error:", err)
