@@ -1164,7 +1164,7 @@ export async function sendInvoice(
 
     // Count stops for per_stop billing model
     const stopCount = invoice.billing_model === "per_stop"
-      ? lineItemRows.filter((li) => li.item_type === "service_stop" || li.visit_id).length || null
+      ? lineItemRows.filter((li) => li.item_type === "service" || li.visit_id).length || null
       : null
 
     const now = new Date()

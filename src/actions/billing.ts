@@ -29,6 +29,7 @@ import {
 import { eq, and, gte, lte, sql, isNotNull } from "drizzle-orm"
 import { syncInvoiceToQbo } from "@/actions/qbo-sync"
 import { chargeAutoPay } from "@/actions/payments"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,7 +74,7 @@ function formatDate(dateStr: string): string {
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T12:00:00")
   d.setDate(d.getDate() + days)
-  return d.toISOString().split("T")[0]
+  return toLocalDateString(d)
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +164,7 @@ export async function getPlusChemicalsLineItems(
 
       if (!dosing) continue
 
-      const visitDate = visit.visited_at.toISOString().split("T")[0]
+      const visitDate = toLocalDateString(visit.visited_at)
 
       for (const [chemical, dose] of Object.entries(dosing)) {
         if (!dose || typeof dose.amount !== "number" || dose.amount <= 0) continue
@@ -261,7 +262,7 @@ export async function generateInvoiceForCustomer(
     // ── 3. Build line items based on billing model ─────────────────────────
     const lineItems: DraftLineItem[] = []
     const now = new Date()
-    const dueDate = addDays(now.toISOString().split("T")[0], paymentTermsDays)
+    const dueDate = addDays(toLocalDateString(now), paymentTermsDays)
 
     if (billingModel === "per_stop" || billingModel === "plus_chemicals") {
       // Query completed stops in the billing period
@@ -303,7 +304,7 @@ export async function generateInvoiceForCustomer(
       // Map visits by date for linking
       const visitsByDate = new Map<string, string>()
       for (const v of visits) {
-        const dateKey = v.visited_at.toISOString().split("T")[0]
+        const dateKey = toLocalDateString(v.visited_at)
         visitsByDate.set(dateKey, v.id)
       }
 

@@ -36,6 +36,7 @@ import type { InvoiceSummary } from "@/actions/invoices"
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   sent: "Sent",
+  overdue: "Overdue",
   paid: "Paid",
   void: "Void",
 }
@@ -43,11 +44,12 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-zinc-700 text-zinc-200",
   sent: "bg-blue-900/60 text-blue-300",
+  overdue: "bg-red-900/60 text-red-300",
   paid: "bg-emerald-900/60 text-emerald-300",
-  void: "bg-red-900/60 text-red-300",
+  void: "bg-zinc-800/60 text-zinc-400",
 }
 
-const ALL_STATUSES = ["draft", "sent", "paid", "void"]
+const ALL_STATUSES = ["draft", "sent", "overdue", "paid", "void"]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

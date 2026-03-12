@@ -310,8 +310,14 @@ export async function sendQuote(
 
     const customer = customerRows[0]
     if (!customer) return { success: false, error: "Customer not found" }
-    if (!customer.email) {
+
+    // Only require email when email delivery is needed (not SMS-only)
+    const smsOnly = options?.smsEnabled && !customer.email
+    if (!customer.email && !options?.smsEnabled) {
       return { success: false, error: "Customer has no email address on file" }
+    }
+    if (smsOnly && !customer.phone) {
+      return { success: false, error: "Customer has no email or phone number on file" }
     }
 
     const settingsRows = await adminDb
@@ -480,8 +486,8 @@ export async function sendQuote(
       approval_link: approvalUrl,
     })
 
-    if (!emailTemplate) {
-      // Email template is disabled — skip email delivery entirely
+    if (!emailTemplate || !customer.email) {
+      // Email template is disabled or customer has no email — skip email delivery
       // Still allow SMS if enabled
     } else {
       const emailHtml = await renderEmail(

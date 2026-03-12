@@ -40,6 +40,7 @@ import { Resend } from "resend"
 import { signPayToken } from "@/lib/pay-token"
 import { chargeAutoPay } from "@/actions/payments"
 import { getResolvedTemplate } from "@/actions/notification-templates"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
 // Default dunning steps
@@ -170,7 +171,7 @@ export async function runDunningScan(
 
         // Find overdue invoices (status = 'overdue' or status = 'sent' with due_date past)
         const now = new Date()
-        const todayStr = now.toISOString().split("T")[0]
+        const todayStr = toLocalDateString(now)
 
         const overdueInvoices = await adminDb
           .select()
