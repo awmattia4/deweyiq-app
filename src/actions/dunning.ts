@@ -39,6 +39,7 @@ import { DunningEmail } from "@/lib/emails/dunning-email"
 import { Resend } from "resend"
 import { signPayToken } from "@/lib/pay-token"
 import { chargeAutoPay } from "@/actions/payments"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Default dunning steps
@@ -251,8 +252,24 @@ export async function runDunningScan(
           // -- Send dunning email -------------------------------------------
           if (customer.email) {
             try {
-              const emailSubject = (applicableStep.email_subject || "Payment Reminder: Invoice {number}")
+              // Resolve org-level notification template for dunning_email
+              const dunningTemplate = await getResolvedTemplate(scanOrgId, "dunning_email", {
+                customer_name: customer.full_name,
+                company_name: org.name,
+                invoice_number: invoice.invoice_number ?? "N/A",
+                invoice_total: totalFormatted,
+                payment_link: paymentUrl,
+              })
+
+              // If dunning_email template is disabled, skip email entirely
+              if (!dunningTemplate) continue
+
+              // Subject priority: step-level > org-level template > default
+              const emailSubject = (applicableStep.email_subject || dunningTemplate.subject || "Payment Reminder: Invoice {number}")
                 .replace("{number}", invoice.invoice_number ?? "N/A")
+
+              // Body priority: step-level > org-level template
+              const customBody = applicableStep.email_body || dunningTemplate.body_html || null
 
               const emailHtml = await renderEmail(
                 createElement(DunningEmail, {
@@ -263,7 +280,7 @@ export async function runDunningScan(
                   paymentUrl,
                   stepNumber: stepIndex + 1,
                   maxSteps: steps.length,
-                  customBody: applicableStep.email_body || null,
+                  customBody,
                 })
               )
 

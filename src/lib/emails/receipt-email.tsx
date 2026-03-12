@@ -32,6 +32,10 @@ export interface ReceiptEmailProps {
   paymentMethod: "card" | "ach" | "check" | "cash"
   paidAt: string
   paymentLast4?: string | null
+  // Optional customizations from notification template system
+  customSubject?: string | null
+  customBody?: string | null
+  customFooter?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +88,8 @@ export function ReceiptEmail({
   paymentMethod,
   paidAt,
   paymentLast4,
+  customBody,
+  customFooter,
 }: ReceiptEmailProps) {
   return (
     <Html lang="en">
@@ -162,12 +168,13 @@ export function ReceiptEmail({
                 color: C.muted,
                 fontSize: "14px",
                 lineHeight: "1.6",
+                whiteSpace: "pre-wrap",
               }}
             >
-              Thank you for your payment of{" "}
+              {customBody || <>Thank you for your payment of{" "}
               <strong style={{ color: C.white }}>{totalAmount}</strong> for
               Invoice <strong style={{ color: C.white }}>#{invoiceNumber}</strong>.
-              This email serves as your receipt.
+              This email serves as your receipt.</>}
             </Text>
           </Section>
 
@@ -316,6 +323,18 @@ export function ReceiptEmail({
                 margin: "0 0 16px",
               }}
             />
+            {customFooter && (
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  color: C.muted,
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {customFooter}
+              </Text>
+            )}
             <Text
               style={{
                 margin: "0",

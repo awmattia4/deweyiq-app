@@ -40,6 +40,11 @@ interface RequestBody {
   orgId: string
   techName: string
   stops: StopRequest[]
+  customSmsText?: string       // Custom SMS text from notification template system
+  customEmailSubject?: string  // Custom email subject from notification template system
+  customEmailBody?: string     // Custom email body from notification template system
+  emailEnabled?: boolean       // Whether email channel is enabled (default true)
+  smsEnabled?: boolean         // Whether SMS channel is enabled (default true)
 }
 
 interface SendResult {
@@ -88,7 +93,16 @@ Deno.serve(async (req: Request) => {
     )
   }
 
-  const { orgId, techName, stops } = body
+  const {
+    orgId,
+    techName,
+    stops,
+    customSmsText,
+    customEmailSubject,
+    customEmailBody,
+    emailEnabled = true,
+    smsEnabled = true,
+  } = body
 
   if (!orgId || !techName || !stops || !Array.isArray(stops) || stops.length === 0) {
     return new Response(
@@ -125,7 +139,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Compose the message text (same content for SMS and email body)
-    const messageText = `Hi ${stop.customerName}, your pool tech ${techName} is heading your way. You're stop #${stop.stopNumber} on today's route.`
+    const defaultMessage = `Hi ${stop.customerName}, your pool tech ${techName} is heading your way. You're stop #${stop.stopNumber} on today's route.`
+    const messageText = customSmsText
+      ? customSmsText.replace(/\{\{customer_name\}\}/g, stop.customerName).replace(/\{\{tech_name\}\}/g, techName).replace(/\{\{stop_number\}\}/g, String(stop.stopNumber))
+      : defaultMessage
 
     let sent = false
     let channel: "sms" | "email" | "skipped" = "skipped"
@@ -133,7 +150,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Try SMS first (Twilio REST API with HTTP Basic auth) ─────────────────
 
-    if (stop.customerPhone && twilioConfigured) {
+    if (smsEnabled && stop.customerPhone && twilioConfigured) {
       try {
         // CRITICAL: Use raw fetch + URLSearchParams + btoa — no Twilio npm package in Deno
         const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
@@ -170,14 +187,21 @@ Deno.serve(async (req: Request) => {
 
     // ── Fallback to email if SMS not sent ────────────────────────────────────
 
-    if (!sent && stop.customerEmail && resendConfigured) {
+    if (!sent && emailEnabled && stop.customerEmail && resendConfigured) {
       try {
-        const emailHtml = `
+        const defaultEmailHtml = `
           <p>Hi ${stop.customerName},</p>
           <p>Your pool tech <strong>${techName}</strong> is heading your way.</p>
           <p>You're stop <strong>#${stop.stopNumber}</strong> on today's route.</p>
           <p>They'll be there soon — make sure your gate is accessible.</p>
         `
+        const emailHtml = customEmailBody
+          ? customEmailBody.replace(/\{\{customer_name\}\}/g, stop.customerName).replace(/\{\{tech_name\}\}/g, techName).replace(/\{\{stop_number\}\}/g, String(stop.stopNumber))
+          : defaultEmailHtml
+
+        const emailSubject = customEmailSubject
+          ? customEmailSubject.replace(/\{\{tech_name\}\}/g, techName).replace(/\{\{customer_name\}\}/g, stop.customerName)
+          : `Your pool tech ${techName} is on the way`
 
         const resendResponse = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -188,7 +212,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             from: "Pool Company <notifications@poolco.app>",
             to: [stop.customerEmail],
-            subject: `Your pool tech ${techName} is on the way`,
+            subject: emailSubject,
             html: emailHtml,
           }),
         })

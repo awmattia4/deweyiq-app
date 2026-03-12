@@ -5,6 +5,8 @@ import { withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeStops, customers, profiles } from "@/lib/db/schema"
 import { and, eq, isNull, inArray } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +63,7 @@ export async function sendPreArrivalNotifications(
   const orgId = token.org_id as string | undefined
   if (!orgId) return { sent: 0, error: "Invalid token — no org_id" }
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = toLocalDateString()
 
   try {
     // ── 1. Query today's eligible route stops (LEFT JOIN — no correlated subquery) ──
@@ -157,7 +159,23 @@ export async function sendPreArrivalNotifications(
       return profileRows[0]?.full_name ?? "Your pool tech"
     })
 
-    // ── 3. Build payload for Edge Function ─────────────────────────────────────
+    // ── 3. Resolve pre-arrival notification templates ───────────────────────────
+    const emailTemplate = await getResolvedTemplate(orgId, "pre_arrival_email", {
+      company_name: "",
+      tech_name: techName,
+    })
+
+    const smsTemplate = await getResolvedTemplate(orgId, "pre_arrival_sms", {
+      company_name: "",
+      tech_name: techName,
+    })
+
+    // If both templates are disabled, skip entirely
+    if (!emailTemplate && !smsTemplate) {
+      return { sent: 0 }
+    }
+
+    // ── 4. Build payload for Edge Function ─────────────────────────────────────
     const stopsPayload: PreArrivalStop[] = stopRows.map((stop) => ({
       stopId: stop.stopId,
       customerName: stop.customerName,
@@ -167,13 +185,18 @@ export async function sendPreArrivalNotifications(
       notificationsEnabled: true,
     }))
 
-    // ── 4. Invoke send-pre-arrival Edge Function ────────────────────────────────
+    // ── 5. Invoke send-pre-arrival Edge Function ────────────────────────────────
     const supabase = await createClient()
     const { error: fnError } = await supabase.functions.invoke("send-pre-arrival", {
       body: {
         orgId,
         techName,
         stops: stopsPayload,
+        customSmsText: smsTemplate?.sms_text ?? undefined,
+        customEmailSubject: emailTemplate?.subject ?? undefined,
+        customEmailBody: emailTemplate?.body_html ?? undefined,
+        emailEnabled: !!emailTemplate,
+        smsEnabled: !!smsTemplate,
       },
     })
 

@@ -29,6 +29,7 @@ interface RequestBody {
   total?: string
   companyName: string
   type: "invoice" | "quote"
+  customText?: string // Optional custom SMS text from notification template system
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +98,10 @@ Deno.serve(async (req: Request) => {
 
   let smsBody: string
 
-  if (type === "invoice") {
+  // If a custom text was provided from the notification template system, use it directly
+  if (body.customText) {
+    smsBody = body.customText
+  } else if (type === "invoice") {
     const { paymentUrl, invoiceNumber, total } = body
     if (!paymentUrl || !invoiceNumber) {
       return new Response(

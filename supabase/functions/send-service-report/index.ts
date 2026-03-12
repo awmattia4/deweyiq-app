@@ -28,6 +28,7 @@ interface RequestBody {
   reportHtml: string
   fromName?: string
   fromEmail?: string
+  customSubject?: string // Custom subject from notification template system
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +77,7 @@ Deno.serve(async (req: Request) => {
     reportHtml,
     fromName = "Pool Company",
     fromEmail = "reports@poolco.app",
+    customSubject,
   } = body
 
   if (!visitId || !customerEmail || !reportHtml) {
@@ -134,7 +136,7 @@ Deno.serve(async (req: Request) => {
     day: "numeric",
     year: "numeric",
   })
-  const subject = `Service Report — ${customerName} — ${dateStr}`
+  const subject = customSubject ?? `Service Report — ${customerName} — ${dateStr}`
 
   // ── Send via Resend API ───────────────────────────────────────────────────
 

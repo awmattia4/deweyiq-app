@@ -36,6 +36,7 @@ export interface DunningEmailProps {
   maxSteps: number
   customSubject?: string | null
   customBody?: string | null
+  customFooter?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,7 @@ export function DunningEmail({
   stepNumber,
   maxSteps,
   customBody,
+  customFooter,
 }: DunningEmailProps) {
   const defaultBody = `Your payment of ${totalAmount} for invoice #${invoiceNumber} is overdue. Please pay at your earliest convenience.`
   const bodyText = customBody || defaultBody
@@ -279,6 +281,18 @@ export function DunningEmail({
               This is reminder {stepNumber} of {maxSteps}. If you have already
               made this payment, please disregard this notice.
             </Text>
+            {customFooter && (
+              <Text
+                style={{
+                  margin: "8px 0 0",
+                  color: C.muted,
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {customFooter}
+              </Text>
+            )}
             <Text
               style={{
                 margin: "8px 0 0",

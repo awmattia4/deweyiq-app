@@ -37,6 +37,10 @@ export interface InvoiceEmailProps {
   billingPeriod: string | null
   billingModel: string | null
   stopCount: number | null
+  // Optional customizations from notification template system
+  customSubject?: string | null
+  customBody?: string | null
+  customFooter?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,8 @@ export function InvoiceEmail({
   billingPeriod,
   billingModel,
   stopCount,
+  customBody,
+  customFooter,
 }: InvoiceEmailProps) {
   // Build the service description line
   let serviceDescription = "Service"
@@ -157,10 +163,10 @@ export function InvoiceEmail({
                 color: C.muted,
                 fontSize: "14px",
                 lineHeight: "1.6",
+                whiteSpace: "pre-wrap",
               }}
             >
-              {companyName} has sent you an invoice. Please review the details
-              below and use the button to pay online.
+              {customBody || `${companyName} has sent you an invoice. Please review the details below and use the button to pay online.`}
             </Text>
           </Section>
 
@@ -374,6 +380,18 @@ export function InvoiceEmail({
               textAlign: "center",
             }}
           >
+            {customFooter && (
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  color: C.muted,
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {customFooter}
+              </Text>
+            )}
             <Text
               style={{
                 margin: "0",

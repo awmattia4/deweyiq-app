@@ -19,8 +19,10 @@ import { StripeConnectSettings } from "@/components/settings/stripe-connect-sett
 import { PaymentStackSettings } from "@/components/settings/payment-stack-settings"
 import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
 import { DunningSettings } from "@/components/settings/dunning-settings"
+import { TemplateEditor } from "@/components/settings/template-editor"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTaskRow } from "@/actions/company-settings"
+import type { TemplateRow } from "@/actions/notification-templates"
 import type { DunningStep } from "@/lib/db/schema/dunning"
 import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
@@ -82,6 +84,14 @@ interface SettingsTabsProps {
   // Dunning data
   dunningSteps: DunningStep[]
   dunningMaxRetries: number
+  // Notification templates
+  notifTemplates: TemplateRow[]
+  orgTemplateSettings: {
+    google_review_url: string | null
+    website_url: string | null
+    custom_email_footer: string | null
+    custom_sms_signature: string | null
+  } | null
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -109,6 +119,8 @@ export function SettingsTabs({
   qboStatus,
   dunningSteps,
   dunningMaxRetries,
+  notifTemplates,
+  orgTemplateSettings,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -182,6 +194,23 @@ export function SettingsTabs({
               </CardHeader>
               <CardContent>
                 <NotificationSettings settings={orgSettings} />
+              </CardContent>
+            </Card>
+          )}
+
+          {notifTemplates.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Email &amp; SMS Templates</CardTitle>
+                <CardDescription>
+                  Customize the content of every email and SMS your company sends to customers. Add your Google review link, custom footer, and brand messaging.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TemplateEditor
+                  templates={notifTemplates}
+                  orgTemplateSettings={orgTemplateSettings}
+                />
               </CardContent>
             </Card>
           )}

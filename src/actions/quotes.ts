@@ -33,6 +33,7 @@ import { QuoteEmail } from "@/lib/emails/quote-email"
 import { render as renderEmail } from "@react-email/render"
 import { signQuoteToken } from "@/lib/quotes/quote-token"
 import { Resend } from "resend"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -461,64 +462,89 @@ export async function sendQuote(
       currency: "USD",
     }).format(grandTotal)
 
-    const emailHtml = await renderEmail(
-      createElement(QuoteEmail, {
-        companyName,
-        customerName: customer.full_name,
-        quoteNumber: quote.quote_number ?? quoteId,
-        quoteTotal: totalFormatted,
-        expirationDate,
-        approvalUrl,
-        scopeOfWork,
-      })
-    )
+    // ── 5b. Resolve notification templates ─────────────────────────────────
+    const emailTemplate = await getResolvedTemplate(orgId, "quote_email", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      quote_number: quote.quote_number ?? quoteId,
+      quote_total: totalFormatted,
+      expiration_date: expirationDate,
+      approval_link: approvalUrl,
+    })
 
-    // ── 6. Send via Resend SDK (or log in dev) ────────────────────────────
-    const resendApiKey = process.env.RESEND_API_KEY
-    const isDev = process.env.NODE_ENV === "development"
+    const smsTemplate = await getResolvedTemplate(orgId, "quote_sms", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      quote_number: quote.quote_number ?? quoteId,
+      quote_total: totalFormatted,
+      approval_link: approvalUrl,
+    })
 
-    if (!resendApiKey) {
-      if (isDev) {
-        console.log("\n━━━ [DEV] Quote Email ━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        console.log(`To: ${customer.email}`)
-        console.log(`Subject: Quote #${quote.quote_number ?? quoteId} from ${companyName}`)
-        console.log(`Approval URL: ${approvalUrl}`)
-        console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-      } else {
-        return { success: false, error: "RESEND_API_KEY not configured" }
-      }
+    if (!emailTemplate) {
+      // Email template is disabled — skip email delivery entirely
+      // Still allow SMS if enabled
     } else {
-      const resend = new Resend(resendApiKey)
+      const emailHtml = await renderEmail(
+        createElement(QuoteEmail, {
+          companyName,
+          customerName: customer.full_name,
+          quoteNumber: quote.quote_number ?? quoteId,
+          quoteTotal: totalFormatted,
+          expirationDate,
+          approvalUrl,
+          scopeOfWork,
+          customBody: emailTemplate.body_html,
+          customFooter: null, // Footer resolved into body_html by template engine
+        })
+      )
 
-      const fromAddress = isDev
-        ? "PoolCo Dev <onboarding@resend.dev>"
-        : `${companyName} <quotes@poolco.app>`
+      // ── 6. Send via Resend SDK (or log in dev) ────────────────────────────
+      const resendApiKey = process.env.RESEND_API_KEY
+      const isDev = process.env.NODE_ENV === "development"
 
-      const { error: resendError } = await resend.emails.send({
-        from: fromAddress,
-        to: isDev ? ["delivered@resend.dev"] : [customer.email],
-        subject: `Quote #${quote.quote_number ?? quoteId} from ${companyName}`,
-        html: emailHtml,
-        attachments: [
-          {
-            filename: `quote-${quote.quote_number ?? quoteId}.pdf`,
-            content: Buffer.from(pdfBuffer).toString("base64"),
-          },
-        ],
-      })
+      if (!resendApiKey) {
+        if (isDev) {
+          console.log("\n--- [DEV] Quote Email -----------------------------------")
+          console.log(`To: ${customer.email}`)
+          console.log(`Subject: ${emailTemplate.subject ?? `Quote #${quote.quote_number ?? quoteId} from ${companyName}`}`)
+          console.log(`Approval URL: ${approvalUrl}`)
+          console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
+          console.log("---------------------------------------------------------\n")
+        } else {
+          return { success: false, error: "RESEND_API_KEY not configured" }
+        }
+      } else {
+        const resend = new Resend(resendApiKey)
 
-      if (resendError) {
-        console.error("[sendQuote] Resend error:", resendError)
-        return {
-          success: false,
-          error: `Email delivery failed: ${resendError.message}`,
+        const fromAddress = isDev
+          ? "PoolCo Dev <onboarding@resend.dev>"
+          : `${companyName} <quotes@poolco.app>`
+
+        const { error: resendError } = await resend.emails.send({
+          from: fromAddress,
+          to: isDev ? ["delivered@resend.dev"] : [customer.email],
+          subject: emailTemplate.subject ?? `Quote #${quote.quote_number ?? quoteId} from ${companyName}`,
+          html: emailHtml,
+          attachments: [
+            {
+              filename: `quote-${quote.quote_number ?? quoteId}.pdf`,
+              content: Buffer.from(pdfBuffer).toString("base64"),
+            },
+          ],
+        })
+
+        if (resendError) {
+          console.error("[sendQuote] Resend error:", resendError)
+          return {
+            success: false,
+            error: `Email delivery failed: ${resendError.message}`,
+          }
         }
       }
     }
 
     // ── 6b. SMS delivery (if enabled and customer has phone) ────────────────
-    if (options?.smsEnabled && customer.phone) {
+    if (options?.smsEnabled && customer.phone && smsTemplate) {
       try {
         const supabase = await createClient()
         await supabase.functions.invoke("send-invoice-sms", {
@@ -529,6 +555,7 @@ export async function sendQuote(
             total: totalFormatted,
             companyName,
             type: "quote",
+            customText: smsTemplate.sms_text ?? undefined,
           },
         })
       } catch (smsErr) {

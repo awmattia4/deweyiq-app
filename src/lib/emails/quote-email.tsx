@@ -35,6 +35,10 @@ export interface QuoteEmailProps {
   expirationDate: string
   approvalUrl: string
   scopeOfWork: string
+  // Optional customizations from notification template system
+  customSubject?: string | null
+  customBody?: string | null
+  customFooter?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +69,8 @@ export function QuoteEmail({
   expirationDate,
   approvalUrl,
   scopeOfWork,
+  customBody,
+  customFooter,
 }: QuoteEmailProps) {
   // Trim scope of work to first 200 chars for email preview
   const scopeSnippet =
@@ -149,10 +155,10 @@ export function QuoteEmail({
                 color: C.muted,
                 fontSize: "14px",
                 lineHeight: "1.6",
+                whiteSpace: "pre-wrap",
               }}
             >
-              {companyName} has prepared a quote for your review. Please see
-              the details below and click the button to view and approve.
+              {customBody || `${companyName} has prepared a quote for your review. Please see the details below and click the button to view and approve.`}
             </Text>
           </Section>
 
@@ -355,6 +361,18 @@ export function QuoteEmail({
               textAlign: "center",
             }}
           >
+            {customFooter && (
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  color: C.muted,
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {customFooter}
+              </Text>
+            )}
             <Text
               style={{
                 margin: "0",

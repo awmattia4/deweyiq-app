@@ -3,6 +3,12 @@
  *
  * Dark-themed email matching the app's dark-first design system.
  * CRITICAL: All colors are hex — NOT oklch() — email clients don't support oklch.
+ *
+ * Content sections are conditionally rendered based on org settings:
+ * - includeChemistry: show/hide chemistry readings grid
+ * - includeChecklist: show/hide checklist summary
+ * - includePhotos: show/hide photo thumbnails
+ * - includeTechName: show/hide technician name
  */
 
 import {
@@ -17,6 +23,7 @@ import {
   Column,
   Button,
   Heading,
+  Img,
 } from "@react-email/components"
 
 // ---------------------------------------------------------------------------
@@ -27,14 +34,22 @@ export interface ServiceReportEmailProps {
   customerName: string
   techName: string
   companyName: string
-  serviceDate: string // Pre-formatted date string
+  companyLogoUrl?: string | null
+  serviceDate: string
   poolName: string
-  /** Chemistry readings keyed by param name */
   chemistry: Record<string, number | null>
-  /** Checklist items (optional) */
   checklist?: Array<{ task: string; completed: boolean }>
-  /** Full public report URL */
+  photoUrls?: string[]
   reportUrl: string
+  // Content toggles (defaults to true for backward compat)
+  includeChemistry?: boolean
+  includeChecklist?: boolean
+  includePhotos?: boolean
+  includeTechName?: boolean
+  // Optional customizations from notification template system
+  customSubject?: string | null
+  customBody?: string | null
+  customFooter?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -60,14 +75,14 @@ const PARAM_META: Record<string, { label: string; unit: string }> = {
 // ---------------------------------------------------------------------------
 
 const C = {
-  bg: "#0f172a", // slate-900
-  surface: "#1e293b", // slate-800
-  border: "#334155", // slate-700
-  text: "#f1f5f9", // slate-100
-  muted: "#94a3b8", // slate-400
-  accent: "#3b82f6", // blue-500
-  accentDark: "#1d4ed8", // blue-700
-  green: "#22c55e", // green-500
+  bg: "#0f172a",
+  surface: "#1e293b",
+  border: "#334155",
+  text: "#f1f5f9",
+  muted: "#94a3b8",
+  accent: "#3b82f6",
+  accentDark: "#1d4ed8",
+  green: "#22c55e",
   white: "#ffffff",
 }
 
@@ -79,21 +94,28 @@ export function ServiceReportEmail({
   customerName,
   techName,
   companyName,
+  companyLogoUrl,
   serviceDate,
   poolName,
   chemistry,
   checklist,
+  photoUrls,
   reportUrl,
+  includeChemistry = true,
+  includeChecklist = true,
+  includePhotos = true,
+  includeTechName = true,
+  customFooter,
 }: ServiceReportEmailProps) {
-  // Build top 4-6 non-null chemistry readings
   const nonNullReadings = Object.entries(chemistry)
     .filter(([, v]) => v !== null && v !== undefined)
     .slice(0, 6)
 
-  // Checklist summary
   const completedCount = checklist?.filter((t) => t.completed).length ?? 0
   const totalCount = checklist?.length ?? 0
   const hasChecklist = totalCount > 0
+
+  const hasPhotos = (photoUrls?.length ?? 0) > 0
 
   return (
     <Html lang="en">
@@ -122,18 +144,31 @@ export function ServiceReportEmail({
               padding: "20px 24px",
             }}
           >
-            <Text
-              style={{
-                margin: "0",
-                color: "rgba(255,255,255,0.8)",
-                fontSize: "11px",
-                fontWeight: "700",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              {companyName}
-            </Text>
+            {companyLogoUrl ? (
+              <Img
+                src={companyLogoUrl}
+                alt={companyName}
+                width="120"
+                height="40"
+                style={{
+                  objectFit: "contain",
+                  marginBottom: "8px",
+                }}
+              />
+            ) : (
+              <Text
+                style={{
+                  margin: "0",
+                  color: "rgba(255,255,255,0.8)",
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {companyName}
+              </Text>
+            )}
             <Heading
               as="h1"
               style={{
@@ -166,18 +201,20 @@ export function ServiceReportEmail({
               padding: "16px 24px",
             }}
           >
-            <Text
-              style={{
-                margin: "0 0 4px",
-                color: C.muted,
-                fontSize: "12px",
-              }}
-            >
-              Serviced by{" "}
-              <span style={{ color: C.text, fontWeight: "600" }}>
-                {techName}
-              </span>
-            </Text>
+            {includeTechName && (
+              <Text
+                style={{
+                  margin: "0 0 4px",
+                  color: C.muted,
+                  fontSize: "12px",
+                }}
+              >
+                Serviced by{" "}
+                <span style={{ color: C.text, fontWeight: "600" }}>
+                  {techName}
+                </span>
+              </Text>
+            )}
             <Text
               style={{
                 margin: "0",
@@ -193,7 +230,7 @@ export function ServiceReportEmail({
           </Section>
 
           {/* ── Chemistry summary ─────────────────────────────────────────── */}
-          {nonNullReadings.length > 0 && (
+          {includeChemistry && nonNullReadings.length > 0 && (
             <Section
               style={{
                 backgroundColor: C.surface,
@@ -219,7 +256,6 @@ export function ServiceReportEmail({
                 Chemistry Readings
               </Text>
 
-              {/* 2-column grid of readings */}
               {nonNullReadings.map(([param, value], idx) => {
                 const meta = PARAM_META[param]
                 const label = meta?.label ?? param
@@ -274,7 +310,7 @@ export function ServiceReportEmail({
           )}
 
           {/* ── Checklist summary ─────────────────────────────────────────── */}
-          {hasChecklist && (
+          {includeChecklist && hasChecklist && (
             <Section
               style={{
                 backgroundColor: C.surface,
@@ -305,7 +341,63 @@ export function ServiceReportEmail({
             </Section>
           )}
 
-          {/* ── Separator ─────────────────────────────────────────────────── */}
+          {/* ── Photos ────────────────────────────────────────────────────── */}
+          {includePhotos && hasPhotos && (
+            <Section
+              style={{
+                backgroundColor: C.surface,
+                borderLeft: `1px solid ${C.border}`,
+                borderRight: `1px solid ${C.border}`,
+                borderTop: `1px solid ${C.border}`,
+                padding: "12px 16px",
+              }}
+            >
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  backgroundColor: "#162032",
+                  color: C.muted,
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Service Photos
+              </Text>
+              <Row>
+                {photoUrls!.slice(0, 4).map((url, idx) => (
+                  <Column key={idx} style={{ width: "25%", padding: "0 4px" }}>
+                    <Img
+                      src={url}
+                      alt={`Service photo ${idx + 1}`}
+                      width="120"
+                      height="90"
+                      style={{
+                        objectFit: "cover",
+                        borderRadius: "6px",
+                        width: "100%",
+                      }}
+                    />
+                  </Column>
+                ))}
+              </Row>
+              {photoUrls!.length > 4 && (
+                <Text
+                  style={{
+                    margin: "8px 0 0",
+                    color: C.muted,
+                    fontSize: "11px",
+                    textAlign: "center",
+                  }}
+                >
+                  +{photoUrls!.length - 4} more photo{photoUrls!.length - 4 > 1 ? "s" : ""} in full report
+                </Text>
+              )}
+            </Section>
+          )}
+
+          {/* ── Separator + CTA ────────────────────────────────────────────── */}
           <Section
             style={{
               backgroundColor: C.surface,
@@ -322,7 +414,6 @@ export function ServiceReportEmail({
               }}
             />
 
-            {/* CTA button */}
             <Button
               href={reportUrl}
               style={{
@@ -355,6 +446,18 @@ export function ServiceReportEmail({
               textAlign: "center",
             }}
           >
+            {customFooter && (
+              <Text
+                style={{
+                  margin: "0 0 8px",
+                  color: C.muted,
+                  fontSize: "12px",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {customFooter}
+              </Text>
+            )}
             <Text
               style={{
                 margin: "0",

@@ -27,6 +27,7 @@ import { createElement } from "react"
 import { render as renderEmail } from "@react-email/render"
 import { ReceiptEmail } from "@/lib/emails/receipt-email"
 import { Resend } from "resend"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // handlePaymentSucceeded
@@ -210,30 +211,45 @@ export async function handlePaymentSucceeded(
           currency: "USD",
         }).format(parseFloat(invoice.total))
 
-        const emailHtml = await renderEmail(
-          createElement(ReceiptEmail, {
-            companyName: org.name,
-            customerName: customer.full_name,
-            invoiceNumber: invoice.invoice_number ?? "N/A",
-            totalAmount: totalFormatted,
-            paymentMethod: paymentMethod as "card" | "ach" | "check" | "cash",
-            paidAt,
-            paymentLast4,
-          })
-        )
+        // Resolve notification template for receipt_email
+        const receiptTemplate = await getResolvedTemplate(invoice.org_id, "receipt_email", {
+          customer_name: customer.full_name,
+          company_name: org.name,
+          invoice_number: invoice.invoice_number ?? "N/A",
+          invoice_total: totalFormatted,
+          payment_method: paymentMethod,
+          paid_at: paidAt,
+        })
 
-        const resendApiKey = process.env.RESEND_API_KEY
-        if (resendApiKey) {
-          const resend = new Resend(resendApiKey)
-          await resend.emails.send({
-            from: `${org.name} <billing@poolco.app>`,
-            to: [customer.email],
-            subject: `Payment Receipt: Invoice ${invoice.invoice_number ?? ""}`,
-            html: emailHtml,
-          })
-          console.log("[handlePaymentSucceeded] Receipt email sent to:", customer.email)
-        } else {
-          console.warn("[handlePaymentSucceeded] RESEND_API_KEY not set, skipping receipt email")
+        // Skip receipt email if template is disabled
+        if (receiptTemplate) {
+          const emailHtml = await renderEmail(
+            createElement(ReceiptEmail, {
+              companyName: org.name,
+              customerName: customer.full_name,
+              invoiceNumber: invoice.invoice_number ?? "N/A",
+              totalAmount: totalFormatted,
+              paymentMethod: paymentMethod as "card" | "ach" | "check" | "cash",
+              paidAt,
+              paymentLast4,
+              customBody: receiptTemplate.body_html,
+              customFooter: null, // Footer resolved into body_html by template engine
+            })
+          )
+
+          const resendApiKey = process.env.RESEND_API_KEY
+          if (resendApiKey) {
+            const resend = new Resend(resendApiKey)
+            await resend.emails.send({
+              from: `${org.name} <billing@poolco.app>`,
+              to: [customer.email],
+              subject: receiptTemplate.subject ?? `Payment Receipt: Invoice ${invoice.invoice_number ?? ""}`,
+              html: emailHtml,
+            })
+            console.log("[handlePaymentSucceeded] Receipt email sent to:", customer.email)
+          } else {
+            console.warn("[handlePaymentSucceeded] RESEND_API_KEY not set, skipping receipt email")
+          }
         }
       }
     }

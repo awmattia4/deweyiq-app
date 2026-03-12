@@ -39,6 +39,7 @@ import { render as renderEmail } from "@react-email/render"
 import { signPayToken } from "@/lib/pay-token"
 import { Resend } from "resend"
 import { syncInvoiceToQbo } from "@/actions/qbo-sync"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1168,8 +1169,27 @@ export async function sendInvoice(
 
     const now = new Date()
 
+    // ── 4b. Resolve notification templates ────────────────────────────────
+    const emailTemplate = await getResolvedTemplate(orgId, "invoice_email", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      invoice_number: invoiceNumber ?? invoiceId,
+      invoice_total: totalFormatted,
+      due_date: dueDateFormatted ?? "",
+      billing_period: billingPeriod ?? "",
+      payment_link: paymentUrl,
+    })
+
+    const smsTemplate = await getResolvedTemplate(orgId, "invoice_sms", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      invoice_number: invoiceNumber ?? invoiceId,
+      invoice_total: totalFormatted,
+      payment_link: paymentUrl,
+    })
+
     // ── 5. Email delivery ────────────────────────────────────────────────
-    if (doEmail) {
+    if (doEmail && emailTemplate) {
       if (!customer.email) {
         // If email was requested but customer has no email, skip silently
         console.warn(`[sendInvoice] Customer ${customer.id} has no email — skipping email delivery`)
@@ -1223,7 +1243,7 @@ export async function sendInvoice(
           createElement(InvoiceDocument, documentProps) as any
         )
 
-        // Render email HTML
+        // Render email HTML (with template customizations)
         const emailHtml = await renderEmail(
           createElement(InvoiceEmail, {
             companyName,
@@ -1235,6 +1255,8 @@ export async function sendInvoice(
             billingPeriod,
             billingModel: invoice.billing_model,
             stopCount,
+            customBody: emailTemplate.body_html,
+            customFooter: null, // Footer already resolved into body_html by template engine
           })
         )
 
@@ -1262,7 +1284,7 @@ export async function sendInvoice(
           const { error: resendError } = await resend.emails.send({
             from: fromAddress,
             to: isDev ? ["delivered@resend.dev"] : [customer.email],
-            subject: `Invoice #${invoiceNumber ?? invoiceId} from ${companyName}`,
+            subject: emailTemplate.subject ?? `Invoice #${invoiceNumber ?? invoiceId} from ${companyName}`,
             html: emailHtml,
             attachments: [
               {
@@ -1292,7 +1314,7 @@ export async function sendInvoice(
     }
 
     // ── 6. SMS delivery ──────────────────────────────────────────────────
-    if (doSms && customer.phone) {
+    if (doSms && customer.phone && smsTemplate) {
       try {
         const supabase = await createClient()
         await supabase.functions.invoke("send-invoice-sms", {
@@ -1303,6 +1325,7 @@ export async function sendInvoice(
             total: totalFormatted,
             companyName,
             type: "invoice",
+            customText: smsTemplate.sms_text ?? undefined,
           },
         })
 

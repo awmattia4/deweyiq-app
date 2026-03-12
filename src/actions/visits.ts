@@ -11,6 +11,7 @@ import {
   checklistTemplates,
   checklistTasks,
   serviceVisits,
+  alerts,
   orgs,
   profiles,
 } from "@/lib/db/schema"
@@ -20,6 +21,8 @@ import type { SanitizerType } from "@/lib/chemistry/targets"
 import { render as renderEmail } from "@react-email/render"
 import { ServiceReportEmail } from "@/lib/emails/service-report-email"
 import { signReportToken } from "@/lib/reports/report-token"
+import { getOrgSettings } from "@/actions/company-settings"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +58,13 @@ export interface CompleteStopInput {
   checklist: Array<{ taskId: string; completed: boolean; notes: string }>
   notes: string
   photoStoragePaths: string[]
+  /** When true, bypasses requirement warnings and completes anyway, generating an incomplete_data alert */
+  overrideWarnings?: boolean
+}
+
+export interface CompleteStopWarnings {
+  missingChemistry: string[]
+  missingChecklist: string[]
 }
 
 export interface SkipStopInput {
@@ -273,7 +283,7 @@ export async function getStopContext(
  */
 export async function completeStop(
   input: CompleteStopInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; warnings?: CompleteStopWarnings }> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
 
@@ -281,6 +291,70 @@ export async function completeStop(
     // ── 1. Resolve tech profile ID ──────────────────────────────────────────
     // token.sub is the auth.uid() — we need the profiles.id (same UUID in our schema)
     const techId = token.sub
+
+    // ── 2. Check service requirements (warn-but-allow pattern) ───────────────
+    // Fetch org_settings to validate required chemistry and checklist items.
+    // This is best-effort — if settings can't be fetched, we skip validation.
+    const missingChemistry: string[] = []
+    const missingChecklist: string[] = []
+
+    if (!input.overrideWarnings) {
+      try {
+        const settings = await getOrgSettings()
+
+        if (settings) {
+          // ── Chemistry requirements: check per sanitizer type ───────────────
+          if (settings.required_chemistry_by_sanitizer) {
+            // Fetch pool's sanitizer type to know which requirements apply
+            const poolRow = await adminDb
+              .select({ sanitizerType: pools.sanitizer_type })
+              .from(pools)
+              .where(eq(pools.id, input.poolId))
+              .limit(1)
+
+            const sanitizerType = (poolRow[0]?.sanitizerType ?? "chlorine") as string
+            const requiredParams =
+              settings.required_chemistry_by_sanitizer[sanitizerType] ?? []
+
+            for (const param of requiredParams) {
+              const val = input.chemistry[param]
+              if (val === null || val === undefined) {
+                missingChemistry.push(param)
+              }
+            }
+          }
+
+          // ── Checklist requirements ─────────────────────────────────────────
+          if (
+            settings.required_checklist_task_ids &&
+            settings.required_checklist_task_ids.length > 0
+          ) {
+            const completedTaskIds = new Set(
+              input.checklist
+                .filter((t) => t.completed)
+                .map((t) => t.taskId)
+            )
+
+            for (const requiredId of settings.required_checklist_task_ids) {
+              if (!completedTaskIds.has(requiredId)) {
+                missingChecklist.push(requiredId)
+              }
+            }
+          }
+        }
+      } catch (settingsErr) {
+        // Non-fatal — skip validation if settings fetch fails
+        console.error("[completeStop] Could not fetch org settings for validation:", settingsErr)
+      }
+
+      // Return warnings without completing — tech must explicitly override
+      if (missingChemistry.length > 0 || missingChecklist.length > 0) {
+        return {
+          success: false,
+          warnings: { missingChemistry, missingChecklist },
+        }
+      }
+    }
 
     // ── 2. Fetch customer info for report and email check ───────────────────
     // Use adminDb to bypass RLS for this read — we just verified auth via token
@@ -332,12 +406,20 @@ export async function completeStop(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
     const reportUrl = `${appUrl}/api/reports/${reportToken}`
 
-    // ── 7. Render branded React Email report HTML ──────────────────────────
+    // ── 7. Resolve service report email template ────────────────────────────
     const serviceDate = now.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
+    })
+
+    const reportTemplate = await getResolvedTemplate(orgId, "service_report_email", {
+      customer_name: customerName,
+      company_name: companyName,
+      tech_name: techName,
+      service_date: serviceDate,
+      pool_name: poolName,
     })
 
     const reportHtml = await renderEmail(
@@ -353,6 +435,7 @@ export async function completeStop(
           completed: item.completed,
         })),
         reportUrl,
+        customFooter: reportTemplate?.body_html ?? null,
       })
     )
 
@@ -404,10 +487,44 @@ export async function completeStop(
         })
     })
 
-    // ── 10. Best-effort: send email report via Edge Function ────────────────
+    // ── 10. If tech overrode warnings, generate an incomplete_data alert ────
+    // This is best-effort — alert generation failure must never block completion.
+    if (input.overrideWarnings && (missingChemistry.length > 0 || missingChecklist.length > 0)) {
+      try {
+        const visitDate = now.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })
+        await adminDb
+          .insert(alerts)
+          .values({
+            org_id: orgId,
+            alert_type: "incomplete_data",
+            severity: "warning",
+            reference_id: input.visitId,
+            reference_type: "service_visit",
+            title: `${customerName}'s service has incomplete data (tech override)`,
+            description: `Stop completed on ${visitDate} with tech override. Missing: ${[...missingChemistry, ...missingChecklist].join(", ")}`,
+            metadata: {
+              customerId: input.customerId,
+              poolId: input.poolId,
+              techId,
+              missingChemistry,
+              missingChecklist,
+            },
+          })
+          .onConflictDoNothing()
+      } catch (alertErr) {
+        // Best-effort — don't fail the completion if alert generation fails
+        console.error("[completeStop] Alert generation failed (non-blocking):", alertErr)
+      }
+    }
+
+    // ── 11. Best-effort: send email report via Edge Function ────────────────
     // Only send on first completion — edits update report_html silently (no resend).
     // If customer has no email: skip silently — no error, no alert.
-    if (customerEmail && !isUpdate) {
+    // If service_report_email template is disabled: skip silently.
+    if (customerEmail && !isUpdate && reportTemplate) {
       try {
         const supabase = await createClient()
         await supabase.functions.invoke("send-service-report", {
@@ -418,6 +535,7 @@ export async function completeStop(
             reportHtml,
             fromName: companyName,
             fromEmail: "reports@poolco.app",
+            customSubject: reportTemplate.subject ?? undefined,
           },
         })
       } catch (emailErr) {
