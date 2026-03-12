@@ -1,10 +1,12 @@
 /**
  * Phase 6: Work Orders & Quoting — Invoices Schema
+ * Phase 7: Billing & Payments — Extended with billing model, period, payment fields
  *
  * Tables: invoices, invoice_line_items
  *
  * Invoices support multi-WO invoicing (a single invoice can cover multiple
- * work orders, e.g. monthly combined invoice).
+ * work orders, e.g. monthly combined invoice) and billing-model-based
+ * generation (per-stop, flat-rate, plus-chemicals, custom).
  *
  * RLS:
  * - SELECT/INSERT/UPDATE: owner+office
@@ -12,6 +14,7 @@
  */
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -56,6 +59,19 @@ export const invoices = pgTable(
     paid_at: timestamp("paid_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // Phase 7: Billing model & period
+    billing_model: text("billing_model"), // 'per_stop' | 'flat_rate' | 'plus_chemicals' | 'custom'
+    billing_period_start: date("billing_period_start"),
+    billing_period_end: date("billing_period_end"),
+    due_date: date("due_date"),
+    // Phase 7: Payment tracking
+    stripe_payment_intent_id: text("stripe_payment_intent_id"),
+    payment_method: text("payment_method"), // 'card' | 'ach' | 'check' | 'cash' | 'qbo'
+    surcharge_amount: numeric("surcharge_amount", { precision: 10, scale: 2 }),
+    qbo_invoice_id: text("qbo_invoice_id"),
+    // Phase 7: Communication tracking
+    sent_at: timestamp("sent_at", { withTimezone: true }),
+    sent_sms_at: timestamp("sent_sms_at", { withTimezone: true }),
   },
   (table) => [
     index("invoices_org_id_idx").on(table.org_id),
@@ -132,6 +148,9 @@ export const invoiceLineItems = pgTable(
     line_total: numeric("line_total", { precision: 10, scale: 2 }).notNull().default("0"),
     sort_order: integer("sort_order").notNull().default(0),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Phase 7: Link to service visit for per-stop line items
+    visit_id: uuid("visit_id"),
+    stop_date: date("stop_date"),
   },
   (table) => [
     // RLS: owner+office can view invoice line items

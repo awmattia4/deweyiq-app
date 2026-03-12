@@ -1,4 +1,4 @@
-import { boolean, doublePrecision, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { boolean, doublePrecision, index, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -45,6 +45,14 @@ export const customers = pgTable(
     notifications_enabled: boolean("notifications_enabled").notNull().default(true),
     // Phase 6: tax exemption status — when true, WOs/invoices skip tax calculation
     tax_exempt: boolean("tax_exempt").notNull().default(false),
+    // Phase 7: Billing model & payment
+    billing_model: text("billing_model"), // 'per_stop' | 'flat_rate' | 'plus_chemicals' | 'custom'
+    flat_rate_amount: numeric("flat_rate_amount", { precision: 10, scale: 2 }),
+    stripe_customer_id: text("stripe_customer_id"),
+    autopay_enabled: boolean("autopay_enabled").notNull().default(false),
+    autopay_method_id: text("autopay_method_id"),
+    qbo_customer_id: text("qbo_customer_id"),
+    overdue_balance: numeric("overdue_balance", { precision: 10, scale: 2 }),
     // Timestamps
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

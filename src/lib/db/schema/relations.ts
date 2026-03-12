@@ -27,6 +27,9 @@ import { orgSettings } from "./org-settings"
 import { workOrders, workOrderLineItems } from "./work-orders"
 import { quotes } from "./quotes"
 import { invoices, invoiceLineItems } from "./invoices"
+import { paymentRecords } from "./payments"
+import { dunningConfig } from "./dunning"
+import { expenses } from "./expenses"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -186,6 +189,8 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   org: one(orgs, { fields: [invoices.org_id], references: [orgs.id] }),
   customer: one(customers, { fields: [invoices.customer_id], references: [customers.id] }),
   lineItems: many(invoiceLineItems),
+  // Phase 7
+  payments: many(paymentRecords),
 }))
 
 export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) => ({
@@ -193,5 +198,32 @@ export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) =
   invoice: one(invoices, {
     fields: [invoiceLineItems.invoice_id],
     references: [invoices.id],
+  }),
+  // Phase 7: link to service visit for per-stop line items
+  visit: one(serviceVisits, {
+    fields: [invoiceLineItems.visit_id],
+    references: [serviceVisits.id],
+  }),
+}))
+
+// Phase 7 relations
+
+export const paymentRecordsRelations = relations(paymentRecords, ({ one }) => ({
+  org: one(orgs, { fields: [paymentRecords.org_id], references: [orgs.id] }),
+  invoice: one(invoices, {
+    fields: [paymentRecords.invoice_id],
+    references: [invoices.id],
+  }),
+}))
+
+export const dunningConfigRelations = relations(dunningConfig, ({ one }) => ({
+  org: one(orgs, { fields: [dunningConfig.org_id], references: [orgs.id] }),
+}))
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  org: one(orgs, { fields: [expenses.org_id], references: [orgs.id] }),
+  createdBy: one(profiles, {
+    fields: [expenses.created_by],
+    references: [profiles.id],
   }),
 }))

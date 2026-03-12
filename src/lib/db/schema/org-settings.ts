@@ -64,6 +64,22 @@ export const orgSettings = pgTable(
     wo_notify_office_on_flag: boolean("wo_notify_office_on_flag").notNull().default(true),
     wo_notify_customer_on_scheduled: boolean("wo_notify_customer_on_scheduled").notNull().default(true),
     wo_notify_customer_on_complete: boolean("wo_notify_customer_on_complete").notNull().default(true),
+    // Phase 7: Stripe Connect
+    stripe_account_id: text("stripe_account_id"),
+    stripe_onboarding_done: boolean("stripe_onboarding_done").notNull().default(false),
+    // Phase 7: QuickBooks Online integration
+    qbo_realm_id: text("qbo_realm_id"),
+    qbo_access_token: text("qbo_access_token"),
+    qbo_refresh_token: text("qbo_refresh_token"),
+    qbo_token_expires_at: timestamp("qbo_token_expires_at", { withTimezone: true }),
+    qbo_last_sync_at: timestamp("qbo_last_sync_at", { withTimezone: true }),
+    qbo_connected: boolean("qbo_connected").notNull().default(false),
+    // Phase 7: Payment & billing settings
+    payment_provider: text("payment_provider").notNull().default("none"), // 'none' | 'stripe' | 'qbo' | 'both'
+    cc_surcharge_pct: numeric("cc_surcharge_pct", { precision: 5, scale: 4 }),
+    cc_surcharge_enabled: boolean("cc_surcharge_enabled").notNull().default(false),
+    default_payment_terms_days: integer("default_payment_terms_days").notNull().default(30),
+    invoice_footer_text: text("invoice_footer_text"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
