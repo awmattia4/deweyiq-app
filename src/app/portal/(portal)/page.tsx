@@ -1,7 +1,10 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
+import { getOrgBranding } from "@/actions/portal-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { HistoryIcon, FileTextIcon, MessageCircleIcon } from "lucide-react"
+import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "My Portal",
@@ -10,100 +13,102 @@ export const metadata: Metadata = {
 /**
  * Portal home — Customer landing page after login.
  *
- * Phase 1: welcome message with the customer's name, and "coming soon"
- * empty states for Service History, Invoices, and Messages.
- *
- * Per user decision: customer portal has company branding (placeholder
- * in Phase 1; real branding from org settings in Phase 8).
- *
- * Full portal content — service history, upcoming visits, invoices,
- * and messaging — arrives in Phase 8.
+ * Shows welcome message (custom from org_settings or default),
+ * quick-link cards to portal sections, and a summary row for
+ * next visit / outstanding balance / unread messages.
+ * (Summary data will be populated in subsequent portal plans.)
  */
 export default async function PortalHomePage() {
   const user = await getCurrentUser()
-  const firstName = user?.full_name?.split(" ")[0] || "there"
+  if (!user) redirect("/portal/login")
+
+  const firstName = user.full_name?.split(" ")[0] || "there"
+  const branding = await getOrgBranding(user.org_id)
+  const welcomeMessage = branding?.portalWelcomeMessage || `Welcome back, ${firstName}.`
 
   return (
     <div className="flex flex-col gap-6">
       {/* ── Welcome header ───────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back, {firstName}
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">{welcomeMessage}</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Your pool service portal &mdash; see your service history, invoices, and messages here.
+          Here&apos;s everything about your pool service in one place.
         </p>
       </div>
 
-      {/* ── Coming soon sections ─────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-3">
-        {/* Service History */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/10">
-                <HistoryIcon className="h-4 w-4 text-teal-400" aria-hidden="true" />
+      {/* ── Quick-link cards ──────────────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+        <Link href="/portal/history" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/10">
+                  <HistoryIcon className="h-4 w-4 text-teal-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Service History</CardTitle>
               </div>
-              <CardTitle className="text-sm">Service History</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              View your past pool service visits, chemical readings, and technician notes.
-            </p>
-            <p className="text-xs text-primary/70 mt-3 font-medium">
-              Coming in Phase 8
-            </p>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                View past visits, chemical readings, technician notes, and photos.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        {/* Invoices */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10">
-                <FileTextIcon className="h-4 w-4 text-sky-400" aria-hidden="true" />
+        <Link href="/portal/invoices" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/10">
+                  <FileTextIcon className="h-4 w-4 text-sky-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Invoices</CardTitle>
               </div>
-              <CardTitle className="text-sm">Invoices</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Access and pay your invoices, view payment history and upcoming charges.
-            </p>
-            <p className="text-xs text-primary/70 mt-3 font-medium">
-              Coming in Phase 8
-            </p>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                Access and pay invoices, view payment history.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        {/* Messages */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/10">
-                <MessageCircleIcon className="h-4 w-4 text-violet-400" aria-hidden="true" />
+        <Link href="/portal/messages" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/10">
+                  <MessageCircleIcon className="h-4 w-4 text-violet-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Messages</CardTitle>
               </div>
-              <CardTitle className="text-sm">Messages</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Communicate directly with your pool service team.
-            </p>
-            <p className="text-xs text-primary/70 mt-3 font-medium">
-              Coming in Phase 8
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                Communicate directly with your pool service team.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-      {/* ── Status note ──────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-dashed border-border/60 p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Your portal is being set up. Full functionality &mdash; service history,
-          invoices, and messaging &mdash; launches soon.
-        </p>
+        <Link href="/portal/requests" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/10">
+                  <WrenchIcon className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Request Service</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                Submit a one-off service request — repair, opening, or other needs.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   )

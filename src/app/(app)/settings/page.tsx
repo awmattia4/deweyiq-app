@@ -7,7 +7,7 @@ import { orgs } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { createClient } from "@/lib/supabase/server"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
-import { getOrgSettings, getChecklistTasks, getOrgLogoUrl } from "@/actions/company-settings"
+import { getOrgSettings, getChecklistTemplatesWithTasks, getOrgLogoUrl } from "@/actions/company-settings"
 import { getCatalogItems, getWoTemplates } from "@/actions/parts-catalog"
 import { getStripeAccountStatus } from "@/actions/stripe-connect"
 import { getQboStatus } from "@/actions/qbo-sync"
@@ -24,8 +24,9 @@ export default async function SettingsPage() {
   if (!user) redirect("/login")
   if (user.role === "customer") redirect("/portal")
 
-  // Fetch org name for display
+  // Fetch org name and slug for display
   let orgName = "Your Organization"
+  let orgSlug: string | null = null
 
   try {
     const supabase = await createClient()
@@ -35,12 +36,13 @@ export default async function SettingsPage() {
       const token = claimsData.claims as Parameters<typeof withRls>[0]
       const orgResult = await withRls(token, (db) =>
         db
-          .select({ name: orgs.name })
+          .select({ name: orgs.name, slug: orgs.slug })
           .from(orgs)
           .where(eq(orgs.id, user.org_id))
           .limit(1)
       )
       orgName = orgResult[0]?.name ?? "Your Organization"
+      orgSlug = orgResult[0]?.slug ?? null
     }
   } catch (err) {
     console.error("[SettingsPage] Failed to fetch org data:", err)
@@ -49,10 +51,10 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTasks, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings] = isOwner
     ? await Promise.all([
         getOrgSettings(),
-        getChecklistTasks(),
+        getChecklistTemplatesWithTasks(),
         getOrgLogoUrl(),
         getCatalogItems(),
         getWoTemplates(),
@@ -85,8 +87,9 @@ export default async function SettingsPage() {
         email={user.email}
         orgName={orgName}
         orgSettings={orgSettings}
-        checklistTasks={checklistTasks}
+        checklistTemplates={checklistTemplates}
         logoUrl={logoUrl}
+        orgSlug={orgSlug}
         catalogItems={catalogItems}
         woTemplates={woTemplateList}
         stripeStatus={stripeStatus}

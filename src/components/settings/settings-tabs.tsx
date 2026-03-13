@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
 import { DunningSettings } from "@/components/settings/dunning-settings"
 import { TemplateEditor } from "@/components/settings/template-editor"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
-import type { OrgSettings, ChecklistTaskRow } from "@/actions/company-settings"
+import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
 import type { TemplateRow } from "@/actions/notification-templates"
 import type { DunningStep } from "@/lib/db/schema/dunning"
 import type { CatalogItem } from "@/actions/parts-catalog"
@@ -70,8 +70,9 @@ interface SettingsTabsProps {
   orgName: string
   // Owner data (null for non-owners)
   orgSettings: OrgSettings | null
-  checklistTasks: ChecklistTaskRow[]
+  checklistTemplates: ChecklistTemplateRow[]
   logoUrl: string | null
+  orgSlug: string | null
   catalogItems: CatalogItem[]
   woTemplates: WoTemplate[]
   // Billing data (null for non-owners)
@@ -107,8 +108,9 @@ export function SettingsTabs({
   email,
   orgName,
   orgSettings,
-  checklistTasks,
+  checklistTemplates,
   logoUrl,
+  orgSlug,
   catalogItems,
   woTemplates,
   stripeStatus,
@@ -128,7 +130,33 @@ export function SettingsTabs({
 
   // Non-owner roles only see "account"
   const tabs = isOwner ? OWNER_TABS : [{ id: "account" as TabId, label: "Account" }]
-  const [activeTab, setActiveTab] = useState<TabId>(isOwner ? "company" : "account")
+  const validTabIds = new Set(tabs.map((t) => t.id))
+
+  // Read initial tab from URL hash (e.g. #billing)
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.slice(1) as TabId
+      if (hash && validTabIds.has(hash)) return hash
+    }
+    return isOwner ? "company" : "account"
+  })
+
+  // Sync hash → state on popstate (browser back/forward)
+  useEffect(() => {
+    function onHashChange() {
+      const hash = window.location.hash.slice(1) as TabId
+      if (hash && validTabIds.has(hash)) setActiveTab(hash)
+    }
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Update hash when tab changes
+  function switchTab(id: TabId) {
+    setActiveTab(id)
+    window.history.replaceState(null, "", `#${id}`)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,7 +168,7 @@ export function SettingsTabs({
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => switchTab(tab.id)}
                 className={cn(
                   "cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
                   activeTab === tab.id
@@ -177,6 +205,10 @@ export function SettingsTabs({
                 homeBaseAddress={orgSettings?.home_base_address ?? null}
                 homeBaseLat={orgSettings?.home_base_lat ?? null}
                 homeBaseLng={orgSettings?.home_base_lng ?? null}
+                brandColor={orgSettings?.brand_color ?? null}
+                faviconPath={orgSettings?.favicon_path ?? null}
+                portalWelcomeMessage={orgSettings?.portal_welcome_message ?? null}
+                orgSlug={orgSlug}
               />
             </CardContent>
           </Card>
@@ -231,7 +263,7 @@ export function SettingsTabs({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChecklistManager initialTasks={checklistTasks} />
+              <ChecklistManager initialTemplates={checklistTemplates} />
             </CardContent>
           </Card>
 

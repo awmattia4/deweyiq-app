@@ -27,8 +27,56 @@ import { NextResponse, type NextRequest } from "next/server"
  * SECURITY: Uses getClaims() to validate JWT signature locally (does not
  * trust the cookie blindly). See: https://supabase.com/docs/guides/auth/server-side/nextjs
  */
+
+/**
+ * Reserved subdomains that are NOT company portal subdomains.
+ * Requests from these hosts will not have x-portal-slug set.
+ */
+const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "portal", "admin"])
+
+/**
+ * extractPortalSubdomain — parses a company slug from the request host.
+ *
+ * Examples:
+ * - "bluewavepools.poolco.app" → "bluewavepools"
+ * - "app.poolco.app"           → null (reserved)
+ * - "localhost:3000"           → null (dev)
+ * - "poolco.app"               → null (root domain, no subdomain)
+ *
+ * The portal layout reads the x-portal-slug header injected here to
+ * resolve the org without requiring auth (for the login page branding).
+ */
+export function extractPortalSubdomain(host: string): string | null {
+  // Strip port if present
+  const hostname = host.split(":")[0]
+
+  // Must be at least a.b.c to have a subdomain
+  const parts = hostname.split(".")
+  if (parts.length < 3) return null
+
+  const subdomain = parts[0]
+
+  // Skip reserved subdomains
+  if (RESERVED_SUBDOMAINS.has(subdomain)) return null
+
+  return subdomain
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+
+  // Extract portal subdomain from host and pass as header for portal pages
+  const host = request.headers.get("host") ?? ""
+  const portalSlug = extractPortalSubdomain(host)
+
+  if (portalSlug) {
+    // Clone headers to add our custom header
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-portal-slug", portalSlug)
+    supabaseResponse = NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,6 +111,7 @@ export async function updateSession(request: NextRequest) {
   const isPortalPath = pathname.startsWith("/portal")
   const isPortalLoginPath =
     pathname === "/portal/login" || pathname.startsWith("/portal/login/")
+  const isAuthCallbackPath = pathname.startsWith("/auth/portal-callback")
   const isStaffLoginPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
@@ -72,6 +121,11 @@ export async function updateSession(request: NextRequest) {
   // ─── Unauthenticated users ─────────────────────────────────────────────────
 
   if (!isAuthenticated) {
+    // Portal callback is public (it's how you log in)
+    if (isAuthCallbackPath) {
+      return supabaseResponse
+    }
+
     // Portal paths (except portal login) require portal auth
     if (isPortalPath && !isPortalLoginPath) {
       const url = request.nextUrl.clone()

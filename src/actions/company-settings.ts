@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { orgSettings, orgs, checklistTasks, checklistTemplates } from "@/lib/db/schema"
-import { eq, and, isNull, asc } from "drizzle-orm"
+import { eq, and, isNull, isNotNull, asc, ne } from "drizzle-orm"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +59,10 @@ export interface OrgSettings {
   social_media_urls: Record<string, string> | null
   custom_email_footer: string | null
   custom_sms_signature: string | null
+  // Phase 8: Portal branding
+  brand_color: string | null
+  favicon_path: string | null
+  portal_welcome_message: string | null
   created_at: Date
   updated_at: Date
 }
@@ -69,6 +73,13 @@ export interface ChecklistTaskRow {
   is_required: boolean
   requires_photo: boolean
   sort_order: number
+}
+
+export interface ChecklistTemplateRow {
+  id: string
+  name: string
+  is_default: boolean
+  tasks: ChecklistTaskRow[]
 }
 
 /** Default org settings returned when no row exists yet */
@@ -115,6 +126,10 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   social_media_urls: null,
   custom_email_footer: null,
   custom_sms_signature: null,
+  // Phase 8 defaults
+  brand_color: null,
+  favicon_path: null,
+  portal_welcome_message: null,
 }
 
 // ---------------------------------------------------------------------------
@@ -411,14 +426,54 @@ export async function createLogoUploadUrl(
 }
 
 // ---------------------------------------------------------------------------
+// createFaviconUploadUrl
+// ---------------------------------------------------------------------------
+
+/**
+ * createFaviconUploadUrl — generates a signed URL for uploading a portal favicon.
+ * Accepts ICO or PNG files. Stored at {orgId}/portal/favicon.{ext} in company-assets bucket.
+ */
+export async function createFaviconUploadUrl(
+  fileName: string
+): Promise<{ signedUrl: string; token: string; path: string } | { error: string }> {
+  const rlsToken = await getRlsToken()
+  if (!rlsToken) return { error: "Not authenticated" }
+
+  const userRole = rlsToken.user_role as string | undefined
+  if (userRole !== "owner") return { error: "Only owners can upload favicons" }
+
+  const orgId = rlsToken.org_id as string
+  if (!orgId) return { error: "No org found" }
+
+  const supabase = await createClient()
+  const ext = fileName.split(".").pop() ?? "png"
+  const path = `${orgId}/portal/favicon.${ext}`
+
+  const { data, error } = await supabase.storage
+    .from("company-assets")
+    .createSignedUploadUrl(path, { upsert: true })
+
+  if (error) {
+    console.error("[createFaviconUploadUrl] Error:", error)
+    return { error: error.message }
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    token: data.token,
+    path,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Checklist CRUD
 // ---------------------------------------------------------------------------
 
 /**
- * getChecklistTasks — Returns all org-level checklist tasks (template_id null, customer_id null).
- * These are the "universal" tasks that apply to all stops.
+ * getChecklistTasks — Returns checklist tasks for a specific template.
+ * When templateId is omitted, returns tasks with template_id IS NULL (legacy compat).
  */
-export async function getChecklistTasks(): Promise<ChecklistTaskRow[]> {
+export async function getChecklistTasks(templateId?: string): Promise<ChecklistTaskRow[]> {
   const token = await getRlsToken()
   if (!token) return []
 
@@ -439,7 +494,9 @@ export async function getChecklistTasks(): Promise<ChecklistTaskRow[]> {
         .where(
           and(
             eq(checklistTasks.org_id, orgId),
-            isNull(checklistTasks.template_id),
+            templateId
+              ? eq(checklistTasks.template_id, templateId)
+              : isNull(checklistTasks.template_id),
             isNull(checklistTasks.customer_id),
             eq(checklistTasks.is_deleted, false)
           )
@@ -454,10 +511,11 @@ export async function getChecklistTasks(): Promise<ChecklistTaskRow[]> {
 }
 
 /**
- * addChecklistTask — Adds a new org-level checklist task.
+ * addChecklistTask — Adds a checklist task to a template (or org-level if no templateId).
  */
 export async function addChecklistTask(
   label: string,
+  templateId?: string,
   options?: { is_required?: boolean; requires_photo?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
   const token = await getRlsToken()
@@ -475,7 +533,7 @@ export async function addChecklistTask(
   if (!trimmed) return { success: false, error: "Task label cannot be empty" }
 
   try {
-    // Get max sort_order for new task
+    // Get max sort_order for new task within this template
     const existing = await withRls(token, (db) =>
       db
         .select({ sort_order: checklistTasks.sort_order })
@@ -483,7 +541,9 @@ export async function addChecklistTask(
         .where(
           and(
             eq(checklistTasks.org_id, orgId),
-            isNull(checklistTasks.template_id),
+            templateId
+              ? eq(checklistTasks.template_id, templateId)
+              : isNull(checklistTasks.template_id),
             isNull(checklistTasks.customer_id)
           )
         )
@@ -496,6 +556,7 @@ export async function addChecklistTask(
     await withRls(token, (db) =>
       db.insert(checklistTasks).values({
         org_id: orgId,
+        template_id: templateId ?? null,
         label: trimmed,
         is_required: options?.is_required ?? true,
         requires_photo: options?.requires_photo ?? false,
@@ -623,6 +684,668 @@ export async function reorderChecklistTasks(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to reorder tasks",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Checklist template CRUD
+// ---------------------------------------------------------------------------
+
+/**
+ * getChecklistTemplatesWithTasks — returns all templates with their tasks.
+ * Creates a default "Routine Service" template if none exist (auto-migration).
+ * Also moves orphan tasks (template_id IS NULL) under the default template.
+ */
+export async function getChecklistTemplatesWithTasks(): Promise<ChecklistTemplateRow[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const orgId = token.org_id as string
+  if (!orgId) return []
+
+  try {
+    return await withRls(token, async (db) => {
+      // Fetch all templates
+      let templates = await db
+        .select({
+          id: checklistTemplates.id,
+          name: checklistTemplates.name,
+          is_default: checklistTemplates.is_default,
+        })
+        .from(checklistTemplates)
+        .where(eq(checklistTemplates.org_id, orgId))
+        .orderBy(asc(checklistTemplates.name))
+
+      // Auto-create default template if none exist
+      if (templates.length === 0) {
+        const [newTemplate] = await db
+          .insert(checklistTemplates)
+          .values({
+            org_id: orgId,
+            name: "Routine Service",
+            is_default: true,
+          })
+          .returning({
+            id: checklistTemplates.id,
+            name: checklistTemplates.name,
+            is_default: checklistTemplates.is_default,
+          })
+        templates = [newTemplate]
+      }
+
+      // Ensure exactly one default
+      const hasDefault = templates.some((t) => t.is_default)
+      if (!hasDefault) {
+        await db
+          .update(checklistTemplates)
+          .set({ is_default: true })
+          .where(eq(checklistTemplates.id, templates[0].id))
+        templates[0].is_default = true
+      }
+
+      const defaultTemplateId = templates.find((t) => t.is_default)!.id
+
+      // Move orphan tasks (template_id IS NULL) under the default template
+      await db
+        .update(checklistTasks)
+        .set({ template_id: defaultTemplateId })
+        .where(
+          and(
+            eq(checklistTasks.org_id, orgId),
+            isNull(checklistTasks.template_id),
+            isNull(checklistTasks.customer_id)
+          )
+        )
+
+      // Fetch all tasks for all templates
+      const allTasks = await db
+        .select({
+          id: checklistTasks.id,
+          template_id: checklistTasks.template_id,
+          label: checklistTasks.label,
+          is_required: checklistTasks.is_required,
+          requires_photo: checklistTasks.requires_photo,
+          sort_order: checklistTasks.sort_order,
+        })
+        .from(checklistTasks)
+        .where(
+          and(
+            eq(checklistTasks.org_id, orgId),
+            isNull(checklistTasks.customer_id),
+            eq(checklistTasks.is_deleted, false)
+          )
+        )
+        .orderBy(asc(checklistTasks.sort_order))
+
+      // Group tasks by template
+      const tasksByTemplate = new Map<string, ChecklistTaskRow[]>()
+      for (const task of allTasks) {
+        if (!task.template_id) continue
+        const list = tasksByTemplate.get(task.template_id) ?? []
+        list.push({
+          id: task.id,
+          label: task.label,
+          is_required: task.is_required,
+          requires_photo: task.requires_photo,
+          sort_order: task.sort_order,
+        })
+        tasksByTemplate.set(task.template_id, list)
+      }
+
+      return templates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        is_default: t.is_default,
+        tasks: tasksByTemplate.get(t.id) ?? [],
+      }))
+    })
+  } catch (err) {
+    console.error("[getChecklistTemplatesWithTasks] Error:", err)
+    return []
+  }
+}
+
+/**
+ * createChecklistTemplate — creates a new service type template.
+ */
+export async function createChecklistTemplate(
+  name: string
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage service types" }
+  }
+
+  const orgId = token.org_id as string
+  if (!orgId) return { success: false, error: "No org found" }
+
+  const trimmed = name.trim()
+  if (!trimmed) return { success: false, error: "Name cannot be empty" }
+
+  try {
+    const [created] = await withRls(token, (db) =>
+      db
+        .insert(checklistTemplates)
+        .values({ org_id: orgId, name: trimmed, is_default: false })
+        .returning({ id: checklistTemplates.id })
+    )
+
+    revalidatePath("/settings")
+    return { success: true, id: created.id }
+  } catch (err) {
+    console.error("[createChecklistTemplate] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create service type",
+    }
+  }
+}
+
+/**
+ * renameChecklistTemplate — renames a service type template.
+ */
+export async function renameChecklistTemplate(
+  templateId: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage service types" }
+  }
+
+  const trimmed = name.trim()
+  if (!trimmed) return { success: false, error: "Name cannot be empty" }
+
+  try {
+    await withRls(token, (db) =>
+      db
+        .update(checklistTemplates)
+        .set({ name: trimmed })
+        .where(eq(checklistTemplates.id, templateId))
+    )
+
+    revalidatePath("/settings")
+    return { success: true }
+  } catch (err) {
+    console.error("[renameChecklistTemplate] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to rename service type",
+    }
+  }
+}
+
+/**
+ * deleteChecklistTemplate — deletes a service type template and its tasks.
+ * Cannot delete the default template.
+ */
+export async function deleteChecklistTemplate(
+  templateId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage service types" }
+  }
+
+  try {
+    return await withRls(token, async (db) => {
+      // Check if this is the default template
+      const [template] = await db
+        .select({ is_default: checklistTemplates.is_default })
+        .from(checklistTemplates)
+        .where(eq(checklistTemplates.id, templateId))
+        .limit(1)
+
+      if (!template) return { success: false, error: "Template not found" }
+      if (template.is_default) return { success: false, error: "Cannot delete the default service type" }
+
+      // Delete template (cascades to tasks via FK onDelete)
+      await db.delete(checklistTemplates).where(eq(checklistTemplates.id, templateId))
+
+      revalidatePath("/settings")
+      return { success: true }
+    })
+  } catch (err) {
+    console.error("[deleteChecklistTemplate] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete service type",
+    }
+  }
+}
+
+/**
+ * setDefaultChecklistTemplate — marks a template as default and unmarks all others.
+ */
+export async function setDefaultChecklistTemplate(
+  templateId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage service types" }
+  }
+
+  const orgId = token.org_id as string
+  if (!orgId) return { success: false, error: "No org found" }
+
+  try {
+    await withRls(token, async (db) => {
+      // Unmark all templates for this org
+      await db
+        .update(checklistTemplates)
+        .set({ is_default: false })
+        .where(
+          and(
+            eq(checklistTemplates.org_id, orgId),
+            ne(checklistTemplates.id, templateId)
+          )
+        )
+      // Mark the target template
+      await db
+        .update(checklistTemplates)
+        .set({ is_default: true })
+        .where(eq(checklistTemplates.id, templateId))
+    })
+
+    revalidatePath("/settings")
+    return { success: true }
+  } catch (err) {
+    console.error("[setDefaultChecklistTemplate] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to set default service type",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-Customer Checklist Management
+// ---------------------------------------------------------------------------
+
+/**
+ * Structured view of a customer's effective checklist: template tasks (with
+ * per-customer suppression status) plus any customer-specific additions.
+ */
+export interface CustomerChecklistView {
+  templateTasks: Array<{
+    id: string
+    label: string
+    is_required: boolean
+    requires_photo: boolean
+    sort_order: number
+    isSuppressed: boolean
+    tombstoneId: string | null
+  }>
+  customTasks: Array<{
+    id: string
+    label: string
+    is_required: boolean
+    requires_photo: boolean
+    sort_order: number
+  }>
+}
+
+/**
+ * getCustomerChecklistView — Returns the effective checklist for a customer:
+ * template tasks (with suppression status) + customer-specific additions.
+ */
+export async function getCustomerChecklistView(
+  customerId: string
+): Promise<CustomerChecklistView> {
+  const token = await getRlsToken()
+  if (!token) return { templateTasks: [], customTasks: [] }
+
+  const orgId = token.org_id as string
+  if (!orgId) return { templateTasks: [], customTasks: [] }
+
+  try {
+    // 1. Find the default template for this org
+    const templates = await withRls(token, (db) =>
+      db
+        .select({ id: checklistTemplates.id })
+        .from(checklistTemplates)
+        .where(
+          and(
+            eq(checklistTemplates.org_id, orgId),
+            eq(checklistTemplates.is_default, true)
+          )
+        )
+        .limit(1)
+    )
+
+    const defaultTemplateId = templates[0]?.id ?? null
+
+    // 2. Fetch template tasks (org-level, not deleted)
+    const templateTaskRows = defaultTemplateId
+      ? await withRls(token, (db) =>
+          db
+            .select({
+              id: checklistTasks.id,
+              label: checklistTasks.label,
+              is_required: checklistTasks.is_required,
+              requires_photo: checklistTasks.requires_photo,
+              sort_order: checklistTasks.sort_order,
+            })
+            .from(checklistTasks)
+            .where(
+              and(
+                eq(checklistTasks.org_id, orgId),
+                eq(checklistTasks.template_id, defaultTemplateId),
+                isNull(checklistTasks.customer_id),
+                eq(checklistTasks.is_deleted, false)
+              )
+            )
+            .orderBy(asc(checklistTasks.sort_order))
+        )
+      : []
+
+    // 3. Fetch ALL customer-level rows (both additions and tombstones)
+    const customerRows = await withRls(token, (db) =>
+      db
+        .select({
+          id: checklistTasks.id,
+          label: checklistTasks.label,
+          is_required: checklistTasks.is_required,
+          requires_photo: checklistTasks.requires_photo,
+          sort_order: checklistTasks.sort_order,
+          is_deleted: checklistTasks.is_deleted,
+          suppresses_task_id: checklistTasks.suppresses_task_id,
+        })
+        .from(checklistTasks)
+        .where(
+          and(
+            eq(checklistTasks.org_id, orgId),
+            eq(checklistTasks.customer_id, customerId)
+          )
+        )
+        .orderBy(asc(checklistTasks.sort_order))
+    )
+
+    // 4. Build suppression map: templateTaskId → tombstoneId
+    const suppressionMap = new Map<string, string>()
+    for (const row of customerRows) {
+      if (row.is_deleted && row.suppresses_task_id) {
+        suppressionMap.set(row.suppresses_task_id, row.id)
+      }
+    }
+
+    // 5. Build template tasks with suppression status
+    const templateTasks = templateTaskRows.map((t) => ({
+      id: t.id,
+      label: t.label,
+      is_required: t.is_required,
+      requires_photo: t.requires_photo,
+      sort_order: t.sort_order,
+      isSuppressed: suppressionMap.has(t.id),
+      tombstoneId: suppressionMap.get(t.id) ?? null,
+    }))
+
+    // 6. Build customer additions (non-deleted customer rows)
+    const customTasks = customerRows
+      .filter((r) => !r.is_deleted)
+      .map((r) => ({
+        id: r.id,
+        label: r.label,
+        is_required: r.is_required,
+        requires_photo: r.requires_photo,
+        sort_order: r.sort_order,
+      }))
+
+    return { templateTasks, customTasks }
+  } catch (err) {
+    console.error("[getCustomerChecklistView] Error:", err)
+    return { templateTasks: [], customTasks: [] }
+  }
+}
+
+/**
+ * suppressTemplateTask — Creates a tombstone row to suppress a template task
+ * for a specific customer.
+ */
+export async function suppressTemplateTask(
+  customerId: string,
+  templateTaskId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage checklists" }
+  }
+
+  const orgId = token.org_id as string
+  if (!orgId) return { success: false, error: "No org found" }
+
+  try {
+    // Fetch the template task to copy its label (label is NOT NULL in schema)
+    const [templateTask] = await withRls(token, (db) =>
+      db
+        .select({ label: checklistTasks.label })
+        .from(checklistTasks)
+        .where(eq(checklistTasks.id, templateTaskId))
+        .limit(1)
+    )
+
+    if (!templateTask) {
+      return { success: false, error: "Template task not found" }
+    }
+
+    await withRls(token, (db) =>
+      db.insert(checklistTasks).values({
+        org_id: orgId,
+        customer_id: customerId,
+        template_id: null,
+        label: templateTask.label,
+        is_deleted: true,
+        suppresses_task_id: templateTaskId,
+        sort_order: 0,
+      })
+    )
+
+    revalidatePath(`/customers/${customerId}`)
+    return { success: true }
+  } catch (err) {
+    console.error("[suppressTemplateTask] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to suppress task",
+    }
+  }
+}
+
+/**
+ * restoreTemplateTask — Deletes a tombstone row to restore a previously
+ * suppressed template task for a customer.
+ */
+export async function restoreTemplateTask(
+  tombstoneId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage checklists" }
+  }
+
+  try {
+    await withRls(token, (db) =>
+      db.delete(checklistTasks).where(eq(checklistTasks.id, tombstoneId))
+    )
+
+    revalidatePath("/customers")
+    return { success: true }
+  } catch (err) {
+    console.error("[restoreTemplateTask] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to restore task",
+    }
+  }
+}
+
+/**
+ * addCustomerTask — Adds a customer-specific checklist task.
+ */
+export async function addCustomerTask(
+  customerId: string,
+  data: { label: string; is_required?: boolean; requires_photo?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage checklists" }
+  }
+
+  const orgId = token.org_id as string
+  if (!orgId) return { success: false, error: "No org found" }
+
+  const trimmed = data.label.trim()
+  if (!trimmed) return { success: false, error: "Task label cannot be empty" }
+
+  try {
+    // Get max sort_order for customer tasks
+    const existing = await withRls(token, (db) =>
+      db
+        .select({ sort_order: checklistTasks.sort_order })
+        .from(checklistTasks)
+        .where(
+          and(
+            eq(checklistTasks.org_id, orgId),
+            eq(checklistTasks.customer_id, customerId),
+            eq(checklistTasks.is_deleted, false)
+          )
+        )
+    )
+    const nextOrder = existing.length > 0
+      ? Math.max(...existing.map((r) => r.sort_order)) + 1
+      : 0
+
+    await withRls(token, (db) =>
+      db.insert(checklistTasks).values({
+        org_id: orgId,
+        customer_id: customerId,
+        template_id: null,
+        label: trimmed,
+        is_required: data.is_required ?? true,
+        requires_photo: data.requires_photo ?? false,
+        sort_order: nextOrder,
+        is_deleted: false,
+      })
+    )
+
+    revalidatePath(`/customers/${customerId}`)
+    return { success: true }
+  } catch (err) {
+    console.error("[addCustomerTask] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to add customer task",
+    }
+  }
+}
+
+/**
+ * updateCustomerTask — Updates a customer-specific checklist task.
+ * Only allows updating tasks that belong to a customer (customer_id IS NOT NULL).
+ */
+export async function updateCustomerTask(
+  taskId: string,
+  data: { label?: string; is_required?: boolean; requires_photo?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage checklists" }
+  }
+
+  try {
+    const updateData: Record<string, unknown> = {}
+    if (data.label !== undefined) {
+      const trimmed = data.label.trim()
+      if (!trimmed) return { success: false, error: "Task label cannot be empty" }
+      updateData.label = trimmed
+    }
+    if (data.is_required !== undefined) updateData.is_required = data.is_required
+    if (data.requires_photo !== undefined) updateData.requires_photo = data.requires_photo
+
+    if (Object.keys(updateData).length === 0) return { success: true }
+
+    await withRls(token, (db) =>
+      db
+        .update(checklistTasks)
+        .set(updateData)
+        .where(
+          and(
+            eq(checklistTasks.id, taskId),
+            isNotNull(checklistTasks.customer_id)
+          )
+        )
+    )
+
+    revalidatePath("/customers")
+    return { success: true }
+  } catch (err) {
+    console.error("[updateCustomerTask] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to update task",
+    }
+  }
+}
+
+/**
+ * deleteCustomerTask — Hard deletes a customer-specific checklist task.
+ * Only allows deleting tasks that belong to a customer (customer_id IS NOT NULL).
+ */
+export async function deleteCustomerTask(
+  taskId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Only owners and office staff can manage checklists" }
+  }
+
+  try {
+    await withRls(token, (db) =>
+      db
+        .delete(checklistTasks)
+        .where(
+          and(
+            eq(checklistTasks.id, taskId),
+            isNotNull(checklistTasks.customer_id)
+          )
+        )
+    )
+
+    revalidatePath("/customers")
+    return { success: true }
+  } catch (err) {
+    console.error("[deleteCustomerTask] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete task",
     }
   }
 }
