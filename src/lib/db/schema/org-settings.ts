@@ -86,6 +86,10 @@ export const orgSettings = pgTable(
     social_media_urls: jsonb("social_media_urls").$type<Record<string, string>>(),
     custom_email_footer: text("custom_email_footer"),
     custom_sms_signature: text("custom_sms_signature"),
+    // Phase 8: Customer Portal branding
+    brand_color: text("brand_color"),
+    favicon_path: text("favicon_path"),
+    portal_welcome_message: text("portal_welcome_message"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

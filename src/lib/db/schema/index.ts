@@ -40,6 +40,10 @@ export * from "./dunning"
 export * from "./expenses"
 export * from "./notification-templates"
 
+// Phase 08 tables
+export * from "./portal-messages"
+export * from "./service-requests"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

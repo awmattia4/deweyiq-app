@@ -22,6 +22,48 @@
       "when": 1773080616409,
       "tag": "0002_chunky_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773083736950,
+      "tag": "0003_high_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773266481358,
+      "tag": "0004_typical_phil_sheldon",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773276228471,
+      "tag": "0005_lumpy_proemial_gods",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773357428618,
+      "tag": "0006_opposite_shinko_yamashiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773361800721,
+      "tag": "0007_tidy_red_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773422520659,
+      "tag": "0008_milky_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

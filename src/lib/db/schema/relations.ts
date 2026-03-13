@@ -31,6 +31,8 @@ import { paymentRecords } from "./payments"
 import { dunningConfig } from "./dunning"
 import { expenses } from "./expenses"
 import { notificationTemplates } from "./notification-templates"
+import { portalMessages } from "./portal-messages"
+import { serviceRequests } from "./service-requests"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -47,6 +49,9 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   // Phase 6
   workOrders: many(workOrders),
   invoices: many(invoices),
+  // Phase 8
+  portalMessages: many(portalMessages),
+  serviceRequests: many(serviceRequests),
 }))
 
 export const poolsRelations = relations(pools, ({ one, many }) => ({
@@ -116,6 +121,10 @@ export const routeStopsRelations = relations(routeStops, ({ one }) => ({
     fields: [routeStops.schedule_rule_id],
     references: [scheduleRules.id],
   }),
+  checklistTemplate: one(checklistTemplates, {
+    fields: [routeStops.checklist_template_id],
+    references: [checklistTemplates.id],
+  }),
 }))
 
 export const scheduleRulesRelations = relations(scheduleRules, ({ one, many }) => ({
@@ -123,6 +132,10 @@ export const scheduleRulesRelations = relations(scheduleRules, ({ one, many }) =
   customer: one(customers, { fields: [scheduleRules.customer_id], references: [customers.id] }),
   pool: one(pools, { fields: [scheduleRules.pool_id], references: [pools.id] }),
   tech: one(profiles, { fields: [scheduleRules.tech_id], references: [profiles.id] }),
+  checklistTemplate: one(checklistTemplates, {
+    fields: [scheduleRules.checklist_template_id],
+    references: [checklistTemplates.id],
+  }),
   routeStops: many(routeStops),
 }))
 
@@ -233,4 +246,22 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
 
 export const notificationTemplatesRelations = relations(notificationTemplates, ({ one }) => ({
   org: one(orgs, { fields: [notificationTemplates.org_id], references: [orgs.id] }),
+}))
+
+// Phase 8 relations
+
+export const portalMessagesRelations = relations(portalMessages, ({ one }) => ({
+  org: one(orgs, { fields: [portalMessages.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [portalMessages.customer_id], references: [customers.id] }),
+  serviceRequest: one(serviceRequests, {
+    fields: [portalMessages.service_request_id],
+    references: [serviceRequests.id],
+  }),
+}))
+
+export const serviceRequestsRelations = relations(serviceRequests, ({ one, many }) => ({
+  org: one(orgs, { fields: [serviceRequests.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [serviceRequests.customer_id], references: [customers.id] }),
+  pool: one(pools, { fields: [serviceRequests.pool_id], references: [pools.id] }),
+  portalMessages: many(portalMessages),
 }))
