@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 8 of 11 (Customer Portal) — IN PROGRESS
-Plan: 1/6 complete (01 done)
-Status: Phase 8 Plan 01 complete — Portal foundation: magic link auth, subdomain routing, company branding, portal_messages + service_requests schema
-Last activity: 2026-03-13 — Phase 8 Plan 01 executed: Portal foundation
+Plan: 2/6 complete (01, 02 done)
+Status: Phase 8 Plan 02 complete — Service history: timeline, chemistry readings, photo gallery with lightbox
+Last activity: 2026-03-13 — Phase 8 Plan 02 executed: Service history view
 
 Progress: [█████████-] 90%
 
@@ -71,6 +71,7 @@ Progress: [█████████-] 90%
 | Phase 07-billing-payments P07 | 9 | 2 tasks | 15 files |
 | Phase 07-billing-payments P08 | 25 | 2 tasks | 24 files |
 | Phase 08-customer-portal P01 | 35 | 2 tasks | 20 files |
+| Phase 08-customer-portal P02 | 10 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -267,6 +268,9 @@ Recent decisions affecting current work:
 - [Phase 08-01]: window.location.href for org switch navigation — JWT org_id change requires full page reload; router.push would not re-run server components with new claims
 - [Phase 08-01]: x-portal-slug injected as request header by proxy.ts middleware — portal layout and login page read it via headers() for subdomain org resolution without query params or cookies
 - [Phase 08-01]: NULL RLS policy pitfall confirmed again for portal_messages and service_requests — all 5 policies manually fixed via ALTER POLICY after drizzle-kit push
+- [Phase 08-02]: adminDb for portal service history queries — customers lack org_id in JWT claims required for RLS; consistent portal-data pattern
+- [Phase 08-02]: Captions plugin static import for yet-another-react-lightbox — YARL plugins are plain functions, not React components; dynamic() only for Lightbox component itself
+- [Phase 08-02]: chemistry_readings explicitly mapped in getServiceHistory — MEMORY.md critical note: manual mapping silently drops fields
 
 ### Pending Todos
 
@@ -291,5 +295,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 08-01-PLAN.md — Portal foundation: magic link auth, subdomain routing, branding, schema
-Resume file: .planning/phases/08-customer-portal/08-02-PLAN.md
+Stopped at: Completed 08-02-PLAN.md — Service history timeline, chemistry display, photo gallery
+Resume file: .planning/phases/08-customer-portal/08-03-PLAN.md
