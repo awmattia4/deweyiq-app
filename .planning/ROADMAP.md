@@ -2,7 +2,7 @@
 
 ## Overview
 
-Seventeen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. Before launch, a comprehensive UI Polish & Launch Readiness phase audits and perfects every screen — fixing cursor states, hover effects, spacing inconsistencies, mobile responsiveness, accessibility, empty states, loading skeletons, error handling, and dark mode consistency across every single page and component. The final phase closes out the roadmap with the public-facing marketing site and subscription billing — converting pool company owners into paying customers with a stunning marketing experience, frictionless sign-up, and Stripe-powered subscription lifecycle.
+Eighteen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. Before launch, a comprehensive UI Polish & Launch Readiness phase audits and perfects every screen — fixing cursor states, hover effects, spacing inconsistencies, mobile responsiveness, accessibility, empty states, loading skeletons, error handling, and dark mode consistency across every single page and component. The marketing site and subscription billing phase converts pool company owners into paying customers with a stunning marketing experience, frictionless sign-up, and Stripe-powered subscription lifecycle. The final phase is Production Launch — flipping every service from test/dev to live, configuring production infrastructure, and verifying the entire platform works end-to-end in the real world.
 
 ## Phases
 
@@ -29,6 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 15: Intelligent Billing Automation** - Per-customer per-visit rates, smart pricing suggestions, bulk shop fee application, billing anomaly detection, and invoice generation preview
 - [ ] **Phase 16: UI Polish & Launch Readiness** - Comprehensive audit and perfection of every screen, component, and interaction — cursor states, hover effects, button text visibility, spacing/typography consistency, mobile responsiveness, accessibility (keyboard nav, screen readers, contrast), loading skeletons, empty states, error pages, dark mode consistency, page transitions, toast notifications, and performance optimization
 - [ ] **Phase 17: Marketing Site & Subscription Billing** - Conversion-optimized public marketing site with interactive app demos, competitor comparisons, ROI calculator, frictionless multi-step sign-up, plus Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
+- [ ] **Phase 18: Production Launch** - Deploy to production, switch all services from test to live (Stripe live keys, Twilio production number, Supabase production config), configure Vercel deployment with custom domain, set up monitoring/alerting, production smoke test of every feature end-to-end, and go live
 
 ## Phase Details
 
@@ -212,14 +213,14 @@ Plans:
   3. The owner can view each tech's pay and commission for any pay period, with a payroll export ready for ADP or Gusto
   4. The owner can see technician scorecards showing stops per day, average stop time, chemical cost per pool, and completion rate — and compare techs side by side
   5. The owner can see which pools are unprofitable based on chemical spend vs. recurring service revenue, with unprofitable pools flagged automatically
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 09-01: Owner revenue dashboard — total, by customer, by tech, time-period filter, trend charts
-- [ ] 09-02: Operational metrics — route completion rates, missed stop counts, on-time percentage per tech
-- [ ] 09-03: Technician pay and commission — per-stop rates, upsell commission, pay period summary, payroll export
-- [ ] 09-04: Technician scorecards — stops/day, avg stop time, chemical cost efficiency, completion rate, comparison view
-- [ ] 09-05: Chemical profitability analysis — chemical spend per pool, revenue per pool, margin calculation, flagging unprofitable pools
+- [ ] 09-01-PLAN.md — Schema migrations + Recharts install + shared report infrastructure + reports page tab restructure
+- [ ] 09-02-PLAN.md — Revenue Dashboard tab: KPI cards, trend chart, customer/tech tables, drill-down drawer, CSV export
+- [ ] 09-03-PLAN.md — Operations Dashboard tab: route completion rates, missed stops, on-time %, per-tech breakdown chart
+- [ ] 09-04-PLAN.md — Team Dashboard tab: tech scorecards (leaderboard + comparison), payroll prep CSV, tech self-view, pay settings
+- [ ] 09-05-PLAN.md — Profitability Dashboard tab: chemical cost per pool, margin flagging, unprofitable pool alerts, per-tech dosing costs
 
 ### Phase 10: Smart Features & AI
 **Goal**: The platform uses accumulated operational data to optimize routes with ML, predict chemistry problems before they happen, and automatically balance technician workloads — making the system actively smarter the longer it runs
@@ -241,12 +242,12 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 10-01: Enhanced smart dosing — weather API integration, per-pool history weighting, sanitizer-type-specific model
+- [ ] 10-01: Enhanced smart dosing — OpenWeatherMap API integration (current + forecast), per-pool history weighting, sanitizer-type-specific model
 - [ ] 10-02: Predictive chemistry alerts — linear regression on per-pool reading history, alert threshold validation, CPO-reviewed thresholds
 - [ ] 10-03: Automated workload balancing — auto-schedule engine based on service level rules, tech availability, and geography
 - [ ] 10-04: ML route optimization — algorithm selection (OSRM vs. Google ROA), Upstash QStash async job, before/after comparison UI
 - [ ] 10-05: Smart customer creation — intelligent suggestions when adding pools/equipment (pool+spa auto-notes, service frequency recommendations, common equipment combos, gate code reminders)
-- [ ] 10-06: Weather-aware scheduling — forecast API integration, auto-reschedule engine for rain/storm days, office approval workflow, optimal reschedule slot finder
+- [ ] 10-06: Weather-aware scheduling — OpenWeatherMap forecast integration, auto-reschedule engine for rain/storm days, office approval workflow, optimal reschedule slot finder
 - [ ] 10-07: Tech weather alerts — per-stop weather badges on route view (rain, extreme heat, lightning risk), daily weather summary on route start
 - [ ] 10-08: Weather delay customer notifications — automatic SMS/email when a stop is rescheduled due to weather, with new expected date and re-notification if it shifts again
 - [ ] 10-09: Comprehensive company notifications — in-app push + email for all platform events (stop complete/skip, route start/end, chemistry out-of-range, WO lifecycle, quote responses, payments, portal messages/requests, overdue invoices, system events)
@@ -257,7 +258,7 @@ Plans:
 
 ### Phase 11: Payroll, Team Management & Full Accounting
 **Goal**: The platform is a complete QuickBooks replacement for pool companies — owner runs native payroll with direct deposit, check printing, and automatic tax filing; tracks employee time, PTO, certifications, and break compliance; manages full double-entry accounting with bank reconciliation via Plaid; and gets payment reconciliation from whichever payment path (Stripe Connect or QBO) they chose in Phase 7
-**Depends on**: Phase 9 (tech scorecards, per-stop metrics), Phase 7 (billing/payments, Stripe Connect or QBO integration), Phase 3 (field tech route timestamps)
+**Depends on**: Phase 9 (tech scorecards, per-stop metrics, **tech pay/commission tracking and payroll export** — review and extend what Phase 9 built, don't rebuild), Phase 7 (billing/payments, Stripe Connect or QBO integration), Phase 3 (field tech route timestamps)
 **Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05, TEAM-06, TEAM-07, TEAM-08, TEAM-09, TEAM-10, TEAM-11, TEAM-12, TEAM-13, TEAM-14, PAYRL-01, PAYRL-02, PAYRL-03, PAYRL-04, PAYRL-05, PAYRL-06, PAYRL-07, PAYRL-08, PAYRL-09, PAYRL-10, PAYRL-11, PAYRL-12, PAYRL-13, PAYRL-14, PAYRL-15, ACCT-01, ACCT-02, ACCT-03, ACCT-04, ACCT-05, ACCT-06, ACCT-07, ACCT-08, ACCT-09, ACCT-10, ACCT-11, ACCT-12, ACCT-13, ACCT-14, ACCT-15, PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07
 **Success Criteria** (what must be TRUE):
   1. A tech can clock in and clock out from the app via manual punch (single tap) OR the system auto-detects arrival/departure via geofence around each stop address — both modes work simultaneously; manual punch defines the shift, geofence gives per-stop granularity; office configures which modes are required
@@ -274,6 +275,7 @@ Plans:
   12. The owner can view a team dashboard with all employees (clock status, hours, PTO, overtime alerts, cert warnings) and a financial dashboard with cash position, revenue trends, AR/AP aging, and payroll cost breakdown
   13. The owner can configure deductions (health insurance, retirement, HSA), garnishments, commission structures (per upsell, per WO), and bonus payroll runs — every edge case covered
   14. The owner can offer payment plans for large invoices and apply customer credits/prepayments to future invoices
+  15. Payroll data can be exported to QuickBooks Online — payroll runs, journal entries, tax liabilities, and employee records sync to QBO so companies using QBO as their accountant-facing system of record can keep their bookkeeper/CPA in the loop without manual re-entry
 **Plans**: TBD
 
 Plans:
@@ -430,6 +432,7 @@ Plans:
   - Routes page (tech): stops at the same address (pool + spa) should be visually grouped for simplicity
   - Work Orders list page has emoji icons — remove them (user aesthetic preference: no codey icons)
   - Any other emoji/decorative icons found during audit should be removed app-wide
+  - Billing invoice detail line items UI is basic — needs to match the work order line item quality (taxable indicator "T", better layout, inline editing feel)
 **Success Criteria** (what must be TRUE):
 
   *Interactive States:*
@@ -493,11 +496,14 @@ Plans:
   *Icon & Emoji Cleanup:*
   35. No emoji or decorative icons anywhere in the app — Work Orders list, activity logs, page headers, status badges — all cleaned up to be text-driven per brand guidelines
 
+  *Billing Page Polish:*
+  36. Invoice detail line items match the work order line item UI quality — taxable indicator ("T" badge), consistent column layout (description, qty, rate, tax, total), inline edit feel, same component patterns as WO line items
+
   *Performance & Polish:*
-  36. No Cumulative Layout Shift on any page — elements don't jump around as content loads
-  37. Page transitions are smooth — no flash of unstyled content, no jarring route changes
-  38. All toast notifications use consistent positioning, duration, and styling
-  39. Sidebar, header, and navigation look and behave identically across all pages and roles
+  37. No Cumulative Layout Shift on any page — elements don't jump around as content loads
+  38. Page transitions are smooth — no flash of unstyled content, no jarring route changes
+  39. All toast notifications use consistent positioning, duration, and styling
+  40. Sidebar, header, and navigation look and behave identically across all pages and roles
 **Plans**: TBD
 
 Plans:
@@ -528,13 +534,22 @@ Plans:
   14. Progress is saved at every step — if a user leaves and returns, they resume exactly where they left off
   15. 14-day free trial starts immediately with no credit card required
 
+  *Auth & Navigation Edge Cases:*
+  16. The existing `/login` page "Sign Up" button links to the new marketing sign-up flow — not a separate auth-only registration page
+  17. Every entry point to sign-up converges on the same onboarding wizard: marketing CTAs, `/login` sign-up link, direct `/signup` URL, pricing page "Start Free Trial", Google search landing
+  18. Logged-out users hitting any `/app` route are redirected to `/login`, which prominently shows both "Log In" and "Sign Up" paths
+  19. A user who signs up but abandons onboarding mid-wizard can log back in and resume — not stuck in limbo with a half-provisioned org
+  20. A user who already has an account clicking "Sign Up" is recognized and redirected to login (not allowed to create a duplicate)
+  21. Password reset, email verification, and OAuth error states all have polished, branded pages with clear next steps — no raw Supabase error screens
+  22. After trial expiry, the login flow still works — user lands on the subscription paywall, not a broken dashboard
+
   *Subscription Billing:*
-  16. An owner can select a plan — Starter ($99/mo, 1-79 pools), Pro ($199/mo, 80-200 pools), or Enterprise ($349/mo, 200+ pools), monthly or annual (2 months free) — and complete checkout via Stripe; subscription activates immediately
-  17. An owner can view their current plan, pool usage, invoice history, and manage payment methods from the subscription billing page
-  18. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
-  19. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
-  20. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
-  21. Successful payment after restriction lifts all restrictions automatically
+  23. An owner can select a plan — Starter ($99/mo, 1-79 pools), Pro ($199/mo, 80-200 pools), or Enterprise ($349/mo, 200+ pools), monthly or annual (2 months free) — and complete checkout via Stripe; subscription activates immediately
+  24. An owner can view their current plan, pool usage, invoice history, and manage payment methods from the subscription billing page
+  25. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
+  26. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
+  27. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
+  28. Successful payment after restriction lifts all restrictions automatically
 **Plans**: 14 plans
 
 Plans:
@@ -553,10 +568,66 @@ Plans:
 - [ ] 17-13-PLAN.md — Usage enforcement & failed payments: pool count tracking with real-time limit checking, 7-day grace period for over-limit, upgrade prompt dialog, failed payment grace period, account restriction (read-only mode with full-screen blocker), payment recovery flow, automatic restriction lift on successful payment
 - [ ] 17-14-PLAN.md — End-to-end verification: marketing site Lighthouse audit (90+ all categories), sign-up flow end-to-end test, subscription lifecycle with Stripe test mode (trial → checkout → active → cancel → reactivate → failed payment → recovery), mobile responsiveness audit, competitor comparison accuracy review
 
+### Phase 18: Production Launch
+**Goal**: Deploy the entire platform to production, switch every external service from test/dev to live, configure production infrastructure, and verify the complete system works end-to-end in the real world — this is the "flip the switch" phase
+**Depends on**: All prior phases complete
+**Requirements**: TBD
+**Success Criteria** (what must be TRUE):
+
+  *Vercel Deployment:*
+  1. Next.js app deployed to Vercel Pro, connected to GitHub repo with automatic deployments on push to main
+  2. Custom domain configured with SSL, DNS propagated, www redirect working
+  3. All environment variables set in Vercel via CLI (`vercel env add`) — pulled from production credentials, not dev/test keys. Note: `RESEND_API_KEY` must be set in **both** Vercel env vars (for Next.js server actions) and Supabase secrets (for Edge Functions) — same key, two locations
+  4. Preview deployments working on PR branches for future development
+
+  *Stripe Live Mode:*
+  5. Stripe account identity verification complete (business info, bank account for payouts)
+  6. Live API keys (`pk_live_`, `sk_live_`) set in Vercel env vars, replacing test keys
+  7. Stripe products/prices created in live mode matching the 3 tiers (Starter $99/$990, Pro $199/$1990, Enterprise $349/$3490)
+  8. Production webhook endpoint configured in Stripe pointing to the live Vercel URL
+  9. Stripe Connect onboarding tested end-to-end in live mode (pool company connects their own Stripe account)
+
+  *Twilio Production:*
+  10. Production Twilio phone number purchased and configured
+  11. Supabase secrets updated with live Twilio credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`)
+  12. SMS sending verified — pre-arrival, invoice, quote, and weather delay messages all deliver successfully
+
+  *Supabase Production:*
+  13. Supabase project on Pro plan with spend cap raised/disabled for production traffic
+  14. Auth redirect URLs updated to production domain (login, OAuth callbacks, magic links, password reset)
+  15. Edge functions deployed and pointing to production secrets
+  16. RLS policies verified — no NULL USING/WITH CHECK conditions (the known drizzle-kit push pitfall)
+  17. Database backups enabled and verified (point-in-time recovery)
+
+  *Monitoring & Alerting:*
+  18. Vercel analytics enabled for Web Vitals monitoring (LCP, CLS, FID)
+  19. Error tracking configured (Sentry or Vercel's built-in) — server action failures, client errors, and unhandled exceptions all captured
+  20. Supabase spend alerts configured at 50%, 75%, 90% of budget thresholds
+  21. Stripe webhook failure alerts enabled
+  22. Uptime monitoring configured (ping production URL every 5 min, alert on downtime)
+
+  *Production Smoke Test:*
+  23. Complete end-to-end test with real data: sign up → onboard → add customer → add pool → create schedule → run route → complete stops → generate invoice → send invoice → collect payment → view reports — every feature touched
+  24. PWA install and offline mode verified on real iOS and Android devices
+  25. Email delivery verified (service reports, invoices, quotes) — check spam score, rendering across Gmail/Outlook/Apple Mail
+  26. SMS delivery verified on real phone numbers
+  27. Customer portal tested from a real customer's perspective (magic link login, view history, pay invoice, send message)
+  28. Performance verified — production load times under 2s on 4G mobile connection
+
+  *Security & Compliance:*
+  29. All API keys and secrets are production-grade (no test/dev keys left anywhere)
+  30. HTTPS enforced on all routes, no mixed content warnings
+  31. CSP headers configured, XSS protection verified
+  32. Legal pages (ToS, Privacy Policy, etc.) live and linked from footer
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 18 to break down)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -577,3 +648,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 15. Intelligent Billing Automation | 0/0 | Not started | - |
 | 16. UI Polish & Launch Readiness | 0/0 | Not started | - |
 | 17. Marketing Site & Subscription Billing | 0/14 | Not started | - |
+| 18. Production Launch | 0/0 | Not started | - |
