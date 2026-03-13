@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
+import { createClient } from "@/lib/supabase/client"
 import { getUnreadCount } from "@/actions/portal-messages"
 
 interface UnreadBadgeProps {
@@ -8,15 +9,17 @@ interface UnreadBadgeProps {
   role: "office" | "customer"
   customerId?: string
   initialCount?: number
-  /** Poll interval in ms (default 30s) */
+  /** Poll interval in ms (default 30s) — fallback if Realtime is unavailable */
   pollIntervalMs?: number
 }
 
 /**
  * UnreadBadge — Displays an unread message count badge.
  *
- * Polls getUnreadCount every 30 seconds (configurable) to keep the badge
- * up to date. Used in:
+ * Subscribes to the `unread-badge-{orgId}` Realtime Broadcast channel for
+ * instant updates when messages are sent. Falls back to 30s polling.
+ *
+ * Used in:
  * - AppSidebar: role='office', shows total unread from all customers
  * - PortalShell: role='customer', shows unread replies from office
  *
@@ -31,17 +34,30 @@ export function UnreadBadge({
 }: UnreadBadgeProps) {
   const [count, setCount] = useState(initialCount)
 
+  const refresh = useCallback(() => {
+    getUnreadCount(orgId, role, customerId).then(({ count: n }) => setCount(n))
+  }, [orgId, role, customerId])
+
   useEffect(() => {
     // Initial fetch
-    getUnreadCount(orgId, role, customerId).then(({ count: n }) => setCount(n))
+    refresh()
 
-    // Polling
-    const interval = setInterval(() => {
-      getUnreadCount(orgId, role, customerId).then(({ count: n }) => setCount(n))
-    }, pollIntervalMs)
+    // Realtime subscription for instant updates
+    const supabase = createClient()
+    const channel = supabase.channel(`unread-badge-${orgId}`)
+    channel.on("broadcast", { event: "refresh" }, () => {
+      refresh()
+    })
+    channel.subscribe()
 
-    return () => clearInterval(interval)
-  }, [orgId, role, customerId, pollIntervalMs])
+    // Polling as fallback
+    const interval = setInterval(refresh, pollIntervalMs)
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
+  }, [orgId, role, customerId, pollIntervalMs, refresh])
 
   if (count <= 0) return null
 
@@ -64,15 +80,27 @@ export function UnreadDot({
 }: UnreadBadgeProps) {
   const [count, setCount] = useState(initialCount)
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     getUnreadCount(orgId, role, customerId).then(({ count: n }) => setCount(n))
+  }, [orgId, role, customerId])
 
-    const interval = setInterval(() => {
-      getUnreadCount(orgId, role, customerId).then(({ count: n }) => setCount(n))
-    }, pollIntervalMs)
+  useEffect(() => {
+    refresh()
 
-    return () => clearInterval(interval)
-  }, [orgId, role, customerId, pollIntervalMs])
+    const supabase = createClient()
+    const channel = supabase.channel(`unread-badge-${orgId}`)
+    channel.on("broadcast", { event: "refresh" }, () => {
+      refresh()
+    })
+    channel.subscribe()
+
+    const interval = setInterval(refresh, pollIntervalMs)
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
+  }, [orgId, role, customerId, pollIntervalMs, refresh])
 
   if (count <= 0) return null
 

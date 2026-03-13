@@ -648,6 +648,15 @@ export async function sendRequestMessage(params: {
           created_at: newMessage.created_at,
         },
       })
+
+      // Also broadcast badge-refresh so unread counts update instantly
+      const badgeChannel = supabaseAdmin.channel(`unread-badge-${orgId}`)
+      await badgeChannel.send({
+        type: "broadcast",
+        event: "refresh",
+        payload: { customerId, senderRole },
+      })
+      await supabaseAdmin.removeChannel(badgeChannel)
     } catch (realtimeErr) {
       // Non-fatal — message is stored; Realtime broadcast failure is not critical
       console.error("[service-requests] Realtime broadcast error:", realtimeErr)

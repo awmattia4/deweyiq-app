@@ -143,6 +143,15 @@ export async function sendMessage(params: {
         payload: messagePayload,
       })
       await supabaseAdmin.removeChannel(channel)
+
+      // Also broadcast badge-refresh so unread counts update instantly
+      const badgeChannel = supabaseAdmin.channel(`unread-badge-${orgId}`)
+      await badgeChannel.send({
+        type: "broadcast",
+        event: "refresh",
+        payload: { customerId, senderRole },
+      })
+      await supabaseAdmin.removeChannel(badgeChannel)
     } catch (broadcastErr) {
       // Broadcast failure is non-fatal — message is already saved
       console.error("[sendMessage] Realtime broadcast error:", broadcastErr)
