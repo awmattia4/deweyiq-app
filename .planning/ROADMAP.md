@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sixteen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. Subscription billing closes out the roadmap as it gates the business model but has no feature dependencies beyond auth.
+Sixteen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. The final phase closes out the roadmap with the public-facing marketing site and subscription billing — converting pool company owners into paying customers with a stunning marketing experience, frictionless sign-up, and Stripe-powered subscription lifecycle.
 
 ## Phases
 
@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Office Operations & Dispatch** - Real-time dispatch board, automated service reports, and customer notifications (completed 2026-03-10)
 - [x] **Phase 6: Work Orders & Quoting** - Repair work orders, professional quotes, customer approval, and invoice conversion (completed 2026-03-11)
 - [x] **Phase 7: Billing & Payments** - Invoicing, Stripe AutoPay/ACH, dunning, QuickBooks bi-directional sync, and built-in accounting (completed 2026-03-13)
-- [ ] **Phase 8: Customer Portal** - Full self-service portal — service history, invoice payment, service requests, and messaging
+- [x] **Phase 8: Customer Portal** - Full self-service portal — service history, invoice payment, service requests, and messaging (completed 2026-03-13)
 - [ ] **Phase 9: Reporting & Team Analytics** - Owner dashboards, technician scorecards, chemical profitability, and financial reporting
 - [ ] **Phase 10: Smart Features & AI** - AI route optimization, predictive chemistry alerts, and automated workload balancing
 - [ ] **Phase 11: Payroll, Team Management & Full Accounting** - Native payroll (direct deposit, checks, tax filing, W-2/1099), time tracking, PTO, certifications, full double-entry accounting, bank reconciliation via Plaid, payment reconciliation, financial statements — complete QuickBooks replacement
@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 13: Truck Inventory & Shopping Lists** - Per-tech truck inventory with auto-decrement, shopping lists with full procurement lifecycle, purchasing dashboard, chemical usage tracking, and "What to Bring" pre-route summaries
 - [ ] **Phase 14: Service Agreements & Contracts** - Recurring service agreements with e-signature, auto-schedule/billing setup, agreement lifecycle (pause/resume/cancel/renew), customer portal access, and compliance tracking
 - [ ] **Phase 15: Intelligent Billing Automation** - Per-customer per-visit rates, smart pricing suggestions, bulk shop fee application, billing anomaly detection, and invoice generation preview
-- [ ] **Phase 16: Subscription Billing** - Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
+- [ ] **Phase 16: Marketing Site & Subscription Billing** - Conversion-optimized public marketing site with interactive app demos, competitor comparisons, ROI calculator, frictionless multi-step sign-up, plus Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
 
 ## Phase Details
 
@@ -405,33 +405,62 @@ Plans:
   3. Bulk operational fees (gas surcharge, truck maintenance, shop fees) can be defined in Settings as reusable fee templates and applied across selected invoices with one action — configurable as flat $ or % of subtotal, per-invoice or per-stop
   4. The billing dashboard surfaces anomaly alerts: customer charged significantly less than their 3-month average, per-visit customer has missed stops not deducted, customer pricing hasn't been reviewed in 6+ months, uninvoiced completed work older than 30 days
   5. The generate-invoices flow gains a preview step — before creating drafts, office sees a table of every customer with: stop count, calculated total, applied fees, and any anomaly warnings — with the ability to adjust or exclude individual customers before confirming
+  6. Automatic recurring invoice generation — owner configures a billing schedule (e.g., "every Monday" or "1st of each month") and the system auto-generates invoices for all customers with billing models, auto-charges AutoPay customers, and sends a summary email to the owner — no manual "Generate Invoices" click required for routine weekly/monthly billing cycles
+  7. Each customer's profile shows their next auto-invoice date, billing frequency, and last invoice summary — making recurring billing status visible at a glance
 **Plans**: TBD
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 15 to break down)
 
-### Phase 16: Subscription Billing
-**Goal**: Pool companies pay for using the PoolCo SaaS platform via tiered subscriptions based on pool count — Stripe handles checkout, payment methods, and subscription lifecycle; the app enforces tier limits and handles failed payments gracefully
-**Depends on**: Phase 1 (auth, multi-tenant RLS, org model)
-**Requirements**: SUB-01, SUB-02, SUB-03, SUB-04, SUB-05, SUB-06, SUB-07, SUB-08, SUB-09, SUB-10
+### Phase 16: Marketing Site & Subscription Billing
+**Goal**: The public-facing marketing site converts pool company owners into paying customers with a visually stunning, conversion-optimized experience — interactive app demos, competitor comparisons, ROI calculator, and a frictionless multi-step sign-up flow — backed by Stripe subscription billing with tiered pricing, usage enforcement, and graceful failed payment handling
+**Depends on**: Phase 1 (auth, multi-tenant RLS, org model). Marketing site benefits from all prior phases being complete (more features to showcase).
+**Requirements**: SUB-01, SUB-02, SUB-03, SUB-04, SUB-05, SUB-06, SUB-07, SUB-08, SUB-09, SUB-10, MKT-01, MKT-02, MKT-03, MKT-04, MKT-05, MKT-06, MKT-07, MKT-08
 **Success Criteria** (what must be TRUE):
-  1. A new org starts with a 14-day free trial (no credit card required) and sees a trial banner counting down
-  2. An owner can select a plan (Starter/Pro/Enterprise, monthly or annual) and complete checkout via Stripe — subscription activates immediately
-  3. An owner can view their current plan, pool usage, invoice history, and manage payment methods from /billing
-  4. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
-  5. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
-  6. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
-  7. Successful payment after restriction lifts all restrictions automatically
-**Plans**: 7 plans
+
+  *Marketing Site:*
+  1. A pool company owner lands on the marketing site and immediately understands what PoolCo does, who it's for, and why it's better — within 5 seconds of page load
+  2. The hero section features an animated app mockup (phone + desktop) showing real PoolCo screens with auto-rotating feature highlights — not static screenshots
+  3. Each major feature area (Field Tech, Scheduling & Routes, Dispatch, Billing, Customer Portal, Work Orders) has a dedicated deep-dive section with app mockups, benefit bullets, and visual workflow demonstrations
+  4. A side-by-side competitor comparison table lets visitors toggle between Skimmer, Pool Brain, FieldPulse, and ServiceTitan — showing where PoolCo wins with honest, trust-building comparisons
+  5. An interactive pricing calculator lets visitors slide their pool count and see which tier they fall into — Starter (1-79 pools, $99/mo), Pro (80-200 pools, $199/mo), Enterprise (200+ pools, $349/mo) — with annual savings callout (2 months free), all features included in every tier, no per-pool or per-tech fees
+  6. An ROI calculator shows estimated time/money savings based on company size (pools, techs, hours spent on admin)
+  7. A "Day in the Life" walkthrough section shows both the tech's morning (open app → see route → complete stops → auto-reports sent) and the owner's dashboard (dispatch map, billing insights, customer messages) — making the value tangible
+  8. Social proof section includes testimonials, company logos, and live platform stats (stops completed, invoices generated, pools managed)
+  9. The entire marketing site scores 90+ on Lighthouse for Performance, Accessibility, Best Practices, and SEO — loads in under 2 seconds on mobile
+  10. The marketing site is fully responsive and looks stunning on mobile — pool company owners browse on their phones
+
+  *Sign-Up & Onboarding:*
+  11. A visitor can go from landing page to inside the app in under 2 minutes — email/password or Google OAuth, company name, "how many pools?" and they're in
+  12. The sign-up flow is a multi-step wizard (account → company profile → team size → first customer or CSV import) with progress bar, 2-3 fields per step, and the ability to skip optional steps
+  13. A "Switch from Skimmer" migration path guides users through CSV import with field mapping
+  14. Progress is saved at every step — if a user leaves and returns, they resume exactly where they left off
+  15. 14-day free trial starts immediately with no credit card required
+
+  *Subscription Billing:*
+  16. An owner can select a plan — Starter ($99/mo, 1-79 pools), Pro ($199/mo, 80-200 pools), or Enterprise ($349/mo, 200+ pools), monthly or annual (2 months free) — and complete checkout via Stripe; subscription activates immediately
+  17. An owner can view their current plan, pool usage, invoice history, and manage payment methods from the subscription billing page
+  18. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
+  19. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
+  20. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
+  21. Successful payment after restriction lifts all restrictions automatically
+**Plans**: 14 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Schema + Stripe setup: subscriptions table with enums, src/lib/stripe.ts client singleton, tier config constants
-- [ ] 16-02-PLAN.md — Checkout & onboarding: createCheckoutSession, trial creation on signup, success/cancel pages
-- [ ] 16-03-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling 6 event types (checkout, subscription lifecycle, invoices, trial ending)
-- [ ] 16-04-PLAN.md — Billing management UI: /billing page with plan card, usage bar, invoice history, cancel/reactivate, trial + restricted banners
-- [ ] 16-05-PLAN.md — Usage tracking & tier enforcement: pool count tracking, limit checking with grace periods, upgrade prompt dialog
-- [ ] 16-06-PLAN.md — Failed payment & dunning: grace period management, account restriction (read-only mode), recovery flow
-- [ ] 16-07-PLAN.md — End-to-end verification checkpoint: 7 manual test scenarios with Stripe test mode
+- [ ] 16-01-PLAN.md — Marketing site foundation: public route group layout, shared marketing components (navigation, footer with legal links, CTA buttons), dark-first design system tokens for marketing pages, responsive grid system, Framer Motion setup, SEO infrastructure (meta tags, OG images, structured data, sitemap.xml, robots.txt), legal pages (Terms of Service, Privacy Policy, DPA, Cookie Policy, Acceptable Use, SLA, Billing Terms)
+- [ ] 16-02-PLAN.md — Hero section & navigation: full-viewport cinematic hero with gradient mesh background, animated phone + desktop mockups showing real app screens, auto-rotating feature highlights with smooth transitions, bold headline + subhead + CTA, sticky navigation with smooth scroll to sections, mobile hamburger menu
+- [ ] 16-03-PLAN.md — Feature deep-dive sections: 6 feature areas (Field Tech App, Scheduling & Routes, Real-Time Dispatch, Billing & Payments, Customer Portal, Work Orders & Quoting) — each with phone/desktop mockup, 3 benefit bullets, visual workflow demonstration, scroll-triggered entrance animations, tabbed feature switching within each section
+- [ ] 16-04-PLAN.md — Interactive app demo: sandboxed read-only demo environment showing route view, chemistry logging, dispatch map, billing dashboard — visitors can click through real UI without signing up, guided tour overlay with hotspots, "Try it yourself" CTA at each feature section
+- [ ] 16-05-PLAN.md — Competitor comparison & "Day in the Life": interactive comparison table with toggle between Skimmer/Pool Brain/FieldPulse/ServiceTitan, feature-by-feature breakdown with check/cross indicators, honest positioning, "Why companies switch" callouts; "Day in the Life" walkthrough section showing tech morning + owner dashboard with scroll-animated timeline
+- [ ] 16-06-PLAN.md — Pricing & ROI calculator: interactive pricing section with pool count slider, 3 flat tiers (Starter $99/mo 1-79 pools, Pro $199/mo 80-200 pools, Enterprise $349/mo 200+ pools), annual toggle showing 2 months free ($990/$1,990/$3,490 per year), all-features-included emphasis, "unlimited SMS included" callout (vs Skimmer $0.029/msg), "unlimited techs & office users" callout (vs Pool Brain $55/tech), no per-pool or per-tech fees, competitor price comparison examples, FAQ accordion; ROI calculator (input: pools, techs, admin hours → output: time saved, money saved, payback period)
+- [ ] 16-07-PLAN.md — Social proof & trust: testimonial cards with photos/company names, company logo bar, live platform stats with counter animations (pools managed, stops completed, invoices sent), case study preview cards, trust badges (SSL, Stripe, SOC2-ready), press mentions section
+- [ ] 16-08-PLAN.md — Sign-up flow & onboarding wizard: multi-step wizard (account creation → company profile with logo upload → service details/pool count → invite team → first customer or CSV import → guided dashboard tour), progress bar, field validation, Google OAuth, step-level progress persistence, Skimmer migration path with CSV field mapping
+- [ ] 16-09-PLAN.md — Schema + Stripe setup: subscriptions table with enums (status, tier, billing_interval), src/lib/stripe.ts client singleton, tier config constants (Starter 1-79 pools $99/$990, Pro 80-200 pools $199/$1990, Enterprise 200+ pools $349/$3490), webhook signature verification utility
+- [ ] 16-10-PLAN.md — Checkout & trial: createCheckoutSession action with card + ACH bank transfer payment methods enabled, trial creation on signup (14-day, no card), Stripe Checkout redirect, success/cancel pages, trial banner component visible to all roles, "Save ~3% with bank transfer" nudge on annual plans
+- [ ] 16-11-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling checkout.session.completed, customer.subscription.created/updated/deleted, invoice.payment_succeeded/failed, customer.subscription.trial_will_end — with idempotent event processing
+- [ ] 16-12-PLAN.md — Subscription management UI: owner-only "Billing" tab in /settings with current plan card, pool usage bar with tier limit, invoice history from Stripe API, cancel/reactivate flows, upgrade/downgrade with proration, payment method management via Stripe Customer Portal
+- [ ] 16-13-PLAN.md — Usage enforcement & failed payments: pool count tracking with real-time limit checking, 7-day grace period for over-limit, upgrade prompt dialog, failed payment grace period, account restriction (read-only mode with full-screen blocker), payment recovery flow, automatic restriction lift on successful payment
+- [ ] 16-14-PLAN.md — End-to-end verification: marketing site Lighthouse audit (90+ all categories), sign-up flow end-to-end test, subscription lifecycle with Stripe test mode (trial → checkout → active → cancel → reactivate → failed payment → recovery), mobile responsiveness audit, competitor comparison accuracy review
 
 ## Progress
 
@@ -447,7 +476,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 5. Office Operations & Dispatch | 0/6 | Complete | 2026-03-10 |
 | 6. Work Orders & Quoting | 0/8 | Complete | 2026-03-11 |
 | 7. Billing & Payments | 0/9 | Complete | 2026-03-13 |
-| 8. Customer Portal | 0/5 | Not started | - |
+| 8. Customer Portal | 0/5 | Complete    | 2026-03-13 |
 | 9. Reporting & Team Analytics | 0/5 | Not started | - |
 | 10. Smart Features & AI | 0/13 | Not started | - |
 | 11. Payroll, Team Mgmt & Accounting | 0/23 | Not started | - |
@@ -455,4 +484,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 13. Truck Inventory & Shopping Lists | 0/4 | Not started | - |
 | 14. Service Agreements & Contracts | 0/9 | Not started | - |
 | 15. Intelligent Billing Automation | 0/0 | Not started | - |
-| 16. Subscription Billing | 0/7 | Not started | - |
+| 16. Marketing Site & Subscription Billing | 0/14 | Not started | - |
