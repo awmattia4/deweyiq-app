@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 8 of 11 (Customer Portal) — IN PROGRESS
-Plan: 3/6 complete (01, 02, 03 done)
-Status: Phase 8 Plan 03 complete — Portal billing: invoice list, Stripe Elements payment, SetupIntent method manager, contact info editor
-Last activity: 2026-03-13 — Phase 8 Plan 03 executed: Portal invoices and payments
+Plan: 5/5 complete (01, 02, 03, 04, 05 done)
+Status: Phase 8 Plan 05 complete — Customer messaging: real-time chat, office inbox, unread badges, email notifications
+Last activity: 2026-03-13 — Phase 8 Plan 05 executed: Customer messaging
 
 Progress: [█████████-] 90%
 
@@ -73,6 +73,7 @@ Progress: [█████████-] 90%
 | Phase 08-customer-portal P01 | 35 | 2 tasks | 20 files |
 | Phase 08-customer-portal P02 | 10 | 2 tasks | 7 files |
 | Phase 08-customer-portal P03 | 10 | 2 tasks | 6 files |
+| Phase 08-customer-portal P05 | 12 | 2 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -277,6 +278,9 @@ Recent decisions affecting current work:
 - [Phase 08-03]: SetupIntent with usage:off_session + automatic_payment_methods for portal payment method saving — enables future AutoPay charges
 - [Phase 08-03]: updateCustomerContactInfo restricted to phone/email only — name/address/billing fields require office contact; security boundary for customer self-service
 - [Phase 08-03]: Stripe Elements dark theme (night) with CSS variable overrides for portal payment forms — matches portal dark-first design
+- [Phase 08]: adminDb throughout portal-messages.ts — portal customers + office notification sends both work without user session JWT context
+- [Phase 08]: Supabase Realtime Broadcast for chat (not Postgres Changes) — no RLS filtering needed, lower latency, simpler channel model
+- [Phase 08]: getInboxThreads uses raw SQL GROUP BY + COUNT CASE WHEN — avoids correlated subquery pitfall per MEMORY.md
 
 ### Pending Todos
 
@@ -301,5 +305,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 08-03-PLAN.md — Portal invoices & payments: invoice list, Stripe Elements payment form, SetupIntent method manager, contact info editor
-Resume file: .planning/phases/08-customer-portal/08-04-PLAN.md
+Stopped at: Completed 08-05-PLAN.md — Customer messaging: real-time chat (Supabase Realtime Broadcast), office inbox, unread badges, email notifications both ways
+Resume file: Phase 8 complete — all 5 plans done
