@@ -6,7 +6,11 @@
 <domain>
 ## Phase Boundary
 
-Owner-facing dashboards for financial and operational visibility — revenue, team performance, chemical costs, and profitability. The owner can see the full picture without exporting to a spreadsheet. Techs can see their own scorecard only. All data is derived from existing service visits, invoices, payments, and dosing logs from Phases 1-8.
+Owner-facing reporting dashboards for financial and operational visibility — revenue, team performance, chemical costs, and profitability. The owner can see the full picture without exporting to a spreadsheet. Techs can see their own scorecard only. All data is derived from existing service visits, invoices, payments, and dosing logs from Phases 1-8.
+
+**Important boundaries:**
+- A `/reports` page already exists (added in Phase 7) with AR aging, revenue by customer, P&L, and CSV export. Phase 9 EXTENDS this page with new tabs/sections — do NOT rebuild what's there.
+- Payroll (time tracking, gross-to-net, direct deposit, tax filing) is Phase 11. Phase 9 only provides a simple **payroll prep CSV export** (stop counts, hours, rates) for import into external payroll services. Do NOT build payroll infrastructure — just export the data.
 
 </domain>
 
@@ -36,6 +40,7 @@ Owner-facing dashboards for financial and operational visibility — revenue, te
 - Every report tab has a CSV export button — revenue, operations, tech scorecards, profitability
 - Configurable pay structure per tech: hourly OR per-stop — payroll calculates accordingly (hours * rate OR stops * per-stop rate)
 - Include upsell commissions — if a tech flagged a repair that became a completed work order, a configurable commission % is included in the payroll export
+- **This is a simple CSV download, NOT payroll processing** — Phase 11 handles actual payroll (gross-to-net, tax withholding, direct deposit, etc.)
 
 ### Claude's Discretion
 - Charting library choice (Recharts, Tremor, etc.)
@@ -55,6 +60,7 @@ Owner-facing dashboards for financial and operational visibility — revenue, te
 - Tech scorecard comparison mode should make it obvious at a glance who's performing well vs. who needs coaching
 - Chemical profitability alerts should integrate with the existing Phase 5 alerts dashboard — same alert type system, just a new alert category
 - Payroll export is a stopgap until Phase 11 builds native payroll — keep it simple (CSV download), don't over-engineer
+- The existing `/reports` page from Phase 7 already has AR aging, revenue by customer, P&L, and CSV export — Phase 9 extends it with new tabs, don't duplicate or rebuild existing reports
 
 </specifics>
 
