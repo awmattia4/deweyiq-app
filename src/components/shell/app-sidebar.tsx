@@ -16,7 +16,10 @@ import {
   LogOutIcon,
   WrenchIcon,
   BarChart3Icon,
+  ReceiptIcon,
+  MessageCircleIcon,
 } from "lucide-react"
+import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
   Sidebar,
   SidebarContent,
@@ -124,9 +127,28 @@ const NAV_ITEMS: NavItem[] = [
   },
   // ── Available in Phase 7 ───────────────────────────────────────────────────
   {
+    label: "Billing",
+    href: "/billing",
+    icon: ReceiptIcon,
+    roles: ["owner", "office"],
+  },
+  {
     label: "Reports",
     href: "/reports",
     icon: BarChart3Icon,
+    roles: ["owner", "office"],
+  },
+  // ── Available in Phase 8 ───────────────────────────────────────────────────
+  {
+    label: "Messages",
+    href: "/inbox",
+    icon: MessageCircleIcon,
+    roles: ["owner", "office"],
+  },
+  {
+    label: "Requests",
+    href: "/requests",
+    icon: WrenchIcon,
     roles: ["owner", "office"],
   },
 ]
@@ -179,6 +201,7 @@ interface AppSidebarProps {
   alertCount?: number
   orgName?: string | null
   orgLogoUrl?: string | null
+  orgId?: string | null
 }
 
 /**
@@ -193,7 +216,7 @@ interface AppSidebarProps {
  * tabs (billing settings, team management, reports)."
  * Those additional tabs are hidden until their phases ship (see NAV_ITEMS comments).
  */
-export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl }: AppSidebarProps) {
+export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl, orgId }: AppSidebarProps) {
   const pathname = usePathname()
   const { setOpenMobile } = useSidebar()
 
@@ -274,7 +297,8 @@ export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl }: AppSid
                   (item.href !== "/" && pathname.startsWith(item.href + "/"))
 
                 const isAlertsItem = item.href === "/alerts"
-                const showBadge = isAlertsItem && alertCount > 0
+                const isMessagesItem = item.href === "/inbox"
+                const showAlertBadge = isAlertsItem && alertCount > 0
 
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -286,10 +310,13 @@ export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl }: AppSid
                       <Link href={item.href}>
                         <item.icon className="h-4 w-4" aria-hidden="true" />
                         <span>{item.label}</span>
-                        {showBadge && (
+                        {showAlertBadge && (
                           <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-destructive-foreground group-data-[collapsible=icon]:hidden">
                             {alertCount > 99 ? "99+" : alertCount}
                           </span>
+                        )}
+                        {isMessagesItem && orgId && (
+                          <UnreadBadge orgId={orgId} role="office" />
                         )}
                       </Link>
                     </SidebarMenuButton>

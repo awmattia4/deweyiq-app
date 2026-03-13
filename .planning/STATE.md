@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 8 of 11 (Customer Portal) — IN PROGRESS
-Plan: 2/6 complete (01, 02 done)
-Status: Phase 8 Plan 02 complete — Service history: timeline, chemistry readings, photo gallery with lightbox
-Last activity: 2026-03-13 — Phase 8 Plan 02 executed: Service history view
+Plan: 3/6 complete (01, 02, 03 done)
+Status: Phase 8 Plan 03 complete — Portal billing: invoice list, Stripe Elements payment, SetupIntent method manager, contact info editor
+Last activity: 2026-03-13 — Phase 8 Plan 03 executed: Portal invoices and payments
 
 Progress: [█████████-] 90%
 
@@ -72,6 +72,7 @@ Progress: [█████████-] 90%
 | Phase 07-billing-payments P08 | 25 | 2 tasks | 24 files |
 | Phase 08-customer-portal P01 | 35 | 2 tasks | 20 files |
 | Phase 08-customer-portal P02 | 10 | 2 tasks | 7 files |
+| Phase 08-customer-portal P03 | 10 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -271,6 +272,11 @@ Recent decisions affecting current work:
 - [Phase 08-02]: adminDb for portal service history queries — customers lack org_id in JWT claims required for RLS; consistent portal-data pattern
 - [Phase 08-02]: Captions plugin static import for yet-another-react-lightbox — YARL plugins are plain functions, not React components; dynamic() only for Lightbox component itself
 - [Phase 08-02]: chemistry_readings explicitly mapped in getServiceHistory — MEMORY.md critical note: manual mapping silently drops fields
+- [Phase 08-03]: Portal PaymentIntent includes surcharge upfront for card payments — customer sees full card amount and can switch to ACH to avoid surcharge fee
+- [Phase 08-03]: PI reuse pattern — retrieve existing PI on invoice before creating new to prevent orphaned PaymentIntents (same as /pay/[token] pattern)
+- [Phase 08-03]: SetupIntent with usage:off_session + automatic_payment_methods for portal payment method saving — enables future AutoPay charges
+- [Phase 08-03]: updateCustomerContactInfo restricted to phone/email only — name/address/billing fields require office contact; security boundary for customer self-service
+- [Phase 08-03]: Stripe Elements dark theme (night) with CSS variable overrides for portal payment forms — matches portal dark-first design
 
 ### Pending Todos
 
@@ -295,5 +301,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 08-02-PLAN.md — Service history timeline, chemistry display, photo gallery
-Resume file: .planning/phases/08-customer-portal/08-03-PLAN.md
+Stopped at: Completed 08-03-PLAN.md — Portal invoices & payments: invoice list, Stripe Elements payment form, SetupIntent method manager, contact info editor
+Resume file: .planning/phases/08-customer-portal/08-04-PLAN.md
