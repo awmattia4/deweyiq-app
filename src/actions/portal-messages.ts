@@ -21,6 +21,7 @@ import { adminDb } from "@/lib/db"
 import { portalMessages, customers, profiles, orgs } from "@/lib/db/schema"
 import { eq, and, isNull, inArray, desc, asc, sql } from "drizzle-orm"
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
+import { getCurrentUser } from "@/actions/auth"
 import { Resend } from "resend"
 import { render as renderEmail } from "@react-email/render"
 import { createElement } from "react"
@@ -434,6 +435,10 @@ export async function createMessagePhotoUploadUrl(
   customerId: string,
   filename: string
 ): Promise<{ signedUrl: string; path: string } | null> {
+  // Validate caller is authenticated and belongs to this org
+  const user = await getCurrentUser()
+  if (!user || user.org_id !== orgId) return null
+
   try {
     const supabaseAdmin = createAdminClient()
     const path = `${orgId}/portal/messages/${customerId}/${Date.now()}-${filename}`

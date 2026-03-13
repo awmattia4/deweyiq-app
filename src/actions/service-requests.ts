@@ -107,6 +107,10 @@ export async function createRequestPhotoUploadUrl(
   customerId: string,
   filename: string
 ): Promise<{ signedUrl: string; path: string } | null> {
+  // Validate caller is authenticated and belongs to this org
+  const token = await getRlsToken()
+  if (!token || token.org_id !== orgId) return null
+
   try {
     const supabaseAdmin = createAdminClient()
     const storagePath = `${orgId}/portal/requests/${Date.now()}-${filename}`
@@ -225,6 +229,7 @@ export async function submitServiceRequest(
     }
 
     revalidatePath("/requests")
+    revalidatePath("/portal/requests")
 
     return { id: newRequest.id, success: true }
   } catch (err) {
@@ -397,6 +402,7 @@ export async function reviewRequest(
     })
 
     revalidatePath("/requests")
+    revalidatePath("/portal/requests")
     return { success: true }
   } catch (err) {
     console.error("[service-requests] reviewRequest error:", err)
@@ -490,6 +496,7 @@ export async function createWoFromRequest(
       .where(eq(serviceRequests.id, requestId))
 
     revalidatePath("/requests")
+    revalidatePath("/portal/requests")
     revalidatePath("/work-orders")
 
     return { woId: newWo.id, success: true }
@@ -687,4 +694,30 @@ function formatCategoryLabel(category: string): string {
     other: "Other",
   }
   return labels[category] ?? category
+}
+
+// ---------------------------------------------------------------------------
+// getRequestPhotoUrls — sign storage paths for display
+// ---------------------------------------------------------------------------
+
+export async function getRequestPhotoUrls(
+  photoPaths: string[]
+): Promise<string[]> {
+  if (photoPaths.length === 0) return []
+
+  const supabaseAdmin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const urls = await Promise.all(
+    photoPaths.map(async (path) => {
+      const { data } = await supabaseAdmin.storage
+        .from("service-request-photos")
+        .createSignedUrl(path, 3600)
+      return data?.signedUrl ?? null
+    })
+  )
+
+  return urls.filter((u): u is string => u !== null)
 }

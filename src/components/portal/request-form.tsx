@@ -121,6 +121,7 @@ export function RequestForm({ orgId, customerId, pools }: RequestFormProps) {
   const [preferredTimeWindow, setPreferredTimeWindow] = useState("anytime")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [photoError, setPhotoError] = useState<string | null>(null)
 
   // Skip step 1 if only one pool
   const firstStep: Step = pools.length === 1 ? 2 : 1
@@ -201,6 +202,7 @@ export function RequestForm({ orgId, customerId, pools }: RequestFormProps) {
       ])
     } catch (err) {
       console.error("[RequestForm] Photo upload error:", err)
+      setPhotoError("Failed to upload photo. Please try again.")
     } finally {
       setIsUploadingPhoto(false)
     }
@@ -427,10 +429,14 @@ export function RequestForm({ orgId, customerId, pools }: RequestFormProps) {
             onChange={handleFileChange}
           />
 
+          {photoError && (
+            <p className="text-sm text-destructive">{photoError}</p>
+          )}
+
           {photos.length < 5 && (
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { setPhotoError(null); fileInputRef.current?.click() }}
               disabled={isUploadingPhoto}
               className={cn(
                 "flex items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed py-6 text-sm font-medium cursor-pointer transition-all",

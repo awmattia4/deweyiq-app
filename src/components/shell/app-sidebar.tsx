@@ -18,6 +18,7 @@ import {
   BarChart3Icon,
   ReceiptIcon,
   MessageCircleIcon,
+  ClipboardListIcon,
 } from "lucide-react"
 import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
@@ -148,7 +149,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: "Requests",
     href: "/requests",
-    icon: WrenchIcon,
+    icon: ClipboardListIcon,
     roles: ["owner", "office"],
   },
 ]

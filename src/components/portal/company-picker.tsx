@@ -63,7 +63,7 @@ export function CompanyPicker({ companies, currentOrgId }: CompanyPickerProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+    <div data-portal="true" className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold tracking-tight">Choose a company</h1>

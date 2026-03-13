@@ -9,6 +9,7 @@ import {
   reviewRequest,
   createWoFromRequest,
   getRequestMessages,
+  getRequestPhotoUrls,
 } from "@/actions/service-requests"
 import { RequestThread } from "@/components/portal/request-thread"
 
@@ -82,8 +83,15 @@ export function RequestReviewPanel({
   const [actionError, setActionError] = useState<string | null>(null)
   const [messages, setMessages] = useState<PortalMessage[] | null>(null)
   const [loadingMessages, setLoadingMessages] = useState(true)
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
 
-  // Load messages on mount
+  // Load messages and photo URLs on mount
+  useEffect(() => {
+    if (request.photo_paths.length > 0) {
+      getRequestPhotoUrls(request.photo_paths).then(setPhotoUrls).catch(() => {})
+    }
+  }, [request.photo_paths])
+
   useEffect(() => {
     void (async () => {
       try {
@@ -235,9 +243,23 @@ export function RequestReviewPanel({
                 <span className="text-sm whitespace-pre-wrap">{request.description}</span>
               </div>
               {request.photo_paths.length > 0 && (
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <span className="text-xs text-muted-foreground w-24 shrink-0">Photos</span>
-                  <span className="text-sm">{request.photo_paths.length} attached</span>
+                <div className="flex items-start gap-2 px-4 py-3">
+                  <span className="text-xs text-muted-foreground w-24 shrink-0 mt-1">Photos</span>
+                  <div className="flex flex-wrap gap-2">
+                    {photoUrls.length > 0 ? (
+                      photoUrls.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={url}
+                            alt={`Photo ${i + 1}`}
+                            className="w-16 h-16 rounded-lg object-cover border border-border hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{request.photo_paths.length} attached</span>
+                    )}
+                  </div>
                 </div>
               )}
               {request.preferred_date && (

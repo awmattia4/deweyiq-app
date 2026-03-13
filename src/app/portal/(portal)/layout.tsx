@@ -78,7 +78,7 @@ export default async function AuthenticatedPortalLayout({
 
     // Single org but no customer row yet — account is being set up
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div data-portal="true" className="min-h-screen flex items-center justify-center p-4 bg-background text-foreground">
         <div className="max-w-sm text-center">
           <h1 className="text-xl font-semibold">Account being set up</h1>
           <p className="text-sm text-muted-foreground mt-2">

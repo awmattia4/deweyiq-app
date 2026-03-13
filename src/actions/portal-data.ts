@@ -15,6 +15,7 @@ import {
   paymentRecords,
 } from "@/lib/db/schema"
 import { eq, and, inArray, asc } from "drizzle-orm"
+import { revalidatePath } from "next/cache"
 import { getStripe } from "@/lib/stripe/client"
 
 /**
@@ -843,6 +844,7 @@ export async function confirmPaymentMethodUpdate(
       })
       .where(and(eq(customers.id, customerId), eq(customers.org_id, orgId)))
 
+    revalidatePath("/portal/invoices")
     return { success: true }
   } catch (err) {
     console.error("[confirmPaymentMethodUpdate] Error:", err)
@@ -985,6 +987,7 @@ export async function updateCustomerContactInfo(
       .set(updatePayload)
       .where(and(eq(customers.id, customerId), eq(customers.org_id, orgId)))
 
+    revalidatePath("/portal/invoices")
     return { success: true }
   } catch (err) {
     console.error("[updateCustomerContactInfo] Error:", err)

@@ -154,6 +154,36 @@
   --sidebar-ring: oklch(0.65 0.19 231);
 }
 
+/* Portal — force light theme for customer-facing pages.
+   [data-portal="true"] is set by PortalShell. Overrides .dark
+   variables so portal renders in light mode even though <html>
+   has class="dark". */
+[data-portal="true"] {
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.12 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0 0);
+  --primary: oklch(0.65 0.19 231);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.94 0.03 220);
+  --secondary-foreground: oklch(0.2 0.05 230);
+  --muted: oklch(0.95 0.01 220);
+  --muted-foreground: oklch(0.5 0.03 230);
+  --accent: oklch(0.78 0.14 196);
+  --accent-foreground: oklch(0.1 0 0);
+  --destructive: oklch(0.6 0.24 27);
+  --border: oklch(0.9 0.01 220);
+  --input: oklch(0.9 0.01 220);
+  --ring: oklch(0.65 0.19 231);
+}
+
+/* Use company brand color as portal accent when set */
+[data-portal="true"] {
+  --primary: var(--portal-primary, oklch(0.65 0.19 231));
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

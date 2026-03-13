@@ -74,13 +74,9 @@ export function PaymentForm(props: PaymentFormProps) {
       options={{
         clientSecret: props.clientSecret,
         appearance: {
-          theme: "night",
+          theme: "stripe",
           variables: {
-            colorPrimary: "#3b82f6",
-            colorBackground: "hsl(var(--card))",
-            colorText: "hsl(var(--foreground))",
-            colorTextSecondary: "hsl(var(--muted-foreground))",
-            colorDanger: "hsl(var(--destructive))",
+            colorPrimary: "#0ea5e9",
             borderRadius: "8px",
           },
         },

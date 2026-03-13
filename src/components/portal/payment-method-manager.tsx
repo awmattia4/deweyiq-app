@@ -27,6 +27,7 @@ import {
   createPortalSetupIntent,
   confirmPaymentMethodUpdate,
   updateCustomerContactInfo,
+  getCustomerPaymentMethods,
 } from "@/actions/portal-data"
 import type { PortalPaymentMethod } from "@/actions/portal-data"
 
@@ -166,10 +167,9 @@ function SavedMethodsList({
     async (paymentMethodId: string) => {
       // Save this as the default payment method
       await confirmPaymentMethodUpdate(orgId, customerId, paymentMethodId)
-      // Mark old methods as non-default, mark new one as default
-      setMethods((prev) =>
-        prev.map((m) => ({ ...m, isDefault: m.id === paymentMethodId }))
-      )
+      // Fetch fresh list from Stripe so the newly saved method appears
+      const fresh = await getCustomerPaymentMethods(orgId, customerId)
+      setMethods(fresh)
       setSetupSuccess(true)
       setShowSetupForm(false)
       setSiData(null)
@@ -252,12 +252,9 @@ function SavedMethodsList({
               options={{
                 clientSecret: siData.clientSecret,
                 appearance: {
-                  theme: "night",
+                  theme: "stripe",
                   variables: {
-                    colorPrimary: "#3b82f6",
-                    colorBackground: "hsl(var(--card))",
-                    colorText: "hsl(var(--foreground))",
-                    colorTextSecondary: "hsl(var(--muted-foreground))",
+                    colorPrimary: "#0ea5e9",
                     borderRadius: "8px",
                   },
                 },

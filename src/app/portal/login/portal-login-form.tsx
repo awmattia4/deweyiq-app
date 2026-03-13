@@ -60,7 +60,8 @@ export function PortalLoginForm({ branding }: PortalLoginFormProps) {
 
   return (
     <div
-      className="min-h-[calc(100vh-3.5rem)] flex flex-col items-center justify-center p-4"
+      data-portal="true"
+      className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground"
       style={brandColor ? ({ "--portal-primary": brandColor } as React.CSSProperties) : undefined}
     >
       {/* Company branding area */}
