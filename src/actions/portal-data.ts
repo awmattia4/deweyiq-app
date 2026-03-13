@@ -2,8 +2,20 @@
 
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 import { adminDb } from "@/lib/db"
-import { customers, orgs, orgSettings, serviceVisits, pools, visitPhotos, profiles } from "@/lib/db/schema"
-import { eq, and, inArray } from "drizzle-orm"
+import {
+  customers,
+  orgs,
+  orgSettings,
+  serviceVisits,
+  pools,
+  visitPhotos,
+  profiles,
+  invoices,
+  invoiceLineItems,
+  paymentRecords,
+} from "@/lib/db/schema"
+import { eq, and, inArray, asc } from "drizzle-orm"
+import { getStripe } from "@/lib/stripe/client"
 
 /**
  * portal-data.ts — Customer-ID resolution and org branding helpers.
