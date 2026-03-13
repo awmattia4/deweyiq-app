@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getAlertCount } from "@/actions/alerts"
+import { getOrgBranding } from "@/actions/company-settings"
 import { AppShell } from "@/components/shell/app-shell"
 
 /**
@@ -39,9 +40,21 @@ export default async function AppLayout({
     redirect("/portal")
   }
 
-  // Fetch alert count for sidebar badge (owner/office only)
-  // getAlertCount returns 0 for tech role so it's safe to call for all roles
-  const alertCount = await getAlertCount()
+  // Fetch alert count and org branding in parallel
+  const [alertCount, orgBranding] = await Promise.all([
+    getAlertCount(),
+    getOrgBranding(),
+  ])
 
-  return <AppShell user={user} alertCount={alertCount}>{children}</AppShell>
+  return (
+    <AppShell
+      user={user}
+      alertCount={alertCount}
+      orgName={orgBranding?.name ?? null}
+      orgLogoUrl={orgBranding?.logoUrl ?? null}
+      orgId={user.org_id}
+    >
+      {children}
+    </AppShell>
+  )
 }

@@ -12,6 +12,9 @@ interface AppShellProps {
   user: AuthUser
   children: React.ReactNode
   alertCount?: number
+  orgName?: string | null
+  orgLogoUrl?: string | null
+  orgId?: string | null
 }
 
 /**
@@ -34,7 +37,7 @@ interface AppShellProps {
  * SyncInitializer renders null but wires initSyncListener() and
  * prefetchTodayRoutes() on mount (per locked decision on pre-caching).
  */
-export function AppShell({ user, children, alertCount = 0 }: AppShellProps) {
+export function AppShell({ user, children, alertCount = 0, orgName, orgLogoUrl, orgId }: AppShellProps) {
   return (
     <TooltipProvider>
       {/* Offline indicator — fixed at viewport top, renders null when online */}
@@ -45,7 +48,7 @@ export function AppShell({ user, children, alertCount = 0 }: AppShellProps) {
 
       {/* Sidebar layout */}
       <SidebarProvider>
-        <AppSidebar user={user} alertCount={alertCount} />
+        <AppSidebar user={user} alertCount={alertCount} orgName={orgName} orgLogoUrl={orgLogoUrl} orgId={orgId} />
 
         {/* Main content area (sidebar inset) */}
         <SidebarInset>

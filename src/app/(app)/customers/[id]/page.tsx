@@ -11,6 +11,9 @@ import { CustomerInlineEdit } from "@/components/customers/customer-inline-edit"
 import { PoolList } from "@/components/customers/pool-list"
 import { EquipmentList } from "@/components/customers/equipment-list"
 import { ServiceHistoryTimeline } from "@/components/customers/service-history-timeline"
+import { CustomerChecklistEditor } from "@/components/customers/customer-checklist-editor"
+import { getOrgSettings, getCustomerChecklistView } from "@/actions/company-settings"
+import { InboxThread } from "@/components/inbox/inbox-thread"
 
 export const metadata: Metadata = {
   title: "Customer Profile",
@@ -47,11 +50,18 @@ export default async function CustomerProfilePage({
 
   let customer: Awaited<ReturnType<typeof fetchCustomer>> | null = null
   let techs: Array<{ id: string; full_name: string | null }> = []
+  let orgSettings: Awaited<ReturnType<typeof getOrgSettings>> | null = null
+  let checklistView: Awaited<ReturnType<typeof getCustomerChecklistView>> = {
+    templateTasks: [],
+    customTasks: [],
+  }
 
   try {
-    ;[customer, techs] = await Promise.all([
+    ;[customer, techs, orgSettings, checklistView] = await Promise.all([
       fetchCustomer(token, id),
       fetchTechs(token),
+      getOrgSettings(),
+      getCustomerChecklistView(id),
     ])
   } catch (err) {
     console.error("[CustomerProfilePage] DB error:", err)
@@ -84,16 +94,23 @@ export default async function CustomerProfilePage({
 
       {/* ── Tabbed sections ───────────────────────────────────────────────── */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="pools">Pools</TabsTrigger>
           <TabsTrigger value="equipment">Equipment</TabsTrigger>
+          <TabsTrigger value="checklist">Checklist</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
         {/* Overview — inline edit for customer fields */}
         <TabsContent value="overview" className="mt-6">
-          <CustomerInlineEdit customer={customer} techs={techs} userRole={user.role} />
+          <CustomerInlineEdit
+            customer={customer}
+            techs={techs}
+            userRole={user.role}
+            defaultPerStopRate={(orgSettings?.default_hourly_rate as string | null | undefined) ?? null}
+          />
         </TabsContent>
 
         {/* Pools — pool cards with Add Pool modal */}
@@ -106,9 +123,33 @@ export default async function CustomerProfilePage({
           <EquipmentList pools={customer.pools} />
         </TabsContent>
 
+        {/* Checklist — per-customer task customization */}
+        <TabsContent value="checklist" className="mt-6">
+          <CustomerChecklistEditor
+            customerId={customer.id}
+            initialView={checklistView}
+          />
+        </TabsContent>
+
         {/* History — vertical timeline of service visits (Phase 3 populates with real data) */}
         <TabsContent value="history" className="mt-6">
           <ServiceHistoryTimeline visits={allVisits} />
+        </TabsContent>
+
+        {/* Messages — office-to-customer thread for this customer */}
+        <TabsContent value="messages" className="mt-6">
+          <div
+            className="rounded-xl border border-border/60 bg-card overflow-hidden"
+            style={{ height: "500px" }}
+          >
+            <InboxThread
+              customerId={customer.id}
+              customerName={customer.full_name}
+              customerEmail={customer.email ?? ""}
+              orgId={user.org_id}
+              senderName={user.full_name || user.email}
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

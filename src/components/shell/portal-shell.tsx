@@ -7,6 +7,7 @@ import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, ChevronDownIc
 import { signOut } from "@/actions/auth"
 import type { AuthUser } from "@/actions/auth"
 import type { OrgBranding } from "@/actions/portal-data"
+import { UnreadDot } from "@/components/inbox/unread-badge"
 
 interface PortalShellProps {
   user: AuthUser
@@ -40,7 +41,7 @@ const NAV_ITEMS: NavItem[] = [
  *
  * User dropdown: customer name + email, sign out, switch company (if applicable).
  */
-export function PortalShell({ user, branding, children }: PortalShellProps) {
+export function PortalShell({ user, branding, customerId, children }: PortalShellProps) {
   const pathname = usePathname()
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
@@ -111,17 +112,25 @@ export function PortalShell({ user, branding, children }: PortalShellProps) {
           >
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+              const isMessages = item.href === "/portal/messages"
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  className={`relative px-3 py-1.5 text-sm rounded-md transition-colors ${
                     isActive
                       ? "text-foreground bg-muted font-medium"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   }`}
                 >
                   {item.label}
+                  {isMessages && (
+                    <UnreadDot
+                      orgId={user.org_id}
+                      role="customer"
+                      customerId={customerId}
+                    />
+                  )}
                 </Link>
               )
             })}
@@ -196,6 +205,7 @@ export function PortalShell({ user, branding, children }: PortalShellProps) {
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             const Icon = item.icon
+            const isMessages = item.href === "/portal/messages"
             return (
               <Link
                 key={item.href}
@@ -206,7 +216,16 @@ export function PortalShell({ user, branding, children }: PortalShellProps) {
                     : "text-muted-foreground"
                 }`}
               >
-                <Icon className="h-5 w-5" />
+                <div className="relative">
+                  <Icon className="h-5 w-5" />
+                  {isMessages && (
+                    <UnreadDot
+                      orgId={user.org_id}
+                      role="customer"
+                      customerId={customerId}
+                    />
+                  )}
+                </div>
                 <span className="leading-tight">
                   {item.label === "Request Service" ? "Request" : item.label}
                 </span>
