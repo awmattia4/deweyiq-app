@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 7 — Billing & Payments (Phase 6 complete)
+**Current focus:** Phase 8 — Customer Portal (Phase 7 Plan 09 deferred)
 
 ## Current Position
 
-Phase: 7 of 11 (Billing & Payments) — IN PROGRESS
-Plan: 8/9 complete (01, 02, 03, 04, 05, 06, 07, 08 done)
-Status: Phase 7 Plan 08 complete — Customizable notification templates with merge tag engine and template editor UI
-Last activity: 2026-03-12 — Phase 7 Plan 08 executed: Customizable email/SMS templates
+Phase: 8 of 11 (Customer Portal) — IN PROGRESS
+Plan: 1/6 complete (01 done)
+Status: Phase 8 Plan 01 complete — Portal foundation: magic link auth, subdomain routing, company branding, portal_messages + service_requests schema
+Last activity: 2026-03-13 — Phase 8 Plan 01 executed: Portal foundation
 
-Progress: [█████████-] 89%
+Progress: [█████████-] 90%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████-] 89%
 | Phase 07-billing-payments P05 | 14 | 2 tasks | 15 files |
 | Phase 07-billing-payments P07 | 9 | 2 tasks | 15 files |
 | Phase 07-billing-payments P08 | 25 | 2 tasks | 24 files |
+| Phase 08-customer-portal P01 | 35 | 2 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -260,6 +261,12 @@ Recent decisions affecting current work:
 - [Phase 07-08]: Dunning email has dual customization -- step-level subject/body takes priority, org-level template provides fallback and enabled toggle
 - [Phase 07-08]: Edge Functions accept optional customText/customSubject/customBody for backward compatibility -- existing callers unchanged
 - [Phase 07-08]: 5 new org_settings columns (google_review_url, website_url, social_media_urls, custom_email_footer, custom_sms_signature) for merge tag sources
+- [Phase 08-01]: shouldCreateUser:false on signInWithOtp — only existing customers receive magic links; prevents rogue account creation via portal login form
+- [Phase 08-01]: sendMagicLink always returns success — prevents email enumeration attacks on portal login
+- [Phase 08-01]: adminDb for portal-data helpers — portal login page loads branding before auth; withRls not viable; getOrgBranding and resolveCustomerId always use adminDb
+- [Phase 08-01]: window.location.href for org switch navigation — JWT org_id change requires full page reload; router.push would not re-run server components with new claims
+- [Phase 08-01]: x-portal-slug injected as request header by proxy.ts middleware — portal layout and login page read it via headers() for subdomain org resolution without query params or cookies
+- [Phase 08-01]: NULL RLS policy pitfall confirmed again for portal_messages and service_requests — all 5 policies manually fixed via ALTER POLICY after drizzle-kit push
 
 ### Pending Todos
 
@@ -268,6 +275,11 @@ Recent decisions affecting current work:
 - [UI Polish]: Auth page button spacing and logo mismatch (deferred from Phase 1)
 - [Phase 4/5]: Team invite dialog should allow setting display name when inviting — currently display name is not editable by the invited user or the inviter; add name field to invite flow and allow techs to edit their own display name in settings
 - [Phase 5]: Customizable tech requirements — owner/office should be able to configure: required chemistry readings per sanitizer type, required checklist tasks, minimum data for stop completion. Currently hardcoded in REQUIRED_PARAMS (completion-modal.tsx) and requiredFor (chemistry-grid.tsx). Added as plan 05-05 in roadmap.
+
+### Roadmap Evolution
+
+- Phase 15 added: Intelligent Billing Automation — per-customer pricing with smart suggestions, bulk shop fees, billing anomaly detection, auto-categorization (duplicates with Phase 7 removed)
+- Phase 15/16 swapped: Intelligent Billing Automation → Phase 15, Subscription Billing → Phase 16
 
 ### Blockers/Concerns
 
@@ -278,6 +290,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Completed 07-08-PLAN.md — Customizable notification templates with merge tag engine and template editor UI
-Resume file: .planning/phases/07-billing-payments/07-09-PLAN.md
+Last session: 2026-03-13
+Stopped at: Completed 08-01-PLAN.md — Portal foundation: magic link auth, subdomain routing, branding, schema
+Resume file: .planning/phases/08-customer-portal/08-02-PLAN.md
