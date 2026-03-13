@@ -73,6 +73,7 @@ Progress: [█████████-] 90%
 | Phase 08-customer-portal P01 | 35 | 2 tasks | 20 files |
 | Phase 08-customer-portal P02 | 10 | 2 tasks | 7 files |
 | Phase 08-customer-portal P03 | 10 | 2 tasks | 6 files |
+| Phase 08-customer-portal P04 | 45 | 2 tasks | 13 files |
 | Phase 08-customer-portal P05 | 12 | 2 tasks | 22 files |
 
 ## Accumulated Context
@@ -281,6 +282,11 @@ Recent decisions affecting current work:
 - [Phase 08]: adminDb throughout portal-messages.ts — portal customers + office notification sends both work without user session JWT context
 - [Phase 08]: Supabase Realtime Broadcast for chat (not Postgres Changes) — no RLS filtering needed, lower latency, simpler channel model
 - [Phase 08]: getInboxThreads uses raw SQL GROUP BY + COUNT CASE WHEN — avoids correlated subquery pitfall per MEMORY.md
+- [Phase 08-04]: Per-request Realtime channel scoped to portal-request-{requestId} — avoids cross-request message leakage; each request is its own Supabase Realtime channel
+- [Phase 08-04]: adminDb for portal service request operations — portal customers' JWT lacks reliable org_id for RLS; explicit org+customer check in server action provides equivalent security
+- [Phase 08-04]: withRls two-query pattern for getOfficeRequests — customers and pools queried in separate steps (no correlated subqueries inside withRls per MEMORY.md pitfall)
+- [Phase 08-04]: Lazy message loading in RequestList — messages fetched on card expand, not page load; prevents N+1 DB calls for large request lists
+- [Phase 08-04]: RequestThread reused in both portal (customer) and office review panel — single source of truth for chat UI
 
 ### Pending Todos
 
