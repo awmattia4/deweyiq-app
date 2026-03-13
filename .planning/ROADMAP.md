@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sixteen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. The final phase closes out the roadmap with the public-facing marketing site and subscription billing — converting pool company owners into paying customers with a stunning marketing experience, frictionless sign-up, and Stripe-powered subscription lifecycle.
+Seventeen phases that build the platform from the ground up, ordered by hard technical dependencies. Foundation (auth, schema, multi-tenancy, offline architecture) ships first because retrofitting any of these is a rewrite. Customer data model comes second because every field operation needs to know what pool it is servicing. Core field tech app is the daily driver and the source of all service records — it ships before billing, reporting, or AI because those downstream phases depend on the records it generates. Office dispatch, work orders, and billing follow in sequence, each unblocked by the previous. The customer portal and reporting dashboards surface existing data once it is stable and real. Smart AI features follow, then the platform becomes a complete QuickBooks replacement — native payroll with direct deposit and tax filing, full double-entry accounting with bank reconciliation, and payment reconciliation from Stripe Connect or QBO. Projects & Renovations adds full construction/remodel project management with deposits, progress billing, permits, subcontractors, and a dedicated tech field experience. Service Agreements formalizes recurring contracts with e-signature. Intelligent Billing Automation adds smart auto-invoice generation — techs log work, the system prices it based on per-customer rates and billing profiles, with bulk fee application, arrears billing, and anomaly detection. Before launch, a comprehensive UI Polish & Launch Readiness phase audits and perfects every screen — fixing cursor states, hover effects, spacing inconsistencies, mobile responsiveness, accessibility, empty states, loading skeletons, error handling, and dark mode consistency across every single page and component. The final phase closes out the roadmap with the public-facing marketing site and subscription billing — converting pool company owners into paying customers with a stunning marketing experience, frictionless sign-up, and Stripe-powered subscription lifecycle.
 
 ## Phases
 
@@ -27,7 +27,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 13: Truck Inventory & Shopping Lists** - Per-tech truck inventory with auto-decrement, shopping lists with full procurement lifecycle, purchasing dashboard, chemical usage tracking, and "What to Bring" pre-route summaries
 - [ ] **Phase 14: Service Agreements & Contracts** - Recurring service agreements with e-signature, auto-schedule/billing setup, agreement lifecycle (pause/resume/cancel/renew), customer portal access, and compliance tracking
 - [ ] **Phase 15: Intelligent Billing Automation** - Per-customer per-visit rates, smart pricing suggestions, bulk shop fee application, billing anomaly detection, and invoice generation preview
-- [ ] **Phase 16: Marketing Site & Subscription Billing** - Conversion-optimized public marketing site with interactive app demos, competitor comparisons, ROI calculator, frictionless multi-step sign-up, plus Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
+- [ ] **Phase 16: UI Polish & Launch Readiness** - Comprehensive audit and perfection of every screen, component, and interaction — cursor states, hover effects, button text visibility, spacing/typography consistency, mobile responsiveness, accessibility (keyboard nav, screen readers, contrast), loading skeletons, empty states, error pages, dark mode consistency, page transitions, toast notifications, and performance optimization
+- [ ] **Phase 17: Marketing Site & Subscription Billing** - Conversion-optimized public marketing site with interactive app demos, competitor comparisons, ROI calculator, frictionless multi-step sign-up, plus Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
 
 ## Phase Details
 
@@ -350,6 +351,8 @@ Plans:
   6. Office has a purchasing dashboard showing all outstanding needs across all techs, grouped by supplier, with bulk PO generation and spending trends
   7. Chemical usage is tracked per tech, per route, per customer, and per pool — surfacing over/under-dosing patterns across the fleet
   8. Barcode/QR scanning is available (but optional) for logging usage, updating truck inventory, receiving deliveries, and adding items to shopping lists
+  9. Parts/items can be imported from QuickBooks Online — pulls the QBO Item catalog (products/services) into the parts catalog with name, description, SKU, unit cost, and sale price mapped automatically. This imports into the same parts catalog already used by work orders in Settings → Work Orders (not a separate inventory — the existing `CatalogItem` table is the single source of truth for parts across the app)
+  10. Office has a dedicated `/inventory` page (sidebar entry) with tabs for: per-tech truck inventory view (what's on each truck, stock levels, reorder alerts), shopping lists (all active lists with status tracking), and purchasing dashboard (fleet-wide needs, supplier grouping, PO generation, spending trends). Parts catalog *definition* (adding/editing items, QBO import) stays in Settings → Work Orders — `/inventory` is the operational page for day-to-day inventory management
 **Plans**: 4 plans
 
 Plans:
@@ -412,7 +415,95 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd:plan-phase 15 to break down)
 
-### Phase 16: Marketing Site & Subscription Billing
+### Phase 16: UI Polish & Launch Readiness
+**Goal**: Audit and perfect every single screen, component, and micro-interaction in the app — fix every broken hover state, missing cursor pointer, invisible button text, inconsistent spacing, janky transition, missing loading state, and accessibility gap — so the product feels polished, professional, and launch-ready before the marketing site showcases it
+**Depends on**: All prior phases (every feature must be built before the polish pass)
+**Requirements**: TBD (to be defined during planning)
+**Known Issues** (reported by user):
+  - Some buttons don't show pointer cursor on hover
+  - Some button hover effects make text invisible/unreadable
+  - Schedule page "Today" button goes to wrong day — if viewing a different day next week and clicking "Today", it navigates to the same weekday in the current week instead of actual today
+  - Completed stops for the day can still be edited/dragged on the Schedule page — should be locked once complete
+  - Dispatch page: all tech routes are the same blue color — need per-tech color coding so routes are visually distinguishable
+  - Routes page (tech): map button exists but map doesn't work — needs functional route map for the current tech's route
+  - Routes page (tech): no way to view previous or upcoming days' routes — needs day navigation (previous/next day)
+  - Routes page (tech): stops at the same address (pool + spa) should be visually grouped for simplicity
+  - Work Orders list page has emoji icons — remove them (user aesthetic preference: no codey icons)
+  - Any other emoji/decorative icons found during audit should be removed app-wide
+**Success Criteria** (what must be TRUE):
+
+  *Interactive States:*
+  1. Every clickable element (buttons, links, cards, tabs, toggles, dropdowns) shows `cursor: pointer` on hover — no exceptions
+  2. Every button and interactive element has a visible, consistent hover/active/focus state that never makes text unreadable or invisible
+  3. Every disabled button has a visually distinct disabled state with `cursor: not-allowed` and clear visual dimming
+  4. Focus rings are visible on all interactive elements for keyboard navigation — consistent ring style across the entire app
+
+  *Visual Consistency:*
+  5. Every page follows the exact same spacing system — `gap-6` between sections, `gap-4` within sections, `p-5` card padding, consistent margins — no one-off spacing values
+  6. Typography is consistent across all pages — same font sizes, weights, line heights, and tracking for equivalent elements (h1, h2, body, captions, labels)
+  7. Color usage exclusively uses design system tokens — no hardcoded hex/rgb/oklch values outside globals.css — status colors, accent colors, and semantic colors are defined once and reused everywhere
+  8. All cards, dialogs, sheets, and panels use the same border radius, shadow, and padding patterns
+
+  *Loading & Empty States:*
+  9. Every data-loading view has a skeleton loader or spinner that matches the layout it will populate — no layout shift when data arrives
+  10. Every list/table has a meaningful empty state with helpful text (not just blank space) — consistent italic muted text pattern across the app
+  11. Every form submission shows a loading indicator on the submit button and disables double-submission
+
+  *Error Handling:*
+  12. Every server action failure shows a toast notification with a human-readable message — no silent failures, no raw error strings
+  13. 404 and error pages are styled, branded, and provide navigation back to the app — not default Next.js error pages
+  14. Network/offline errors show a clear, non-technical message with retry option where applicable
+
+  *Mobile & Responsive:*
+  15. Every page and dialog is fully usable on mobile (375px+) — no horizontal scroll, no cut-off content, no unreachable buttons
+  16. Touch targets are minimum 44x44px on all mobile interactive elements
+  17. Sheets and dialogs are properly sized on mobile — full-screen or bottom-sheet pattern, not desktop-sized modals on small screens
+
+  *Accessibility:*
+  18. All images and icons have appropriate alt text or aria-label
+  19. Color contrast meets WCAG AA (4.5:1 for text, 3:1 for large text) across the entire app in dark mode
+  20. Screen reader can navigate the full app — proper heading hierarchy, landmark regions, form labels, and live regions for dynamic content
+
+  *Dark Mode:*
+  21. Every component renders correctly in dark mode — no white flashes, no unreadable text, no missing borders that were only visible in light mode
+  22. All third-party components (maps, date pickers, etc.) are themed to match dark mode
+
+  *Dashboard Overhaul:*
+  23. The owner dashboard is a comprehensive command center — not a sparse placeholder — showing today's route progress, tech locations, revenue snapshot (week/month/YTD), upcoming schedule density, overdue invoices, open work orders, recent customer activity, and quick-action shortcuts to the most common tasks
+  24. Dashboard widgets are data-rich with sparklines, trend indicators (up/down arrows with percentages), and at-a-glance status badges — the owner should open the app and immediately know the health of their business without clicking into any other page
+  25. Dashboard layout is responsive — cards reflow cleanly from a multi-column desktop grid to a single-column mobile stack
+
+  *Navigation & Sidebar:*
+  26. Sidebar items are reordered into a logical, usage-frequency-based hierarchy — most-used items at top (Dashboard, Schedule, Customers, Routes), operational items in the middle (Dispatch, Work Orders, Billing), and admin at the bottom (Settings) — matching industry-standard SaaS sidebar conventions
+  27. Sidebar grouping uses visual separators or section labels to distinguish between daily operations, management, and configuration sections
+  28. Active sidebar item is clearly highlighted, and the sidebar collapses/expands cleanly on mobile
+
+  *Schedule Page Fixes:*
+  29. The "Today" button always navigates to the actual current date — regardless of which day/week is currently selected
+  30. Completed stops are locked on the Schedule page — cannot be dragged, reordered, or edited for that day once marked complete (read-only visual treatment)
+
+  *Dispatch Page Fixes:*
+  31. Each tech's route on the dispatch map uses a unique, distinguishable color — not all blue — with a matching color legend showing which color belongs to which tech
+
+  *Routes Page (Tech) Enhancements:*
+  32. The route map is fully functional — tech can see their stops plotted on a map with route lines, stop markers with indices, and the ability to tap a marker to see stop details
+  33. Day navigation allows techs to view previous and upcoming days' routes — swipe or arrow buttons to browse days, with clear date display
+  34. Stops at the same address (e.g. pool + spa) are visually grouped into a single card/entry showing all services, consistent with the co-located stops pattern used on schedule and dispatch maps
+
+  *Icon & Emoji Cleanup:*
+  35. No emoji or decorative icons anywhere in the app — Work Orders list, activity logs, page headers, status badges — all cleaned up to be text-driven per brand guidelines
+
+  *Performance & Polish:*
+  36. No Cumulative Layout Shift on any page — elements don't jump around as content loads
+  37. Page transitions are smooth — no flash of unstyled content, no jarring route changes
+  38. All toast notifications use consistent positioning, duration, and styling
+  39. Sidebar, header, and navigation look and behave identically across all pages and roles
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 16 to break down)
+
+### Phase 17: Marketing Site & Subscription Billing
 **Goal**: The public-facing marketing site converts pool company owners into paying customers with a visually stunning, conversion-optimized experience — interactive app demos, competitor comparisons, ROI calculator, and a frictionless multi-step sign-up flow — backed by Stripe subscription billing with tiered pricing, usage enforcement, and graceful failed payment handling
 **Depends on**: Phase 1 (auth, multi-tenant RLS, org model). Marketing site benefits from all prior phases being complete (more features to showcase).
 **Requirements**: SUB-01, SUB-02, SUB-03, SUB-04, SUB-05, SUB-06, SUB-07, SUB-08, SUB-09, SUB-10, MKT-01, MKT-02, MKT-03, MKT-04, MKT-05, MKT-06, MKT-07, MKT-08
@@ -447,25 +538,25 @@ Plans:
 **Plans**: 14 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Marketing site foundation: public route group layout, shared marketing components (navigation, footer with legal links, CTA buttons), dark-first design system tokens for marketing pages, responsive grid system, Framer Motion setup, SEO infrastructure (meta tags, OG images, structured data, sitemap.xml, robots.txt), legal pages (Terms of Service, Privacy Policy, DPA, Cookie Policy, Acceptable Use, SLA, Billing Terms)
-- [ ] 16-02-PLAN.md — Hero section & navigation: full-viewport cinematic hero with gradient mesh background, animated phone + desktop mockups showing real app screens, auto-rotating feature highlights with smooth transitions, bold headline + subhead + CTA, sticky navigation with smooth scroll to sections, mobile hamburger menu
-- [ ] 16-03-PLAN.md — Feature deep-dive sections: 6 feature areas (Field Tech App, Scheduling & Routes, Real-Time Dispatch, Billing & Payments, Customer Portal, Work Orders & Quoting) — each with phone/desktop mockup, 3 benefit bullets, visual workflow demonstration, scroll-triggered entrance animations, tabbed feature switching within each section
-- [ ] 16-04-PLAN.md — Interactive app demo: sandboxed read-only demo environment showing route view, chemistry logging, dispatch map, billing dashboard — visitors can click through real UI without signing up, guided tour overlay with hotspots, "Try it yourself" CTA at each feature section
-- [ ] 16-05-PLAN.md — Competitor comparison & "Day in the Life": interactive comparison table with toggle between Skimmer/Pool Brain/FieldPulse/ServiceTitan, feature-by-feature breakdown with check/cross indicators, honest positioning, "Why companies switch" callouts; "Day in the Life" walkthrough section showing tech morning + owner dashboard with scroll-animated timeline
-- [ ] 16-06-PLAN.md — Pricing & ROI calculator: interactive pricing section with pool count slider, 3 flat tiers (Starter $99/mo 1-79 pools, Pro $199/mo 80-200 pools, Enterprise $349/mo 200+ pools), annual toggle showing 2 months free ($990/$1,990/$3,490 per year), all-features-included emphasis, "unlimited SMS included" callout (vs Skimmer $0.029/msg), "unlimited techs & office users" callout (vs Pool Brain $55/tech), no per-pool or per-tech fees, competitor price comparison examples, FAQ accordion; ROI calculator (input: pools, techs, admin hours → output: time saved, money saved, payback period)
-- [ ] 16-07-PLAN.md — Social proof & trust: testimonial cards with photos/company names, company logo bar, live platform stats with counter animations (pools managed, stops completed, invoices sent), case study preview cards, trust badges (SSL, Stripe, SOC2-ready), press mentions section
-- [ ] 16-08-PLAN.md — Sign-up flow & onboarding wizard: multi-step wizard (account creation → company profile with logo upload → service details/pool count → invite team → first customer or CSV import → guided dashboard tour), progress bar, field validation, Google OAuth, step-level progress persistence, Skimmer migration path with CSV field mapping
-- [ ] 16-09-PLAN.md — Schema + Stripe setup: subscriptions table with enums (status, tier, billing_interval), src/lib/stripe.ts client singleton, tier config constants (Starter 1-79 pools $99/$990, Pro 80-200 pools $199/$1990, Enterprise 200+ pools $349/$3490), webhook signature verification utility
-- [ ] 16-10-PLAN.md — Checkout & trial: createCheckoutSession action with card + ACH bank transfer payment methods enabled, trial creation on signup (14-day, no card), Stripe Checkout redirect, success/cancel pages, trial banner component visible to all roles, "Save ~3% with bank transfer" nudge on annual plans
-- [ ] 16-11-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling checkout.session.completed, customer.subscription.created/updated/deleted, invoice.payment_succeeded/failed, customer.subscription.trial_will_end — with idempotent event processing
-- [ ] 16-12-PLAN.md — Subscription management UI: owner-only "Billing" tab in /settings with current plan card, pool usage bar with tier limit, invoice history from Stripe API, cancel/reactivate flows, upgrade/downgrade with proration, payment method management via Stripe Customer Portal
-- [ ] 16-13-PLAN.md — Usage enforcement & failed payments: pool count tracking with real-time limit checking, 7-day grace period for over-limit, upgrade prompt dialog, failed payment grace period, account restriction (read-only mode with full-screen blocker), payment recovery flow, automatic restriction lift on successful payment
-- [ ] 16-14-PLAN.md — End-to-end verification: marketing site Lighthouse audit (90+ all categories), sign-up flow end-to-end test, subscription lifecycle with Stripe test mode (trial → checkout → active → cancel → reactivate → failed payment → recovery), mobile responsiveness audit, competitor comparison accuracy review
+- [ ] 17-01-PLAN.md — Marketing site foundation: public route group layout, shared marketing components (navigation, footer with legal links, CTA buttons), dark-first design system tokens for marketing pages, responsive grid system, Framer Motion setup, SEO infrastructure (meta tags, OG images, structured data, sitemap.xml, robots.txt), legal pages (Terms of Service, Privacy Policy, DPA, Cookie Policy, Acceptable Use, SLA, Billing Terms)
+- [ ] 17-02-PLAN.md — Hero section & navigation: full-viewport cinematic hero with gradient mesh background, animated phone + desktop mockups showing real app screens, auto-rotating feature highlights with smooth transitions, bold headline + subhead + CTA, sticky navigation with smooth scroll to sections, mobile hamburger menu
+- [ ] 17-03-PLAN.md — Feature deep-dive sections: 6 feature areas (Field Tech App, Scheduling & Routes, Real-Time Dispatch, Billing & Payments, Customer Portal, Work Orders & Quoting) — each with phone/desktop mockup, 3 benefit bullets, visual workflow demonstration, scroll-triggered entrance animations, tabbed feature switching within each section
+- [ ] 17-04-PLAN.md — Interactive app demo: sandboxed read-only demo environment showing route view, chemistry logging, dispatch map, billing dashboard — visitors can click through real UI without signing up, guided tour overlay with hotspots, "Try it yourself" CTA at each feature section
+- [ ] 17-05-PLAN.md — Competitor comparison & "Day in the Life": interactive comparison table with toggle between Skimmer/Pool Brain/FieldPulse/ServiceTitan, feature-by-feature breakdown with check/cross indicators, honest positioning, "Why companies switch" callouts; "Day in the Life" walkthrough section showing tech morning + owner dashboard with scroll-animated timeline
+- [ ] 17-06-PLAN.md — Pricing & ROI calculator: interactive pricing section with pool count slider, 3 flat tiers (Starter $99/mo 1-79 pools, Pro $199/mo 80-200 pools, Enterprise $349/mo 200+ pools), annual toggle showing 2 months free ($990/$1,990/$3,490 per year), all-features-included emphasis, "unlimited SMS included" callout (vs Skimmer $0.029/msg), "unlimited techs & office users" callout (vs Pool Brain $55/tech), no per-pool or per-tech fees, competitor price comparison examples, FAQ accordion; ROI calculator (input: pools, techs, admin hours → output: time saved, money saved, payback period)
+- [ ] 17-07-PLAN.md — Social proof & trust: testimonial cards with photos/company names, company logo bar, live platform stats with counter animations (pools managed, stops completed, invoices sent), case study preview cards, trust badges (SSL, Stripe, SOC2-ready), press mentions section
+- [ ] 17-08-PLAN.md — Sign-up flow & onboarding wizard: multi-step wizard (account creation → company profile with logo upload → service details/pool count → invite team → first customer or CSV import → guided dashboard tour), progress bar, field validation, Google OAuth, step-level progress persistence, Skimmer migration path with CSV field mapping
+- [ ] 17-09-PLAN.md — Schema + Stripe setup: subscriptions table with enums (status, tier, billing_interval), src/lib/stripe.ts client singleton, tier config constants (Starter 1-79 pools $99/$990, Pro 80-200 pools $199/$1990, Enterprise 200+ pools $349/$3490), webhook signature verification utility
+- [ ] 17-10-PLAN.md — Checkout & trial: createCheckoutSession action with card + ACH bank transfer payment methods enabled, trial creation on signup (14-day, no card), Stripe Checkout redirect, success/cancel pages, trial banner component visible to all roles, "Save ~3% with bank transfer" nudge on annual plans
+- [ ] 17-11-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling checkout.session.completed, customer.subscription.created/updated/deleted, invoice.payment_succeeded/failed, customer.subscription.trial_will_end — with idempotent event processing
+- [ ] 17-12-PLAN.md — Subscription management UI: owner-only "Billing" tab in /settings with current plan card, pool usage bar with tier limit, invoice history from Stripe API, cancel/reactivate flows, upgrade/downgrade with proration, payment method management via Stripe Customer Portal
+- [ ] 17-13-PLAN.md — Usage enforcement & failed payments: pool count tracking with real-time limit checking, 7-day grace period for over-limit, upgrade prompt dialog, failed payment grace period, account restriction (read-only mode with full-screen blocker), payment recovery flow, automatic restriction lift on successful payment
+- [ ] 17-14-PLAN.md — End-to-end verification: marketing site Lighthouse audit (90+ all categories), sign-up flow end-to-end test, subscription lifecycle with Stripe test mode (trial → checkout → active → cancel → reactivate → failed payment → recovery), mobile responsiveness audit, competitor comparison accuracy review
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -484,4 +575,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 13. Truck Inventory & Shopping Lists | 0/4 | Not started | - |
 | 14. Service Agreements & Contracts | 0/9 | Not started | - |
 | 15. Intelligent Billing Automation | 0/0 | Not started | - |
-| 16. Marketing Site & Subscription Billing | 0/14 | Not started | - |
+| 16. UI Polish & Launch Readiness | 0/0 | Not started | - |
+| 17. Marketing Site & Subscription Billing | 0/14 | Not started | - |

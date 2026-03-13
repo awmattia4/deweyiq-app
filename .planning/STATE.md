@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 8 — Customer Portal (Phase 7 Plan 09 deferred)
+**Current focus:** Phase 9 — Reporting & Team Analytics (Phase 7 Plan 09 deferred)
 
 ## Current Position
 
-Phase: 8 of 11 (Customer Portal) — IN PROGRESS
+Phase: 8 of 17 (Customer Portal) — COMPLETE
 Plan: 5/5 complete (01, 02, 03, 04, 05 done)
-Status: Phase 8 Plan 05 complete — Customer messaging: real-time chat, office inbox, unread badges, email notifications
-Last activity: 2026-03-13 — Phase 8 Plan 05 executed: Customer messaging
+Status: Phase 8 complete — QA passed, all bugs fixed (middleware rename, Realtime unread badges, portal light theme + toasts)
+Last activity: 2026-03-13 — Phase 8 QA fixes committed
 
-Progress: [█████████-] 90%
+Progress: [████████--] 47% (8 of 17 phases)
 
 ## Performance Metrics
 
@@ -300,6 +300,8 @@ Recent decisions affecting current work:
 
 - Phase 15 added: Intelligent Billing Automation — per-customer pricing with smart suggestions, bulk shop fees, billing anomaly detection, auto-categorization (duplicates with Phase 7 removed)
 - Phase 15/16 swapped: Intelligent Billing Automation → Phase 15, Subscription Billing → Phase 16
+- Phase 16 inserted: UI Polish & Launch Readiness — comprehensive audit of every screen/component/interaction before marketing launch
+- Subscription Billing renumbered: Phase 16 → Phase 17 (Marketing Site & Subscription Billing)
 
 ### Blockers/Concerns
 
@@ -311,5 +313,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-13
-Stopped at: Completed 08-05-PLAN.md — Customer messaging: real-time chat (Supabase Realtime Broadcast), office inbox, unread badges, email notifications both ways
-Resume file: Phase 8 complete — all 5 plans done
+Stopped at: Phase 8 complete — all 5 plans executed, QA passed, 11 bugs fixed across 2 commits
+Resume file: Ready for Phase 9 (Reporting & Team Analytics)
