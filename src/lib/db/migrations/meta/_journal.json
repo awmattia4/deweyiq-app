@@ -64,6 +64,13 @@
       "when": 1773422520659,
       "tag": "0008_milky_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773534275656,
+      "tag": "0009_material_echo",
+      "breakpoints": true
     }
   ]
 }

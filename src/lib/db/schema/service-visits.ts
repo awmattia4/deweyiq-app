@@ -48,6 +48,8 @@ export const serviceVisits = pgTable(
     completed_at: timestamp("completed_at", { withTimezone: true }),
     // When the post-visit report email was sent
     email_sent_at: timestamp("email_sent_at", { withTimezone: true }),
+    // Phase 9: What the tech actually applied — Array<{ chemical: string; productId: string; amount: number; unit: string }>
+    dosing_amounts: jsonb("dosing_amounts"),
   },
   (table) => [
     index("service_visits_org_id_idx").on(table.org_id),

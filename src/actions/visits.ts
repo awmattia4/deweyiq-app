@@ -14,14 +14,18 @@ import {
   alerts,
   orgs,
   profiles,
+  routeStops,
+  workOrders,
+  workOrderLineItems,
 } from "@/lib/db/schema"
-import { eq, and, desc } from "drizzle-orm"
+import { eq, and, desc, asc, isNull } from "drizzle-orm"
 import type { ChemicalProduct, ChemicalKey } from "@/lib/chemistry/dosing"
 import type { SanitizerType } from "@/lib/chemistry/targets"
 import { render as renderEmail } from "@react-email/render"
 import { ServiceReportEmail } from "@/lib/emails/service-report-email"
 import { signReportToken } from "@/lib/reports/report-token"
 import { getOrgSettings } from "@/actions/company-settings"
+import { toLocalDateString } from "@/lib/date-utils"
 import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
@@ -48,6 +52,20 @@ export interface StopContext {
     isRequired: boolean
     sortOrder: number
   }>
+  /** Service type name (checklist template name) */
+  serviceTypeName: string | null
+  /** Work order details (only present for WO stops) */
+  workOrder: {
+    title: string
+    description: string | null
+    category: string
+    priority: string
+    lineItems: Array<{
+      description: string
+      quantity: string
+      unit: string
+    }>
+  } | null
 }
 
 export interface CompleteStopInput {
@@ -60,6 +78,12 @@ export interface CompleteStopInput {
   photoStoragePaths: string[]
   /** When true, bypasses requirement warnings and completes anyway, generating an incomplete_data alert */
   overrideWarnings?: boolean
+  /**
+   * Phase 9: What the tech actually applied at this stop.
+   * Optional — existing callers that don't pass it will write null.
+   * Future: stop-workflow.tsx will pass calculated dosing amounts at completion time.
+   */
+  dosingAmounts?: Array<{ chemical: string; productId: string; amount: number; unit: string }>
 }
 
 export interface CompleteStopWarnings {
@@ -183,43 +207,163 @@ export async function getStopContext(
           .filter(Boolean) as ChemicalProduct[]
       }
 
-      // ── 3. Fetch checklist tasks (template for "routine" + customer overrides)
-      const taskRows = await db
+      // ── 3. Look up today's route_stop to get template + WO info ────────────
+      const today = toLocalDateString()
+      const routeStopRows = await db
         .select({
-          taskId: checklistTasks.id,
-          label: checklistTasks.label,
-          isRequired: checklistTasks.is_required,
-          sortOrder: checklistTasks.sort_order,
-          isDeleted: checklistTasks.is_deleted,
-          customerId: checklistTasks.customer_id,
+          checklistTemplateId: routeStops.checklist_template_id,
+          workOrderId: routeStops.work_order_id,
         })
-        .from(checklistTasks)
-        .leftJoin(
-          checklistTemplates,
-          eq(checklistTasks.template_id, checklistTemplates.id)
-        )
+        .from(routeStops)
         .where(
           and(
-            eq(checklistTasks.org_id, orgId as string),
-            eq(checklistTasks.is_deleted, false)
+            eq(routeStops.org_id, orgId as string),
+            eq(routeStops.customer_id, customerId),
+            eq(routeStops.pool_id, poolId),
+            eq(routeStops.scheduled_date, today)
           )
         )
+        .limit(1)
 
-      // Merge template tasks + customer overrides
-      const mergedTasks = taskRows
-        .filter(
-          (task) =>
-            task.customerId === null || task.customerId === customerId
-        )
-        .map((task) => ({
-          taskId: task.taskId,
-          label: task.label,
-          isRequired: task.isRequired,
-          sortOrder: task.sortOrder,
-        }))
-        .sort((a, b) => a.sortOrder - b.sortOrder)
+      const currentStop = routeStopRows[0]
+      let effectiveTemplateId = currentStop?.checklistTemplateId ?? null
+      let serviceTypeName: string | null = null
 
-      // ── 4. Fetch previous visit's chemistry readings ──────────────────────
+      // If no template on the stop, find the org's default template
+      if (!effectiveTemplateId) {
+        const defaultTemplateRows = await db
+          .select({ id: checklistTemplates.id, name: checklistTemplates.name })
+          .from(checklistTemplates)
+          .where(
+            and(
+              eq(checklistTemplates.org_id, orgId as string),
+              eq(checklistTemplates.is_default, true)
+            )
+          )
+          .limit(1)
+        if (defaultTemplateRows[0]) {
+          effectiveTemplateId = defaultTemplateRows[0].id
+          serviceTypeName = defaultTemplateRows[0].name
+        }
+      } else {
+        // Fetch the template name
+        const templateNameRows = await db
+          .select({ name: checklistTemplates.name })
+          .from(checklistTemplates)
+          .where(eq(checklistTemplates.id, effectiveTemplateId))
+          .limit(1)
+        serviceTypeName = templateNameRows[0]?.name ?? null
+      }
+
+      // ── 4. Fetch checklist tasks: template tasks + customer overrides ──────
+      // Query A: Active template tasks (org-level, not customer-specific)
+      const templateTaskRows = effectiveTemplateId
+        ? await db
+            .select({
+              taskId: checklistTasks.id,
+              label: checklistTasks.label,
+              isRequired: checklistTasks.is_required,
+              sortOrder: checklistTasks.sort_order,
+            })
+            .from(checklistTasks)
+            .where(
+              and(
+                eq(checklistTasks.org_id, orgId as string),
+                eq(checklistTasks.template_id, effectiveTemplateId),
+                isNull(checklistTasks.customer_id),
+                eq(checklistTasks.is_deleted, false)
+              )
+            )
+        : []
+
+      // Query B: All customer-level rows (both additions and tombstones)
+      const customerTaskRows = customerId
+        ? await db
+            .select({
+              taskId: checklistTasks.id,
+              label: checklistTasks.label,
+              isRequired: checklistTasks.is_required,
+              sortOrder: checklistTasks.sort_order,
+              isDeleted: checklistTasks.is_deleted,
+              suppressesTaskId: checklistTasks.suppresses_task_id,
+            })
+            .from(checklistTasks)
+            .where(
+              and(
+                eq(checklistTasks.org_id, orgId as string),
+                eq(checklistTasks.customer_id, customerId)
+              )
+            )
+        : []
+
+      // Build suppression set from tombstones
+      const suppressedIds = new Set(
+        customerTaskRows
+          .filter((t) => t.isDeleted && t.suppressesTaskId)
+          .map((t) => t.suppressesTaskId!)
+      )
+
+      // Active customer additions (non-deleted, non-tombstone)
+      const customerAdditions = customerTaskRows.filter((t) => !t.isDeleted)
+
+      // Merge: template tasks (minus suppressed) + customer additions
+      const mergedTasks = [
+        ...templateTaskRows
+          .filter((t) => !suppressedIds.has(t.taskId))
+          .map((t) => ({
+            taskId: t.taskId,
+            label: t.label,
+            isRequired: t.isRequired,
+            sortOrder: t.sortOrder,
+          })),
+        ...customerAdditions.map((t) => ({
+          taskId: t.taskId,
+          label: t.label,
+          isRequired: t.isRequired,
+          sortOrder: t.sortOrder,
+        })),
+      ].sort((a, b) => a.sortOrder - b.sortOrder)
+
+      // ── 5. Fetch WO details if this is a work order stop ───────────────────
+      let workOrderContext: StopContext["workOrder"] = null
+      if (currentStop?.workOrderId) {
+        const [wo] = await db
+          .select({
+            title: workOrders.title,
+            description: workOrders.description,
+            category: workOrders.category,
+            priority: workOrders.priority,
+          })
+          .from(workOrders)
+          .where(eq(workOrders.id, currentStop.workOrderId))
+          .limit(1)
+
+        if (wo) {
+          const lineItemRows = await db
+            .select({
+              description: workOrderLineItems.description,
+              quantity: workOrderLineItems.quantity,
+              unit: workOrderLineItems.unit,
+            })
+            .from(workOrderLineItems)
+            .where(eq(workOrderLineItems.work_order_id, currentStop.workOrderId))
+            .orderBy(asc(workOrderLineItems.sort_order))
+
+          workOrderContext = {
+            title: wo.title,
+            description: wo.description,
+            category: wo.category,
+            priority: wo.priority,
+            lineItems: lineItemRows.map((li) => ({
+              description: li.description,
+              quantity: li.quantity,
+              unit: li.unit,
+            })),
+          }
+        }
+      }
+
+      // ── 6. Fetch previous visit's chemistry readings ──────────────────────
       let previousChemistry: Record<string, number | null> = {}
 
       const previousVisitRows = await db
@@ -243,7 +387,7 @@ export async function getStopContext(
         }
       }
 
-      // ── 5. Assemble context ───────────────────────────────────────────────
+      // ── 7. Assemble context ───────────────────────────────────────────────
       const sanitizerType =
         (poolRow.sanitizerType as SanitizerType | null) ?? "chlorine"
 
@@ -258,6 +402,8 @@ export async function getStopContext(
         previousChemistry,
         chemicalProducts: products,
         checklistTasks: mergedTasks,
+        serviceTypeName,
+        workOrder: workOrderContext,
       } satisfies StopContext
     })
   } catch (err) {
@@ -469,6 +615,7 @@ export async function completeStop(
           >,
           photo_urls: input.photoStoragePaths,
           report_html: reportHtml,
+          dosing_amounts: (input.dosingAmounts ?? null) as unknown as Record<string, unknown> | null,
         })
         .onConflictDoUpdate({
           target: serviceVisits.id,
@@ -483,6 +630,7 @@ export async function completeStop(
             >,
             photo_urls: input.photoStoragePaths,
             report_html: reportHtml,
+            dosing_amounts: (input.dosingAmounts ?? null) as unknown as Record<string, unknown> | null,
           },
         })
     })
@@ -547,6 +695,45 @@ export async function completeStop(
     return { success: true }
   } catch (err) {
     console.error("[completeStop] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// markStopStarted
+// ---------------------------------------------------------------------------
+
+/**
+ * markStopStarted — records when a tech begins a stop (in_progress transition).
+ *
+ * Phase 9: Sets started_at on route_stops so stop duration can be calculated
+ * as (completed_at - started_at) in the Operations and Team reports.
+ *
+ * This is best-effort and fire-and-forget — if the route_stop row doesn't
+ * exist (e.g. Phase 3 fallback), the update is a no-op. Duration data will
+ * simply be missing for those stops.
+ *
+ * @param routeStopId - The route_stops.id for the stop being started
+ */
+export async function markStopStarted(
+  routeStopId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(routeStops)
+        .set({ started_at: new Date() })
+        .where(eq(routeStops.id, routeStopId))
+    })
+    return { success: true }
+  } catch (err) {
+    console.error("[markStopStarted] Error:", err)
     return {
       success: false,
       error: err instanceof Error ? err.message : "Unknown error",

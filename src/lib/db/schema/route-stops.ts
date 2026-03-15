@@ -7,6 +7,8 @@ import { profiles } from "./profiles"
 import { customers } from "./customers"
 import { pools } from "./pools"
 import { scheduleRules } from "./schedule-rules"
+import { workOrders } from "./work-orders"
+import { checklistTemplates } from "./checklists"
 
 /**
  * Route stops — one row per stop on a tech's daily route.
@@ -39,6 +41,13 @@ export const routeStops = pgTable(
       .references(() => customers.id, { onDelete: "cascade" }),
     pool_id: uuid("pool_id").references(() => pools.id, { onDelete: "set null" }),
     schedule_rule_id: uuid("schedule_rule_id").references(() => scheduleRules.id, { onDelete: "set null" }),
+    // Links this stop to a work order (NULL for regular service stops)
+    work_order_id: uuid("work_order_id").references(() => workOrders.id, { onDelete: "set null" }),
+    // Service type — links to checklist template (null = org's default template)
+    checklist_template_id: uuid("checklist_template_id").references(
+      () => checklistTemplates.id,
+      { onDelete: "set null" }
+    ),
     // 'YYYY-MM-DD' string — matches Phase 3 date pattern used in route_days
     scheduled_date: text("scheduled_date").notNull(),
     // Position in the day's route, 1-based. Updated on drag-and-drop reorder.
@@ -52,6 +61,8 @@ export const routeStops = pgTable(
     status: text("status").notNull().default("scheduled"),
     // Phase 5: idempotency for pre-arrival notifications — set after first successful send
     pre_arrival_sent_at: timestamp("pre_arrival_sent_at", { withTimezone: true }),
+    // Phase 9: Set when tech marks stop in_progress; used for stop duration calculation
+    started_at: timestamp("started_at", { withTimezone: true }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

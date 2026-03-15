@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, real, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { boolean, index, numeric, pgTable, real, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -40,6 +40,8 @@ export const chemicalProducts = pgTable(
     unit: text("unit").notNull(),
     // Soft-disable retired products without deleting historical references
     is_active: boolean("is_active").notNull().default(true),
+    // Phase 9: Cost per unit (floz or lbs) — used for chemical cost / margin reports
+    cost_per_unit: numeric("cost_per_unit", { precision: 10, scale: 4 }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { index, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -26,6 +26,10 @@ export const profiles = pgTable(
     // Values: 'owner' | 'office' | 'tech' | 'customer'
     role: text("role").notNull(),
     avatar_url: text("avatar_url"),
+    // Phase 9: Tech payroll — 'per_stop' | 'hourly'
+    pay_type: text("pay_type").default("per_stop"),
+    // Phase 9: Dollar amount per stop (if pay_type='per_stop') or per hour (if pay_type='hourly')
+    pay_rate: numeric("pay_rate", { precision: 10, scale: 2 }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

@@ -86,6 +86,10 @@ export const orgSettings = pgTable(
     social_media_urls: jsonb("social_media_urls").$type<Record<string, string>>(),
     custom_email_footer: text("custom_email_footer"),
     custom_sms_signature: text("custom_sms_signature"),
+    // Phase 9: Chemical profitability threshold — minimum % margin before flagging
+    chem_profit_margin_threshold_pct: numeric("chem_profit_margin_threshold_pct", { precision: 5, scale: 2 }).default("20"),
+    // Phase 9: Commission % for tech-flagged work orders (upsell incentive)
+    wo_upsell_commission_pct: numeric("wo_upsell_commission_pct", { precision: 5, scale: 2 }).default("0"),
     // Phase 8: Customer Portal branding
     brand_color: text("brand_color"),
     favicon_path: text("favicon_path"),
