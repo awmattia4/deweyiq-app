@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { adminDb, withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { alerts, routeStops, serviceVisits, customers, pools } from "@/lib/db/schema"
+import { alerts, routeStops, serviceVisits, customers, pools, orgSettings, chemicalProducts, invoices } from "@/lib/db/schema"
 import { and, eq, isNull, lt, or, sql, inArray, not, desc } from "drizzle-orm"
 import type { AlertType, AlertSeverity, Alert, AlertCounts } from "@/lib/alerts/constants"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // NOTE: Types are imported (not re-exported) from @/lib/alerts/constants because
 // Next.js "use server" files may only export async functions. Client components
@@ -46,6 +47,7 @@ export async function generateAlerts(orgId: string): Promise<void> {
     await _generateMissedStopAlerts(orgId)
     await _generateIncompleteDataAlerts(orgId)
     await _generateDecliningChemistryAlerts(orgId)
+    await _generateUnprofitablePoolAlerts(orgId)
   } catch (err) {
     // Non-fatal — alerts are best-effort. Log and continue.
     console.error("[generateAlerts] Error generating alerts:", err)
@@ -55,7 +57,7 @@ export async function generateAlerts(orgId: string): Promise<void> {
 // ── a) Missed stops ────────────────────────────────────────────────────────────
 
 async function _generateMissedStopAlerts(orgId: string): Promise<void> {
-  const today = new Date().toISOString().split("T")[0]
+  const today = toLocalDateString()
 
   // Find all stops before today that were not completed, skipped, or marked holiday
   // Using LEFT JOIN with customers and pools (no correlated subqueries per MEMORY.md)
@@ -296,6 +298,190 @@ function _formatParamLabel(param: string): string {
   }
 }
 
+// ── d) Unprofitable pools ──────────────────────────────────────────────────────
+
+async function _generateUnprofitablePoolAlerts(orgId: string): Promise<void> {
+  // Fetch org settings for margin threshold
+  const settingsRows = await adminDb
+    .select({ chem_profit_margin_threshold_pct: orgSettings.chem_profit_margin_threshold_pct })
+    .from(orgSettings)
+    .where(eq(orgSettings.org_id, orgId))
+    .limit(1)
+
+  const thresholdPct = parseFloat(settingsRows[0]?.chem_profit_margin_threshold_pct ?? "20") || 20
+
+  // Fetch active chemical products with cost_per_unit for the org
+  const productRows = await adminDb
+    .select({
+      id: chemicalProducts.id,
+      costPerUnit: chemicalProducts.cost_per_unit,
+    })
+    .from(chemicalProducts)
+    .where(and(eq(chemicalProducts.org_id, orgId), eq(chemicalProducts.is_active, true)))
+
+  // Only proceed if we have costs configured — otherwise profitability can't be calculated
+  const productsWithCosts = productRows.filter((p) => p.costPerUnit != null)
+  if (productsWithCosts.length === 0) return
+
+  const costPerUnitMap = new Map<string, number>()
+  for (const p of productsWithCosts) {
+    costPerUnitMap.set(p.id, parseFloat(p.costPerUnit!))
+  }
+
+  // Fetch last 30 days of visits with dosing_amounts
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  const startDate = thirtyDaysAgo.toISOString().split("T")[0]
+
+  const visitRows = await adminDb
+    .select({
+      poolId: serviceVisits.pool_id,
+      customerId: serviceVisits.customer_id,
+      dosingAmounts: serviceVisits.dosing_amounts,
+      poolName: pools.name,
+      customerName: customers.full_name,
+    })
+    .from(serviceVisits)
+    .leftJoin(pools, eq(serviceVisits.pool_id, pools.id))
+    .leftJoin(customers, eq(serviceVisits.customer_id, customers.id))
+    .where(
+      and(
+        eq(serviceVisits.org_id, orgId),
+        eq(serviceVisits.status, "complete"),
+        sql`${serviceVisits.visited_at} >= ${startDate}::date`
+      )
+    )
+    .limit(1000)
+
+  // Aggregate chemical cost per pool
+  interface PoolCostAgg {
+    poolId: string
+    customerId: string | null
+    poolName: string | null
+    customerName: string | null
+    totalCost: number
+    visitCount: number
+  }
+
+  const poolCostMap = new Map<string, PoolCostAgg>()
+
+  for (const visit of visitRows) {
+    if (!visit.poolId) continue
+    if (!poolCostMap.has(visit.poolId)) {
+      poolCostMap.set(visit.poolId, {
+        poolId: visit.poolId,
+        customerId: visit.customerId,
+        poolName: visit.poolName,
+        customerName: visit.customerName,
+        totalCost: 0,
+        visitCount: 0,
+      })
+    }
+
+    const agg = poolCostMap.get(visit.poolId)!
+    agg.visitCount += 1
+
+    const dosingAmounts = visit.dosingAmounts as Array<{
+      chemical: string
+      productId: string
+      amount: number
+      unit: string
+    }> | null
+
+    if (dosingAmounts) {
+      for (const dose of dosingAmounts) {
+        const unitCost = costPerUnitMap.get(dose.productId) ?? 0
+        agg.totalCost += dose.amount * unitCost
+      }
+    }
+  }
+
+  // Fetch revenue per customer in the last 30 days
+  const revenueRows = await adminDb
+    .select({
+      customerId: invoices.customer_id,
+      totalRevenue: sql<string>`COALESCE(SUM(${invoices.total}::numeric), 0)::text`,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.org_id, orgId),
+        eq(invoices.status, "paid"),
+        sql`${invoices.paid_at} >= ${startDate}::timestamptz`
+      )
+    )
+    .groupBy(invoices.customer_id)
+
+  const revenueByCustomer = new Map<string, number>()
+  for (const row of revenueRows) {
+    if (row.customerId) {
+      revenueByCustomer.set(row.customerId, parseFloat(row.totalRevenue))
+    }
+  }
+
+  // Count pools per customer for revenue distribution
+  const poolCountByCustomer = new Map<string, number>()
+  for (const agg of poolCostMap.values()) {
+    if (!agg.customerId) continue
+    poolCountByCustomer.set(agg.customerId, (poolCountByCustomer.get(agg.customerId) ?? 0) + 1)
+  }
+
+  // Find flagged pools
+  const newAlerts: {
+    org_id: string
+    alert_type: AlertType
+    severity: AlertSeverity
+    reference_id: string
+    reference_type: string
+    title: string
+    description: string
+    metadata: Record<string, unknown>
+  }[] = []
+
+  for (const agg of poolCostMap.values()) {
+    if (!agg.customerId || agg.totalCost === 0) continue
+
+    const customerRevenue = revenueByCustomer.get(agg.customerId) ?? 0
+    const poolCount = poolCountByCustomer.get(agg.customerId) ?? 1
+    const poolRevenue = poolCount > 0 ? customerRevenue / poolCount : 0
+
+    const margin = poolRevenue - agg.totalCost
+    const marginPct =
+      poolRevenue > 0 ? (margin / poolRevenue) * 100 : agg.totalCost > 0 ? -100 : 0
+
+    if (marginPct < thresholdPct) {
+      const poolLabel = agg.poolName ?? "Pool"
+      const customerLabel = agg.customerName ?? "Customer"
+      const severity: AlertSeverity = margin < 0 ? "critical" : "warning"
+
+      newAlerts.push({
+        org_id: orgId,
+        alert_type: "unprofitable_pool",
+        severity,
+        reference_id: agg.poolId,
+        reference_type: "pool",
+        title: `${poolLabel} (${customerLabel}) is unprofitable`,
+        description: `Chemical cost $${agg.totalCost.toFixed(2)} vs revenue $${poolRevenue.toFixed(2)}. Margin: ${marginPct.toFixed(1)}%`,
+        metadata: {
+          poolId: agg.poolId,
+          customerId: agg.customerId,
+          chemicalCost: agg.totalCost,
+          revenue: poolRevenue,
+          marginPct,
+          visitCount: agg.visitCount,
+        },
+      })
+    }
+  }
+
+  if (newAlerts.length === 0) return
+
+  await adminDb
+    .insert(alerts)
+    .values(newAlerts)
+    .onConflictDoNothing()
+}
+
 // ─── Query actions ────────────────────────────────────────────────────────────
 
 /**
@@ -379,11 +565,11 @@ export async function getAlertCount(): Promise<number> {
  */
 export async function getAlertCountByType(): Promise<AlertCounts> {
   const token = await getRlsToken()
-  if (!token) return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0 }
+  if (!token) return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0, unprofitable_pool: 0 }
 
   const userRole = token.user_role as string | undefined
   if (!userRole || !["owner", "office"].includes(userRole)) {
-    return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0 }
+    return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0, unprofitable_pool: 0 }
   }
 
   const now = new Date()
@@ -409,6 +595,7 @@ export async function getAlertCountByType(): Promise<AlertCounts> {
       missed_stop: 0,
       declining_chemistry: 0,
       incomplete_data: 0,
+      unprofitable_pool: 0,
     }
 
     for (const row of rows) {
@@ -416,11 +603,12 @@ export async function getAlertCountByType(): Promise<AlertCounts> {
       if (t === "missed_stop") counts.missed_stop++
       else if (t === "declining_chemistry") counts.declining_chemistry++
       else if (t === "incomplete_data") counts.incomplete_data++
+      else if (t === "unprofitable_pool") counts.unprofitable_pool++
     }
 
     return counts
   } catch {
-    return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0 }
+    return { total: 0, missed_stop: 0, declining_chemistry: 0, incomplete_data: 0, unprofitable_pool: 0 }
   }
 }
 

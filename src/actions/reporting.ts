@@ -18,10 +18,13 @@
 import { createClient } from "@/lib/supabase/server"
 import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings } from "@/lib/db/schema"
+import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings, chemicalProducts, pools } from "@/lib/db/schema"
 import { and, eq, sql, isNull, inArray } from "drizzle-orm"
 import { classifyReading } from "@/lib/chemistry/targets"
 import type { SanitizerType } from "@/lib/chemistry/targets"
+import { generateDosingRecommendations } from "@/lib/chemistry/dosing"
+import type { ChemicalProduct, FullChemistryReadings } from "@/lib/chemistry/dosing"
+import { revalidatePath } from "next/cache"
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -1565,6 +1568,550 @@ export async function exportTeamCsv(
   } catch (err) {
     console.error("[exportTeamCsv] Error:", err)
     return { success: false, error: "Failed to export team data" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Types — Profitability Dashboard (Plan 05)
+// ---------------------------------------------------------------------------
+
+export interface PoolProfitability {
+  poolId: string
+  poolName: string
+  customerId: string
+  customerName: string
+  // Revenue side
+  recurringRevenue: number
+  // Cost side
+  totalChemicalCost: number
+  visitCount: number
+  avgCostPerVisit: number
+  // Margin
+  margin: number
+  marginPct: number
+  // Flagging
+  isFlagged: boolean
+  flagSeverity: "red" | "yellow" | null
+  // Data quality
+  hasEstimatedCosts: boolean
+}
+
+export interface TechDosingCost {
+  techId: string
+  techName: string
+  totalChemicalCost: number
+  visitCount: number
+  avgCostPerVisit: number
+  costByChemical: Array<{ chemical: string; totalCost: number; totalAmount: number; unit: string }>
+}
+
+export interface ProfitabilityData {
+  pools: PoolProfitability[]
+  flaggedPools: PoolProfitability[]
+  techCosts: TechDosingCost[]
+  thresholdPct: number
+  totalChemicalCost: number
+  totalRecurringRevenue: number
+  overallMarginPct: number
+}
+
+// ---------------------------------------------------------------------------
+// getProfitabilityAnalysis — Plan 05
+// ---------------------------------------------------------------------------
+
+export async function getProfitabilityAnalysis(
+  startDate: string,
+  endDate: string
+): Promise<ProfitabilityData> {
+  const empty: ProfitabilityData = {
+    pools: [],
+    flaggedPools: [],
+    techCosts: [],
+    thresholdPct: 20,
+    totalChemicalCost: 0,
+    totalRecurringRevenue: 0,
+    overallMarginPct: 0,
+  }
+
+  const token = await getRlsToken()
+  if (!token) return empty
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return empty
+
+  const orgId = token["org_id"] as string | undefined
+  if (!orgId) return empty
+
+  try {
+    // Step 1: Fetch org settings for margin threshold (use adminDb — no RLS needed for config)
+    const settingsRows = await adminDb
+      .select({ chem_profit_margin_threshold_pct: orgSettings.chem_profit_margin_threshold_pct })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, orgId))
+      .limit(1)
+
+    const thresholdPct = parseFloat(settingsRows[0]?.chem_profit_margin_threshold_pct ?? "20") || 20
+
+    // Step 2: Fetch chemical products with cost_per_unit
+    // Two-query pattern — no correlated subqueries per MEMORY.md
+    const productRows = await adminDb
+      .select({
+        id: chemicalProducts.id,
+        name: chemicalProducts.name,
+        chemicalType: chemicalProducts.chemical_type,
+        concentrationPct: chemicalProducts.concentration_pct,
+        unit: chemicalProducts.unit,
+        costPerUnit: chemicalProducts.cost_per_unit,
+      })
+      .from(chemicalProducts)
+      .where(and(eq(chemicalProducts.org_id, orgId), eq(chemicalProducts.is_active, true)))
+
+    // Map productId -> costPerUnit (as a number)
+    const costPerUnitMap = new Map<string, number>()
+    for (const p of productRows) {
+      if (p.costPerUnit != null) {
+        costPerUnitMap.set(p.id, parseFloat(p.costPerUnit))
+      }
+    }
+
+    // Build ChemicalProduct array for dosing engine (for historical estimation)
+    const dosingProducts: ChemicalProduct[] = productRows
+      .filter((p) => p.concentrationPct != null)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        chemical: _mapChemicalType(p.chemicalType) as import("@/lib/chemistry/dosing").ChemicalKey,
+        concentrationPct: p.concentrationPct!,
+      }))
+      .filter((p) => p.chemical !== null) as ChemicalProduct[]
+
+    // Step 3: Fetch service visits in the date range with dosing data + pool info
+    // LEFT JOIN pools and customers — no correlated subqueries
+    const visitRows = await adminDb
+      .select({
+        visitId: serviceVisits.id,
+        customerId: serviceVisits.customer_id,
+        poolId: serviceVisits.pool_id,
+        techId: serviceVisits.tech_id,
+        dosingAmounts: serviceVisits.dosing_amounts,
+        chemistryReadings: serviceVisits.chemistry_readings,
+        poolName: pools.name,
+        poolVolumeGallons: pools.volume_gallons,
+        poolSanitizerType: pools.sanitizer_type,
+        customerName: customers.full_name,
+      })
+      .from(serviceVisits)
+      .leftJoin(pools, eq(serviceVisits.pool_id, pools.id))
+      .leftJoin(customers, eq(serviceVisits.customer_id, customers.id))
+      .where(
+        and(
+          eq(serviceVisits.org_id, orgId),
+          eq(serviceVisits.status, "complete"),
+          sql`${serviceVisits.visited_at} >= ${startDate}::date`,
+          sql`${serviceVisits.visited_at} < (${endDate}::date + interval '1 day')`
+        )
+      )
+      .limit(2000)
+
+    // Step 4: Calculate chemical cost per visit
+    // Group by (poolId, customerId) and (techId)
+    interface VisitCost {
+      visitId: string
+      poolId: string | null
+      customerId: string | null
+      techId: string | null
+      poolName: string | null
+      customerName: string | null
+      cost: number
+      isEstimated: boolean
+      costByChemical: Array<{ chemical: string; amount: number; unit: string; cost: number }>
+    }
+
+    const visitCosts: VisitCost[] = []
+
+    for (const visit of visitRows) {
+      const dosingAmounts = visit.dosingAmounts as Array<{
+        chemical: string
+        productId: string
+        amount: number
+        unit: string
+      }> | null
+
+      let totalCost = 0
+      let isEstimated = false
+      const chemicalBreakdown: Array<{ chemical: string; amount: number; unit: string; cost: number }> = []
+
+      if (dosingAmounts && dosingAmounts.length > 0) {
+        // Phase 9+ visits with recorded dosing amounts
+        for (const dose of dosingAmounts) {
+          const unitCost = costPerUnitMap.get(dose.productId) ?? 0
+          const cost = dose.amount * unitCost
+          totalCost += cost
+          chemicalBreakdown.push({ chemical: dose.chemical, amount: dose.amount, unit: dose.unit, cost })
+        }
+      } else {
+        // Historical visits — try to re-derive from chemistry readings
+        const readings = visit.chemistryReadings as FullChemistryReadings | null
+        if (readings && dosingProducts.length > 0) {
+          const volumeGallons = visit.poolVolumeGallons ?? 15000
+          const sanitizerType = (visit.poolSanitizerType ?? "chlorine") as SanitizerType
+
+          try {
+            const recs = generateDosingRecommendations({
+              readings,
+              pool: { volumeGallons, sanitizerType },
+              products: dosingProducts,
+            })
+
+            for (const rec of recs) {
+              // Find cost for this product
+              const product = productRows.find((p) => p.id === rec.product.id)
+              const unitCost = product?.costPerUnit != null ? parseFloat(product.costPerUnit) : 0
+              const cost = rec.amount * unitCost
+              totalCost += cost
+              chemicalBreakdown.push({ chemical: rec.chemical, amount: rec.amount, unit: rec.unit, cost })
+            }
+            isEstimated = true
+          } catch {
+            // If dosing estimation fails, skip — leave cost at 0
+          }
+        }
+      }
+
+      visitCosts.push({
+        visitId: visit.visitId,
+        poolId: visit.poolId,
+        customerId: visit.customerId,
+        techId: visit.techId,
+        poolName: visit.poolName,
+        customerName: visit.customerName,
+        cost: totalCost,
+        isEstimated,
+        costByChemical: chemicalBreakdown,
+      })
+    }
+
+    // Step 5: Aggregate per pool
+    interface PoolAggregate {
+      poolId: string
+      poolName: string
+      customerId: string
+      customerName: string
+      totalCost: number
+      visitCount: number
+      hasEstimatedCosts: boolean
+    }
+
+    const poolAggMap = new Map<string, PoolAggregate>()
+
+    for (const vc of visitCosts) {
+      if (!vc.poolId || !vc.customerId) continue
+      const key = vc.poolId
+      if (!poolAggMap.has(key)) {
+        poolAggMap.set(key, {
+          poolId: vc.poolId,
+          poolName: vc.poolName ?? "Pool",
+          customerId: vc.customerId,
+          customerName: vc.customerName ?? "Customer",
+          totalCost: 0,
+          visitCount: 0,
+          hasEstimatedCosts: false,
+        })
+      }
+      const agg = poolAggMap.get(key)!
+      agg.totalCost += vc.cost
+      agg.visitCount += 1
+      if (vc.isEstimated) agg.hasEstimatedCosts = true
+    }
+
+    // Step 6: Fetch revenue per customer (paid invoices in date range)
+    // Two-query approach — LEFT JOIN, no correlated subqueries
+    const revenueRows = await adminDb
+      .select({
+        customerId: invoices.customer_id,
+        totalRevenue: sql<string>`COALESCE(SUM(${invoices.total}::numeric), 0)::text`,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.org_id, orgId),
+          eq(invoices.status, "paid"),
+          sql`${invoices.paid_at} >= ${startDate}::timestamptz`,
+          sql`${invoices.paid_at} < (${endDate}::date + interval '1 day')::timestamptz`
+        )
+      )
+      .groupBy(invoices.customer_id)
+
+    const revenueByCustomer = new Map<string, number>()
+    for (const row of revenueRows) {
+      if (row.customerId) {
+        revenueByCustomer.set(row.customerId, parseFloat(row.totalRevenue))
+      }
+    }
+
+    // Step 7: Calculate how many pools each customer has (for revenue distribution)
+    const poolCountByCustomer = new Map<string, number>()
+    for (const agg of poolAggMap.values()) {
+      const current = poolCountByCustomer.get(agg.customerId) ?? 0
+      poolCountByCustomer.set(agg.customerId, current + 1)
+    }
+
+    // Step 8: Build PoolProfitability records
+    const poolResults: PoolProfitability[] = []
+
+    for (const agg of poolAggMap.values()) {
+      const customerRevenue = revenueByCustomer.get(agg.customerId) ?? 0
+      const poolCount = poolCountByCustomer.get(agg.customerId) ?? 1
+      // Distribute revenue evenly across customer's pools
+      const poolRevenue = poolCount > 0 ? customerRevenue / poolCount : 0
+
+      const margin = poolRevenue - agg.totalCost
+      let marginPct: number
+      if (poolRevenue === 0) {
+        marginPct = agg.totalCost > 0 ? -100 : 0
+      } else {
+        marginPct = (margin / poolRevenue) * 100
+      }
+
+      const isFlagged = marginPct < thresholdPct
+      let flagSeverity: "red" | "yellow" | null = null
+      if (isFlagged) {
+        flagSeverity = margin < 0 ? "red" : "yellow"
+      }
+
+      poolResults.push({
+        poolId: agg.poolId,
+        poolName: agg.poolName,
+        customerId: agg.customerId,
+        customerName: agg.customerName,
+        recurringRevenue: poolRevenue,
+        totalChemicalCost: agg.totalCost,
+        visitCount: agg.visitCount,
+        avgCostPerVisit: agg.visitCount > 0 ? agg.totalCost / agg.visitCount : 0,
+        margin,
+        marginPct,
+        isFlagged,
+        flagSeverity,
+        hasEstimatedCosts: agg.hasEstimatedCosts,
+      })
+    }
+
+    // Sort by margin ascending (worst first)
+    poolResults.sort((a, b) => a.margin - b.margin)
+    const flaggedPools = poolResults.filter((p) => p.isFlagged)
+
+    // Step 9: Aggregate per tech
+    interface TechChemAgg {
+      techId: string
+      totalCost: number
+      visitCount: number
+      byChemical: Map<string, { totalCost: number; totalAmount: number; unit: string }>
+    }
+
+    const techAggMap = new Map<string, TechChemAgg>()
+
+    for (const vc of visitCosts) {
+      if (!vc.techId) continue
+      if (!techAggMap.has(vc.techId)) {
+        techAggMap.set(vc.techId, {
+          techId: vc.techId,
+          totalCost: 0,
+          visitCount: 0,
+          byChemical: new Map(),
+        })
+      }
+      const agg = techAggMap.get(vc.techId)!
+      agg.totalCost += vc.cost
+      agg.visitCount += 1
+
+      for (const chem of vc.costByChemical) {
+        if (!agg.byChemical.has(chem.chemical)) {
+          agg.byChemical.set(chem.chemical, { totalCost: 0, totalAmount: 0, unit: chem.unit })
+        }
+        const ca = agg.byChemical.get(chem.chemical)!
+        ca.totalCost += chem.cost
+        ca.totalAmount += chem.amount
+      }
+    }
+
+    // Fetch tech names — two-query pattern
+    const techIds = Array.from(techAggMap.keys())
+    let techNameMap = new Map<string, string>()
+    if (techIds.length > 0) {
+      const techRows = await adminDb
+        .select({ id: profiles.id, full_name: profiles.full_name })
+        .from(profiles)
+        .where(inArray(profiles.id, techIds))
+      for (const row of techRows) {
+        techNameMap.set(row.id, row.full_name)
+      }
+    }
+
+    const techCosts: TechDosingCost[] = Array.from(techAggMap.values()).map((agg) => ({
+      techId: agg.techId,
+      techName: techNameMap.get(agg.techId) ?? "Unknown Tech",
+      totalChemicalCost: agg.totalCost,
+      visitCount: agg.visitCount,
+      avgCostPerVisit: agg.visitCount > 0 ? agg.totalCost / agg.visitCount : 0,
+      costByChemical: Array.from(agg.byChemical.entries()).map(([chemical, data]) => ({
+        chemical,
+        totalCost: data.totalCost,
+        totalAmount: data.totalAmount,
+        unit: data.unit,
+      })),
+    }))
+
+    techCosts.sort((a, b) => b.avgCostPerVisit - a.avgCostPerVisit)
+
+    // Step 10: Calculate totals
+    const totalChemicalCost = poolResults.reduce((sum, p) => sum + p.totalChemicalCost, 0)
+    const totalRecurringRevenue = poolResults.reduce((sum, p) => sum + p.recurringRevenue, 0)
+    const overallMarginPct =
+      totalRecurringRevenue > 0
+        ? ((totalRecurringRevenue - totalChemicalCost) / totalRecurringRevenue) * 100
+        : 0
+
+    return {
+      pools: poolResults,
+      flaggedPools,
+      techCosts,
+      thresholdPct,
+      totalChemicalCost,
+      totalRecurringRevenue,
+      overallMarginPct,
+    }
+  } catch (err) {
+    console.error("[getProfitabilityAnalysis] Error:", err)
+    return empty
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: map chemical_type string to dosing ChemicalKey
+// ---------------------------------------------------------------------------
+
+function _mapChemicalType(chemicalType: string): string | null {
+  const map: Record<string, string> = {
+    chlorine: "sodiumHypochlorite_12pct",
+    shock: "calciumHypochlorite_67pct",
+    acid: "muriatic_31pct",
+    soda_ash: "sodaAsh",
+    baking_soda: "sodiumBicarbonate",
+    cya: "cyanuricAcid",
+  }
+  return map[chemicalType] ?? null
+}
+
+// ---------------------------------------------------------------------------
+// exportProfitabilityCsv — owner-only
+// ---------------------------------------------------------------------------
+
+export async function exportProfitabilityCsv(
+  startDate: string,
+  endDate: string
+): Promise<{ success: boolean; csv?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can export profitability data" }
+
+  try {
+    const data = await getProfitabilityAnalysis(startDate, endDate)
+
+    const headers = [
+      "Pool",
+      "Customer",
+      "Revenue",
+      "Chemical Cost",
+      "Visits",
+      "Avg Cost/Visit",
+      "Margin",
+      "Margin %",
+      "Flagged",
+      "Estimated",
+    ]
+
+    const csvRows = data.pools.map((p) => [
+      csvEscape(p.poolName),
+      csvEscape(p.customerName),
+      p.recurringRevenue.toFixed(2),
+      p.totalChemicalCost.toFixed(2),
+      String(p.visitCount),
+      p.avgCostPerVisit.toFixed(2),
+      p.margin.toFixed(2),
+      p.marginPct.toFixed(1),
+      p.isFlagged ? "Yes" : "No",
+      p.hasEstimatedCosts ? "Yes" : "No",
+    ])
+
+    const csv = [headers.join(","), ...csvRows.map((r) => r.join(","))].join("\n")
+    return { success: true, csv }
+  } catch (err) {
+    console.error("[exportProfitabilityCsv] Error:", err)
+    return { success: false, error: "Failed to export profitability data" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateChemicalProductCost — owner-only
+// ---------------------------------------------------------------------------
+
+export async function updateChemicalProductCost(
+  productId: string,
+  costPerUnit: number
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can update chemical costs" }
+
+  try {
+    await withRls(token, (db) =>
+      db
+        .update(chemicalProducts)
+        .set({ cost_per_unit: String(costPerUnit) })
+        .where(eq(chemicalProducts.id, productId))
+    )
+
+    revalidatePath("/reports")
+    revalidatePath("/settings")
+
+    return { success: true }
+  } catch (err) {
+    console.error("[updateChemicalProductCost] Error:", err)
+    return { success: false, error: "Failed to update chemical cost" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateProfitMarginThreshold — owner-only
+// ---------------------------------------------------------------------------
+
+export async function updateProfitMarginThreshold(
+  thresholdPct: number
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can update the margin threshold" }
+
+  try {
+    await withRls(token, (db) =>
+      db
+        .update(orgSettings)
+        .set({ chem_profit_margin_threshold_pct: String(thresholdPct) })
+    )
+
+    revalidatePath("/reports")
+    revalidatePath("/settings")
+
+    return { success: true }
+  } catch (err) {
+    console.error("[updateProfitMarginThreshold] Error:", err)
+    return { success: false, error: "Failed to update margin threshold" }
   }
 }
 

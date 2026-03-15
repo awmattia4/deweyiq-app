@@ -15,6 +15,7 @@ const FILTER_CHIPS: Array<{ label: string; value: FilterValue }> = [
   { label: "Missed Stops", value: "missed_stop" },
   { label: "Declining Chemistry", value: "declining_chemistry" },
   { label: "Incomplete Data", value: "incomplete_data" },
+  { label: "Unprofitable Pools", value: "unprofitable_pool" },
 ]
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
     declining_chemistry: alerts.filter((a) => a.alert_type === "declining_chemistry").length,
     incomplete_data: alerts.filter((a) => a.alert_type === "incomplete_data").length,
     work_order_flagged: alerts.filter((a) => a.alert_type === "work_order_flagged").length,
+    unprofitable_pool: alerts.filter((a) => a.alert_type === "unprofitable_pool").length,
   }
 
   return (
