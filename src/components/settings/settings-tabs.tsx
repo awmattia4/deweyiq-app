@@ -20,6 +20,7 @@ import { PaymentStackSettings } from "@/components/settings/payment-stack-settin
 import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
 import { DunningSettings } from "@/components/settings/dunning-settings"
 import { TemplateEditor } from "@/components/settings/template-editor"
+import { TeamPaySettings } from "@/components/settings/team-pay-settings"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
 import type { TemplateRow } from "@/actions/notification-templates"
@@ -85,6 +86,8 @@ interface SettingsTabsProps {
   // Dunning data
   dunningSteps: DunningStep[]
   dunningMaxRetries: number
+  // Phase 9: Team pay configuration
+  techProfiles: Array<{ id: string; fullName: string; payType: string | null; payRate: string | null }>
   // Notification templates
   notifTemplates: TemplateRow[]
   orgTemplateSettings: {
@@ -121,6 +124,7 @@ export function SettingsTabs({
   qboStatus,
   dunningSteps,
   dunningMaxRetries,
+  techProfiles,
   notifTemplates,
   orgTemplateSettings,
   signOutAction,
@@ -425,6 +429,18 @@ export function SettingsTabs({
                 initialSteps={dunningSteps}
                 initialMaxRetries={dunningMaxRetries}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Team Pay Configuration</CardTitle>
+              <CardDescription>
+                Configure pay type (per-stop or hourly) and pay rate for each technician. Used for payroll prep exports on the Reports page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TeamPaySettings techProfiles={techProfiles} orgSettings={orgSettings} />
             </CardContent>
           </Card>
         </div>

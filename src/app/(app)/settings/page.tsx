@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { signOut } from "@/actions/auth"
-import { withRls } from "@/lib/db"
-import { orgs } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { withRls, adminDb } from "@/lib/db"
+import { orgs, profiles } from "@/lib/db/schema"
+import { and, eq, inArray } from "drizzle-orm"
 import { createClient } from "@/lib/supabase/server"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { getOrgSettings, getChecklistTemplatesWithTasks, getOrgLogoUrl } from "@/actions/company-settings"
@@ -66,6 +66,36 @@ export default async function SettingsPage() {
       ])
     : [null, [], null, [], [], null, null, null, [], null]
 
+  // Fetch tech profiles for pay configuration (owner only)
+  // adminDb bypasses RLS, so explicitly filter by org_id
+  let techProfiles: Array<{ id: string; fullName: string; payType: string | null; payRate: string | null }> = []
+  if (isOwner && user.org_id) {
+    try {
+      const techRows = await adminDb
+        .select({
+          id: profiles.id,
+          full_name: profiles.full_name,
+          pay_type: profiles.pay_type,
+          pay_rate: profiles.pay_rate,
+        })
+        .from(profiles)
+        .where(
+          and(
+            eq(profiles.org_id, user.org_id),
+            inArray(profiles.role, ["tech", "owner"])
+          )
+        )
+      techProfiles = techRows.map((r) => ({
+        id: r.id,
+        fullName: r.full_name,
+        payType: r.pay_type ?? null,
+        payRate: r.pay_rate ?? null,
+      }))
+    } catch (err) {
+      console.error("[SettingsPage] Failed to fetch tech profiles:", err)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-xl">
       {/* ── Page header ──────────────────────────────────────────────────── */}
@@ -100,6 +130,7 @@ export default async function SettingsPage() {
         qboStatus={qboStatus ?? null}
         dunningSteps={dunningConfig?.steps ?? []}
         dunningMaxRetries={dunningConfig?.maxRetries ?? 3}
+        techProfiles={techProfiles}
         notifTemplates={notifTemplates ?? []}
         orgTemplateSettings={orgTemplateSettings ?? null}
         signOutAction={async () => {

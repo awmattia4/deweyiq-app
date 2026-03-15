@@ -7,8 +7,10 @@ import { RevenueReport } from "@/components/reports/revenue-report"
 import { PnlReport } from "@/components/reports/pnl-report"
 import { RevenueDashboard } from "@/components/reports/revenue-dashboard"
 import { OperationsDashboard } from "@/components/reports/operations-dashboard"
+import { TeamDashboard } from "@/components/reports/team-dashboard"
+import { TechSelfScorecard } from "@/components/reports/tech-self-scorecard"
 import { getArAging, getRevenueByCustomer, getPnlReport } from "@/actions/reports"
-import { getRevenueDashboard, getOperationsMetrics } from "@/actions/reporting"
+import { getRevenueDashboard, getOperationsMetrics, getTeamMetrics, getPayrollPrep, getTechScorecard } from "@/actions/reporting"
 import { getExpenses } from "@/actions/expenses"
 import { toLocalDateString } from "@/lib/date-utils"
 
@@ -37,32 +39,38 @@ export default async function ReportsPage() {
   const isOwner = user.role === "owner"
   const isTech = user.role === "tech"
 
-  // Tech gets a stripped-down personal performance view
-  if (isTech) {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="text-2xl font-bold tracking-tight">My Performance</h1>
-        <div className="text-sm text-muted-foreground italic">
-          Your scorecard will appear here.
-        </div>
-      </div>
-    )
-  }
-
   // Default date range: first day of current month to today
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const defaultStartDate = toLocalDateString(startOfMonth)
   const defaultEndDate = toLocalDateString(today)
 
-  // Fetch initial data for all tabs in parallel — Plans 02-03 add their fetches here
-  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData] = await Promise.all([
+  // Tech gets a stripped-down personal performance view (no tabbed layout)
+  if (isTech) {
+    const techScorecard = await getTechScorecard(user.id, defaultStartDate, defaultEndDate)
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-2xl font-bold tracking-tight">My Performance</h1>
+        <TechSelfScorecard
+          initialData={techScorecard}
+          techId={user.id}
+          defaultStartDate={defaultStartDate}
+          defaultEndDate={defaultEndDate}
+        />
+      </div>
+    )
+  }
+
+  // Fetch initial data for all tabs in parallel — Plans 02-04 add their fetches here
+  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData, teamData, payrollData] = await Promise.all([
     getArAging(),
     getRevenueByCustomer(defaultStartDate, defaultEndDate),
     getPnlReport(defaultStartDate, defaultEndDate),
     getExpenses(defaultStartDate, defaultEndDate),
     getRevenueDashboard(defaultStartDate, defaultEndDate),
     getOperationsMetrics(defaultStartDate, defaultEndDate),
+    getTeamMetrics(defaultStartDate, defaultEndDate),
+    isOwner ? getPayrollPrep(defaultStartDate, defaultEndDate) : Promise.resolve([]),
   ])
 
   return (
@@ -127,9 +135,13 @@ export default async function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="team" className="mt-6">
-          <div className="text-sm text-muted-foreground italic">
-            Coming soon — Phase 9 Plan 04
-          </div>
+          <TeamDashboard
+            initialTeamData={teamData}
+            initialPayrollData={payrollData}
+            defaultStartDate={defaultStartDate}
+            defaultEndDate={defaultEndDate}
+            isOwner={isOwner}
+          />
         </TabsContent>
 
         <TabsContent value="profitability" className="mt-6">
