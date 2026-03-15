@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 9 of 17 (Reporting & Team Analytics) — IN PROGRESS
-Plan: 2/5 complete (01, 02 done)
-Status: Phase 9 Plan 02 complete — Revenue Dashboard tab fully functional
-Last activity: 2026-03-15 — Phase 9 Plan 02 committed
+Plan: 3/5 complete (01, 02, 03 done)
+Status: Phase 9 Plan 03 complete — Operations Dashboard tab fully functional
+Last activity: 2026-03-15 — Phase 9 Plan 03 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -77,6 +77,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 08-customer-portal P05 | 12 | 2 tasks | 22 files |
 | Phase 09-reporting-team-analytics P01 | 6 | 2 tasks | 9 files |
 | Phase 09 P02 | 4 | 2 tasks | 3 files |
+| Phase 09-reporting-team-analytics P03 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -295,6 +296,8 @@ Recent decisions affecting current work:
 - [Phase 09]: reporting.ts is new Phase 9 actions file separate from reports.ts — Phase 9 Plans 03-05 append to it
 - [Phase 09]: Outstanding AR metric: no date range filter — current snapshot of all org unpaid sent invoices
 - [Phase 09]: Tech revenue attribution disclaimer: 'Based on current tech assignment' — customer reassignment shifts attribution
+- [Phase 09-03]: On-time rate uses updated_at::date = scheduled_date as completion proxy (no completed_at on route_stops)
+- [Phase 09-03]: COUNT FILTER aggregate pattern: single GROUP BY pass for completed/skipped/missed/on-time counts
 
 ### Pending Todos
 
@@ -321,5 +324,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Completed 09-02-PLAN.md
-Resume file: Ready for Phase 9 Plan 02 (Revenue Dashboard)
+Stopped at: Completed 09-03-PLAN.md
+Resume file: Ready for Phase 9 Plan 04 (Team Dashboard)
