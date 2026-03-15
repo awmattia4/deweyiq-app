@@ -6,8 +6,9 @@ import { ArAgingView } from "@/components/reports/ar-aging-view"
 import { RevenueReport } from "@/components/reports/revenue-report"
 import { PnlReport } from "@/components/reports/pnl-report"
 import { RevenueDashboard } from "@/components/reports/revenue-dashboard"
+import { OperationsDashboard } from "@/components/reports/operations-dashboard"
 import { getArAging, getRevenueByCustomer, getPnlReport } from "@/actions/reports"
-import { getRevenueDashboard } from "@/actions/reporting"
+import { getRevenueDashboard, getOperationsMetrics } from "@/actions/reporting"
 import { getExpenses } from "@/actions/expenses"
 import { toLocalDateString } from "@/lib/date-utils"
 
@@ -54,13 +55,14 @@ export default async function ReportsPage() {
   const defaultStartDate = toLocalDateString(startOfMonth)
   const defaultEndDate = toLocalDateString(today)
 
-  // Fetch initial data for existing tabs in parallel — Phase 9 tabs add their own fetches
-  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData] = await Promise.all([
+  // Fetch initial data for all tabs in parallel — Plans 02-03 add their fetches here
+  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData] = await Promise.all([
     getArAging(),
     getRevenueByCustomer(defaultStartDate, defaultEndDate),
     getPnlReport(defaultStartDate, defaultEndDate),
     getExpenses(defaultStartDate, defaultEndDate),
     getRevenueDashboard(defaultStartDate, defaultEndDate),
+    getOperationsMetrics(defaultStartDate, defaultEndDate),
   ])
 
   return (
@@ -114,10 +116,14 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
+        {/* Phase 9: Operations Dashboard — Plan 03 */}
         <TabsContent value="operations" className="mt-6">
-          <div className="text-sm text-muted-foreground italic">
-            Coming soon — Phase 9 Plan 03
-          </div>
+          <OperationsDashboard
+            initialData={operationsData}
+            defaultStartDate={defaultStartDate}
+            defaultEndDate={defaultEndDate}
+            isOwner={isOwner}
+          />
         </TabsContent>
 
         <TabsContent value="team" className="mt-6">
