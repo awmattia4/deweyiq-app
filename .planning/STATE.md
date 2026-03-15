@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 8 of 17 (Customer Portal) — COMPLETE
-Plan: 5/5 complete (01, 02, 03, 04, 05 done)
-Status: Phase 8 complete — QA passed, all bugs fixed (middleware rename, Realtime unread badges, portal light theme + toasts)
-Last activity: 2026-03-13 — Phase 8 QA fixes committed
+Phase: 9 of 17 (Reporting & Team Analytics) — IN PROGRESS
+Plan: 1/5 complete (01 done)
+Status: Phase 9 Plan 01 complete — schema foundation, recharts, shared infrastructure
+Last activity: 2026-03-15 — Phase 9 Plan 01 committed
 
-Progress: [████████--] 47% (8 of 17 phases)
+Progress: [████████--] 47% (8 of 17 phases complete)
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [████████--] 47% (8 of 17 phases)
 | Phase 08-customer-portal P03 | 10 | 2 tasks | 6 files |
 | Phase 08-customer-portal P04 | 45 | 2 tasks | 13 files |
 | Phase 08-customer-portal P05 | 12 | 2 tasks | 22 files |
+| Phase 09-reporting-team-analytics P01 | 6 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -287,6 +288,9 @@ Recent decisions affecting current work:
 - [Phase 08-04]: withRls two-query pattern for getOfficeRequests — customers and pools queried in separate steps (no correlated subqueries inside withRls per MEMORY.md pitfall)
 - [Phase 08-04]: Lazy message loading in RequestList — messages fetched on card expand, not page load; prevents N+1 DB calls for large request lists
 - [Phase 08-04]: RequestThread reused in both portal (customer) and office review panel — single source of truth for chat UI
+- [Phase 09-01]: Revenue Dashboard tab naming: 'Revenue Dashboard' distinguishes from existing Revenue tab per locked decision
+- [Phase 09-01]: markStopStarted separate action: no existing in_progress server transition found; added as optional best-effort action
+- [Phase 09-01]: CHART_COLORS hex-only: all recharts colors use hex (no oklch) — SVG/WebGL cannot parse oklch; matches MapLibre convention established in Phase 4
 
 ### Pending Todos
 
@@ -312,6 +316,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: Phase 8 complete — all 5 plans executed, QA passed, 11 bugs fixed across 2 commits
-Resume file: Ready for Phase 9 (Reporting & Team Analytics)
+Last session: 2026-03-15
+Stopped at: Completed 09-01-PLAN.md
+Resume file: Ready for Phase 9 Plan 02 (Revenue Dashboard)
