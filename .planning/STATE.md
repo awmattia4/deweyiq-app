@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 9 of 17 (Reporting & Team Analytics) — IN PROGRESS
-Plan: 1/5 complete (01 done)
-Status: Phase 9 Plan 01 complete — schema foundation, recharts, shared infrastructure
-Last activity: 2026-03-15 — Phase 9 Plan 01 committed
+Plan: 2/5 complete (01, 02 done)
+Status: Phase 9 Plan 02 complete — Revenue Dashboard tab fully functional
+Last activity: 2026-03-15 — Phase 9 Plan 02 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -76,6 +76,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 08-customer-portal P04 | 45 | 2 tasks | 13 files |
 | Phase 08-customer-portal P05 | 12 | 2 tasks | 22 files |
 | Phase 09-reporting-team-analytics P01 | 6 | 2 tasks | 9 files |
+| Phase 09 P02 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -291,6 +292,9 @@ Recent decisions affecting current work:
 - [Phase 09-01]: Revenue Dashboard tab naming: 'Revenue Dashboard' distinguishes from existing Revenue tab per locked decision
 - [Phase 09-01]: markStopStarted separate action: no existing in_progress server transition found; added as optional best-effort action
 - [Phase 09-01]: CHART_COLORS hex-only: all recharts colors use hex (no oklch) — SVG/WebGL cannot parse oklch; matches MapLibre convention established in Phase 4
+- [Phase 09]: reporting.ts is new Phase 9 actions file separate from reports.ts — Phase 9 Plans 03-05 append to it
+- [Phase 09]: Outstanding AR metric: no date range filter — current snapshot of all org unpaid sent invoices
+- [Phase 09]: Tech revenue attribution disclaimer: 'Based on current tech assignment' — customer reassignment shifts attribution
 
 ### Pending Todos
 
@@ -317,5 +321,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: Completed 09-01-PLAN.md
+Stopped at: Completed 09-02-PLAN.md
 Resume file: Ready for Phase 9 Plan 02 (Revenue Dashboard)
