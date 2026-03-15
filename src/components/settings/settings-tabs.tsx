@@ -21,6 +21,7 @@ import { QboConnectSettings } from "@/components/settings/qbo-connect-settings"
 import { DunningSettings } from "@/components/settings/dunning-settings"
 import { TemplateEditor } from "@/components/settings/template-editor"
 import { TeamPaySettings } from "@/components/settings/team-pay-settings"
+import { ChemistryCostSettings } from "@/components/settings/chemistry-cost-settings"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
 import type { TemplateRow } from "@/actions/notification-templates"
@@ -88,6 +89,8 @@ interface SettingsTabsProps {
   dunningMaxRetries: number
   // Phase 9: Team pay configuration
   techProfiles: Array<{ id: string; fullName: string; payType: string | null; payRate: string | null }>
+  // Phase 9: Chemical cost settings
+  chemicalProducts: Array<{ id: string; name: string; chemicalType: string; unit: string; costPerUnit: string | null }>
   // Notification templates
   notifTemplates: TemplateRow[]
   orgTemplateSettings: {
@@ -125,6 +128,7 @@ export function SettingsTabs({
   dunningSteps,
   dunningMaxRetries,
   techProfiles,
+  chemicalProducts,
   notifTemplates,
   orgTemplateSettings,
   signOutAction,
@@ -304,6 +308,21 @@ export function SettingsTabs({
               </Card>
             </>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Chemical Costs</CardTitle>
+              <CardDescription>
+                Set the cost per unit for each chemical product. Used to calculate per-pool profitability on the Reports page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChemistryCostSettings
+                chemicalProducts={chemicalProducts}
+                marginThreshold={orgSettings?.chem_profit_margin_threshold_pct ?? "20"}
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 

@@ -65,6 +65,8 @@ export interface OrgSettings {
   portal_welcome_message: string | null
   // Phase 9: Team payroll — upsell commission % for tech-flagged WOs
   wo_upsell_commission_pct: string | null
+  // Phase 9: Chemical profitability threshold — minimum % margin before flagging
+  chem_profit_margin_threshold_pct: string | null
   created_at: Date
   updated_at: Date
 }
@@ -134,6 +136,7 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   portal_welcome_message: null,
   // Phase 9 defaults
   wo_upsell_commission_pct: "0",
+  chem_profit_margin_threshold_pct: "20",
 }
 
 // ---------------------------------------------------------------------------

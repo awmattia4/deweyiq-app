@@ -9,8 +9,9 @@ import { RevenueDashboard } from "@/components/reports/revenue-dashboard"
 import { OperationsDashboard } from "@/components/reports/operations-dashboard"
 import { TeamDashboard } from "@/components/reports/team-dashboard"
 import { TechSelfScorecard } from "@/components/reports/tech-self-scorecard"
+import { ProfitabilityDashboard } from "@/components/reports/profitability-dashboard"
 import { getArAging, getRevenueByCustomer, getPnlReport } from "@/actions/reports"
-import { getRevenueDashboard, getOperationsMetrics, getTeamMetrics, getPayrollPrep, getTechScorecard } from "@/actions/reporting"
+import { getRevenueDashboard, getOperationsMetrics, getTeamMetrics, getPayrollPrep, getTechScorecard, getProfitabilityAnalysis } from "@/actions/reporting"
 import { getExpenses } from "@/actions/expenses"
 import { toLocalDateString } from "@/lib/date-utils"
 
@@ -61,8 +62,8 @@ export default async function ReportsPage() {
     )
   }
 
-  // Fetch initial data for all tabs in parallel — Plans 02-04 add their fetches here
-  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData, teamData, payrollData] = await Promise.all([
+  // Fetch initial data for all tabs in parallel — Plans 02-05 add their fetches here
+  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData, teamData, payrollData, profitabilityData] = await Promise.all([
     getArAging(),
     getRevenueByCustomer(defaultStartDate, defaultEndDate),
     getPnlReport(defaultStartDate, defaultEndDate),
@@ -71,6 +72,7 @@ export default async function ReportsPage() {
     getOperationsMetrics(defaultStartDate, defaultEndDate),
     getTeamMetrics(defaultStartDate, defaultEndDate),
     isOwner ? getPayrollPrep(defaultStartDate, defaultEndDate) : Promise.resolve([]),
+    isOwner ? getProfitabilityAnalysis(defaultStartDate, defaultEndDate) : Promise.resolve({ pools: [], flaggedPools: [], techCosts: [], thresholdPct: 20, totalChemicalCost: 0, totalRecurringRevenue: 0, overallMarginPct: 0 }),
   ])
 
   return (
@@ -87,7 +89,10 @@ export default async function ReportsPage() {
           <TabsTrigger value="revenue-dashboard" className="whitespace-nowrap">Revenue Dashboard</TabsTrigger>
           <TabsTrigger value="operations" className="whitespace-nowrap">Operations</TabsTrigger>
           <TabsTrigger value="team" className="whitespace-nowrap">Team</TabsTrigger>
-          <TabsTrigger value="profitability" className="whitespace-nowrap">Profitability</TabsTrigger>
+          {/* Profitability tab — owner only (chemical cost data is sensitive) */}
+          {isOwner && (
+            <TabsTrigger value="profitability" className="whitespace-nowrap">Profitability</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Existing tabs — unchanged */}
@@ -144,11 +149,17 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
-        <TabsContent value="profitability" className="mt-6">
-          <div className="text-sm text-muted-foreground italic">
-            Coming soon — Phase 9 Plan 05
-          </div>
-        </TabsContent>
+        {/* Phase 9: Profitability Dashboard — Plan 05 (owner only — financial cost data is sensitive) */}
+        {isOwner && (
+          <TabsContent value="profitability" className="mt-6">
+            <ProfitabilityDashboard
+              initialData={profitabilityData}
+              defaultStartDate={defaultStartDate}
+              defaultEndDate={defaultEndDate}
+              isOwner={isOwner}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { signOut } from "@/actions/auth"
 import { withRls, adminDb } from "@/lib/db"
-import { orgs, profiles } from "@/lib/db/schema"
+import { orgs, profiles, chemicalProducts } from "@/lib/db/schema"
 import { and, eq, inArray } from "drizzle-orm"
 import { createClient } from "@/lib/supabase/server"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
@@ -96,6 +96,38 @@ export default async function SettingsPage() {
     }
   }
 
+  // Fetch chemical products for cost configuration (owner only)
+  let chemicalProductList: Array<{ id: string; name: string; chemicalType: string; unit: string; costPerUnit: string | null }> = []
+  if (isOwner && user.org_id) {
+    try {
+      const productRows = await adminDb
+        .select({
+          id: chemicalProducts.id,
+          name: chemicalProducts.name,
+          chemical_type: chemicalProducts.chemical_type,
+          unit: chemicalProducts.unit,
+          cost_per_unit: chemicalProducts.cost_per_unit,
+        })
+        .from(chemicalProducts)
+        .where(
+          and(
+            eq(chemicalProducts.org_id, user.org_id),
+            eq(chemicalProducts.is_active, true)
+          )
+        )
+        .orderBy(chemicalProducts.chemical_type, chemicalProducts.name)
+      chemicalProductList = productRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        chemicalType: r.chemical_type,
+        unit: r.unit,
+        costPerUnit: r.cost_per_unit ?? null,
+      }))
+    } catch (err) {
+      console.error("[SettingsPage] Failed to fetch chemical products:", err)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-xl">
       {/* ── Page header ──────────────────────────────────────────────────── */}
@@ -131,6 +163,7 @@ export default async function SettingsPage() {
         dunningSteps={dunningConfig?.steps ?? []}
         dunningMaxRetries={dunningConfig?.maxRetries ?? 3}
         techProfiles={techProfiles}
+        chemicalProducts={chemicalProductList}
         notifTemplates={notifTemplates ?? []}
         orgTemplateSettings={orgTemplateSettings ?? null}
         signOutAction={async () => {
