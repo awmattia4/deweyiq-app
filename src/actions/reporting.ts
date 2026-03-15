@@ -8,7 +8,7 @@
  * This file is extended by Plans 02-05 sequentially:
  *   - Plan 02: Revenue Dashboard — getRevenueDashboard, getCustomerRevenueDetail, exportRevenueCsv
  *   - Plan 03: Operations Dashboard — getOperationsMetrics, exportOperationsCsv
- *   - Plan 04: Team Dashboard — getTeamDashboard
+ *   - Plan 04: Team Dashboard — getTeamMetrics, getTechScorecard, getPayrollPrep, exportPayrollCsv, exportTeamCsv
  *   - Plan 05: Profitability Dashboard — getProfitabilityDashboard
  *
  * Uses withRls for all queries. LEFT JOIN pattern per MEMORY.md (no correlated subqueries).
@@ -16,10 +16,12 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { invoices, customers, profiles, routeStops } from "@/lib/db/schema"
-import { and, eq, sql, isNull } from "drizzle-orm"
+import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings } from "@/lib/db/schema"
+import { and, eq, sql, isNull, inArray } from "drizzle-orm"
+import { classifyReading } from "@/lib/chemistry/targets"
+import type { SanitizerType } from "@/lib/chemistry/targets"
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -728,6 +730,841 @@ export async function exportOperationsCsv(
   } catch (err) {
     console.error("[exportOperationsCsv] Error:", err)
     return { success: false, error: "Failed to export operations data" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Types — Team Dashboard (Plan 04)
+// ---------------------------------------------------------------------------
+
+export interface TechScorecardRow {
+  techId: string
+  techName: string
+  // Speed/volume metrics
+  completedStops: number
+  daysWorked: number
+  stopsPerDay: number
+  // Avg stop time only includes stops with started_at data (Phase 9+)
+  avgStopMinutes: number
+  onTimeRate: number
+  // Quality metrics
+  chemistryAccuracy: number
+  checklistCompletionRate: number
+  photoRate: number
+  // Trends (positive = improvement vs previous period)
+  stopsPerDayTrend: number
+  avgStopMinutesTrend: number
+  onTimeRateTrend: number
+  chemistryAccuracyTrend: number
+}
+
+export interface TeamMetricsData {
+  techs: TechScorecardRow[]
+  previousPeriodAvg: {
+    stopsPerDay: number
+    avgStopMinutes: number
+    onTimeRate: number
+    chemistryAccuracy: number
+  }
+}
+
+export interface PayrollRow {
+  techId: string
+  name: string
+  email: string
+  payType: string
+  completedStops: number
+  hoursWorked: number | null
+  payRate: number
+  payRateConfigured: boolean
+  basePay: number
+  upsellCommissions: number
+  totalGross: number
+}
+
+// ---------------------------------------------------------------------------
+// computeChemAccuracy — helper: classify readings in JS per MEMORY.md pitfall
+// (avoids correlated subquery on RLS-protected service_visits)
+// ---------------------------------------------------------------------------
+
+function computeChemAccuracy(
+  visits: Array<{ chemistry_readings: unknown }>
+): number {
+  let inRange = 0
+  let total = 0
+
+  for (const visit of visits) {
+    const readings = visit.chemistry_readings as Record<string, number | null> | null
+    if (!readings) continue
+
+    // Known chemistry params that have target ranges
+    const params: Array<[string, SanitizerType]> = [
+      ["freeChlorine", "chlorine"],
+      ["pH", "chlorine"],
+      ["totalAlkalinity", "chlorine"],
+      ["calciumHardness", "chlorine"],
+      ["cya", "chlorine"],
+      ["phosphates", "chlorine"],
+    ]
+
+    for (const [param, sanitizer] of params) {
+      const val = readings[param]
+      if (val == null || typeof val !== "number") continue
+      total++
+      const result = classifyReading(param as Parameters<typeof classifyReading>[0], val, sanitizer)
+      if (result.status === "ok") inRange++
+    }
+  }
+
+  return total > 0 ? (inRange / total) * 100 : 0
+}
+
+// ---------------------------------------------------------------------------
+// computeChecklistRate — helper: calculate checklist completion rate in JS
+// ---------------------------------------------------------------------------
+
+function computeChecklistRate(
+  visits: Array<{ checklist_completion: unknown }>
+): number {
+  let completedItems = 0
+  let totalItems = 0
+
+  for (const visit of visits) {
+    const checklist = visit.checklist_completion as Array<{ completed: boolean }> | null
+    if (!Array.isArray(checklist)) continue
+    for (const item of checklist) {
+      totalItems++
+      if (item.completed) completedItems++
+    }
+  }
+
+  return totalItems > 0 ? (completedItems / totalItems) * 100 : 0
+}
+
+// ---------------------------------------------------------------------------
+// computePhotoRate — helper: % of visits with at least 1 photo
+// ---------------------------------------------------------------------------
+
+function computePhotoRate(
+  visits: Array<{ photo_urls: unknown }>
+): number {
+  if (visits.length === 0) return 0
+  const withPhoto = visits.filter((v) => {
+    const urls = v.photo_urls as string[] | null
+    return Array.isArray(urls) && urls.length > 0
+  })
+  return (withPhoto.length / visits.length) * 100
+}
+
+// ---------------------------------------------------------------------------
+// buildScorecardRow — merge stop metrics + visit metrics per tech
+// ---------------------------------------------------------------------------
+
+interface StopMetricRow {
+  techId: string
+  techName: string | null
+  techEmail: string | null
+  completedStops: number
+  daysWorked: number
+  avgStopMinutes: number | null
+  onTimeStops: number
+}
+
+function buildScorecardRow(
+  stopRow: StopMetricRow,
+  visits: Array<{ chemistry_readings: unknown; checklist_completion: unknown; photo_urls: unknown }>,
+  prevRow: StopMetricRow | undefined,
+  prevVisits: Array<{ chemistry_readings: unknown; checklist_completion: unknown; photo_urls: unknown }>
+): TechScorecardRow {
+  const completed = stopRow.completedStops ?? 0
+  const days = stopRow.daysWorked ?? 0
+  const stopsPerDay = days > 0 ? completed / days : 0
+  const avgStopMinutes = stopRow.avgStopMinutes ?? 0
+  const onTimeRate = completed > 0 ? ((stopRow.onTimeStops ?? 0) / completed) * 100 : 0
+
+  const chemAccuracy = computeChemAccuracy(visits)
+  const checklistRate = computeChecklistRate(visits)
+  const photoRate = computePhotoRate(visits)
+
+  // Previous period metrics
+  const prevCompleted = prevRow?.completedStops ?? 0
+  const prevDays = prevRow?.daysWorked ?? 0
+  const prevStopsPerDay = prevDays > 0 ? prevCompleted / prevDays : 0
+  const prevAvgMinutes = prevRow?.avgStopMinutes ?? 0
+  const prevOnTime = prevCompleted > 0 ? ((prevRow?.onTimeStops ?? 0) / prevCompleted) * 100 : 0
+  const prevChemAccuracy = computeChemAccuracy(prevVisits)
+
+  return {
+    techId: stopRow.techId,
+    techName: stopRow.techName ?? "Unknown",
+    completedStops: completed,
+    daysWorked: days,
+    stopsPerDay,
+    avgStopMinutes,
+    onTimeRate,
+    chemistryAccuracy: chemAccuracy,
+    checklistCompletionRate: checklistRate,
+    photoRate,
+    stopsPerDayTrend: stopsPerDay - prevStopsPerDay,
+    avgStopMinutesTrend: prevAvgMinutes - avgStopMinutes, // lower avg time = improvement = positive trend
+    onTimeRateTrend: onTimeRate - prevOnTime,
+    chemistryAccuracyTrend: chemAccuracy - prevChemAccuracy,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTeamMetrics — owner + office: all techs' scorecards with trends
+// ---------------------------------------------------------------------------
+
+export async function getTeamMetrics(
+  startDate: string,
+  endDate: string
+): Promise<TeamMetricsData> {
+  const empty: TeamMetricsData = { techs: [], previousPeriodAvg: { stopsPerDay: 0, avgStopMinutes: 0, onTimeRate: 0, chemistryAccuracy: 0 } }
+
+  const token = await getRlsToken()
+  if (!token) return empty
+
+  const role = token["user_role"] as string | undefined
+  if (!role || !["owner", "office"].includes(role)) return empty
+
+  try {
+    // ------------------------------------------------------------------
+    // a. Previous period window (same length)
+    // ------------------------------------------------------------------
+    const periodDays = Math.max(
+      1,
+      Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    )
+    const prevEndDate = new Date(startDate)
+    prevEndDate.setDate(prevEndDate.getDate() - 1)
+    const prevStartDate = new Date(prevEndDate)
+    prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1)
+    const prevStartStr = `${prevStartDate.getFullYear()}-${String(prevStartDate.getMonth() + 1).padStart(2, "0")}-${String(prevStartDate.getDate()).padStart(2, "0")}`
+    const prevEndStr = `${prevEndDate.getFullYear()}-${String(prevEndDate.getMonth() + 1).padStart(2, "0")}-${String(prevEndDate.getDate()).padStart(2, "0")}`
+
+    return await withRls(token, async (db) => {
+      // ------------------------------------------------------------------
+      // b. Stop metrics per tech (current period) — LEFT JOIN pattern
+      //    On-time = status='complete' AND updated_at::date = scheduled_date
+      //    Avg stop time uses started_at → updated_at (proxy); NULL started_at excluded
+      // ------------------------------------------------------------------
+      const stopRows = await db
+        .select({
+          techId: routeStops.tech_id,
+          techName: profiles.full_name,
+          techEmail: profiles.email,
+          completedStops: sql<number>`COUNT(*) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          daysWorked: sql<number>`COUNT(DISTINCT ${routeStops.scheduled_date}) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          avgStopMinutes: sql<number | null>`
+            NULLIF(
+              AVG(
+                EXTRACT(EPOCH FROM (${routeStops.updated_at} - ${routeStops.started_at})) / 60.0
+              ) FILTER (WHERE ${routeStops.status} = 'complete' AND ${routeStops.started_at} IS NOT NULL),
+              0
+            )
+          `,
+          onTimeStops: sql<number>`COUNT(*) FILTER (
+            WHERE ${routeStops.status} = 'complete'
+            AND (${routeStops.updated_at})::date = (${routeStops.scheduled_date})::date
+          )::int`,
+        })
+        .from(routeStops)
+        .leftJoin(profiles, eq(routeStops.tech_id, profiles.id))
+        .where(
+          and(
+            sql`${routeStops.scheduled_date} >= ${startDate}`,
+            sql`${routeStops.scheduled_date} <= ${endDate}`
+          )
+        )
+        .groupBy(routeStops.tech_id, profiles.full_name, profiles.email)
+
+      const techIds = stopRows
+        .filter((r) => r.techId !== null)
+        .map((r) => r.techId!)
+
+      // ------------------------------------------------------------------
+      // c. Service visits for chemistry/checklist/photo (current period)
+      //    Two-step pattern per MEMORY.md: fetch visits separately, merge in JS
+      // ------------------------------------------------------------------
+      const visitRows = techIds.length > 0
+        ? await db
+            .select({
+              techId: serviceVisits.tech_id,
+              chemistry_readings: serviceVisits.chemistry_readings,
+              checklist_completion: serviceVisits.checklist_completion,
+              photo_urls: serviceVisits.photo_urls,
+            })
+            .from(serviceVisits)
+            .where(
+              and(
+                inArray(serviceVisits.tech_id, techIds),
+                sql`${serviceVisits.visited_at} >= ${startDate}::timestamptz`,
+                sql`${serviceVisits.visited_at} < (${endDate}::date + interval '1 day')::timestamptz`,
+                eq(serviceVisits.status, "complete")
+              )
+            )
+        : []
+
+      // Group visits by techId
+      const visitsByTech = new Map<string, typeof visitRows>()
+      for (const v of visitRows) {
+        if (!v.techId) continue
+        const arr = visitsByTech.get(v.techId) ?? []
+        arr.push(v)
+        visitsByTech.set(v.techId, arr)
+      }
+
+      // ------------------------------------------------------------------
+      // d. Stop metrics per tech (previous period)
+      // ------------------------------------------------------------------
+      const prevStopRows = await db
+        .select({
+          techId: routeStops.tech_id,
+          techName: profiles.full_name,
+          techEmail: profiles.email,
+          completedStops: sql<number>`COUNT(*) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          daysWorked: sql<number>`COUNT(DISTINCT ${routeStops.scheduled_date}) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          avgStopMinutes: sql<number | null>`
+            NULLIF(
+              AVG(
+                EXTRACT(EPOCH FROM (${routeStops.updated_at} - ${routeStops.started_at})) / 60.0
+              ) FILTER (WHERE ${routeStops.status} = 'complete' AND ${routeStops.started_at} IS NOT NULL),
+              0
+            )
+          `,
+          onTimeStops: sql<number>`COUNT(*) FILTER (
+            WHERE ${routeStops.status} = 'complete'
+            AND (${routeStops.updated_at})::date = (${routeStops.scheduled_date})::date
+          )::int`,
+        })
+        .from(routeStops)
+        .leftJoin(profiles, eq(routeStops.tech_id, profiles.id))
+        .where(
+          and(
+            sql`${routeStops.scheduled_date} >= ${prevStartStr}`,
+            sql`${routeStops.scheduled_date} <= ${prevEndStr}`
+          )
+        )
+        .groupBy(routeStops.tech_id, profiles.full_name, profiles.email)
+
+      // ------------------------------------------------------------------
+      // e. Previous period visits for chemistry accuracy trend
+      // ------------------------------------------------------------------
+      const prevVisitRows = techIds.length > 0
+        ? await db
+            .select({
+              techId: serviceVisits.tech_id,
+              chemistry_readings: serviceVisits.chemistry_readings,
+              checklist_completion: serviceVisits.checklist_completion,
+              photo_urls: serviceVisits.photo_urls,
+            })
+            .from(serviceVisits)
+            .where(
+              and(
+                inArray(serviceVisits.tech_id, techIds),
+                sql`${serviceVisits.visited_at} >= ${prevStartStr}::timestamptz`,
+                sql`${serviceVisits.visited_at} < (${prevEndStr}::date + interval '1 day')::timestamptz`,
+                eq(serviceVisits.status, "complete")
+              )
+            )
+        : []
+
+      const prevVisitsByTech = new Map<string, typeof prevVisitRows>()
+      for (const v of prevVisitRows) {
+        if (!v.techId) continue
+        const arr = prevVisitsByTech.get(v.techId) ?? []
+        arr.push(v)
+        prevVisitsByTech.set(v.techId, arr)
+      }
+
+      const prevStopByTech = new Map<string, StopMetricRow>()
+      for (const r of prevStopRows) {
+        if (!r.techId) continue
+        prevStopByTech.set(r.techId, {
+          techId: r.techId!,
+          techName: r.techName,
+          techEmail: r.techEmail,
+          completedStops: r.completedStops ?? 0,
+          daysWorked: r.daysWorked ?? 0,
+          avgStopMinutes: r.avgStopMinutes ?? null,
+          onTimeStops: r.onTimeStops ?? 0,
+        })
+      }
+
+      // ------------------------------------------------------------------
+      // f. Build scorecard rows
+      // ------------------------------------------------------------------
+      const techs: TechScorecardRow[] = stopRows
+        .filter((r) => r.techId !== null)
+        .map((r) => buildScorecardRow(
+          {
+            techId: r.techId!,
+            techName: r.techName,
+            techEmail: r.techEmail,
+            completedStops: r.completedStops ?? 0,
+            daysWorked: r.daysWorked ?? 0,
+            avgStopMinutes: r.avgStopMinutes ?? null,
+            onTimeStops: r.onTimeStops ?? 0,
+          },
+          visitsByTech.get(r.techId!) ?? [],
+          prevStopByTech.get(r.techId!),
+          prevVisitsByTech.get(r.techId!) ?? []
+        ))
+        .sort((a, b) => b.stopsPerDay - a.stopsPerDay)
+
+      const previousPeriodAvg = techs.length > 0
+        ? {
+            stopsPerDay: techs.reduce((s, t) => s + (t.stopsPerDay - t.stopsPerDayTrend), 0) / techs.length,
+            avgStopMinutes: techs.reduce((s, t) => s + (t.avgStopMinutes + t.avgStopMinutesTrend), 0) / techs.length,
+            onTimeRate: techs.reduce((s, t) => s + (t.onTimeRate - t.onTimeRateTrend), 0) / techs.length,
+            chemistryAccuracy: techs.reduce((s, t) => s + (t.chemistryAccuracy - t.chemistryAccuracyTrend), 0) / techs.length,
+          }
+        : { stopsPerDay: 0, avgStopMinutes: 0, onTimeRate: 0, chemistryAccuracy: 0 }
+
+      return { techs, previousPeriodAvg }
+    })
+  } catch (err) {
+    console.error("[getTeamMetrics] Error:", err)
+    return empty
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTechScorecard — single tech's scorecard (for tech self-view)
+// Role guard: tech can only query their own ID; owner/office can query any tech
+// ---------------------------------------------------------------------------
+
+export async function getTechScorecard(
+  techId: string,
+  startDate: string,
+  endDate: string
+): Promise<TechScorecardRow | null> {
+  const token = await getRlsToken()
+  if (!token) return null
+
+  const role = token["user_role"] as string | undefined
+  const userId = token["sub"] as string | undefined
+
+  // Tech can only see their own data
+  if (role === "tech" && userId !== techId) return null
+  if (!role || !["owner", "office", "tech"].includes(role)) return null
+
+  try {
+    // Previous period window
+    const periodDays = Math.max(
+      1,
+      Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    )
+    const prevEndDate = new Date(startDate)
+    prevEndDate.setDate(prevEndDate.getDate() - 1)
+    const prevStartDate = new Date(prevEndDate)
+    prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1)
+    const prevStartStr = `${prevStartDate.getFullYear()}-${String(prevStartDate.getMonth() + 1).padStart(2, "0")}-${String(prevStartDate.getDate()).padStart(2, "0")}`
+    const prevEndStr = `${prevEndDate.getFullYear()}-${String(prevEndDate.getMonth() + 1).padStart(2, "0")}-${String(prevEndDate.getDate()).padStart(2, "0")}`
+
+    return await withRls(token, async (db) => {
+      // Stop metrics — current period
+      const [stopRow] = await db
+        .select({
+          techId: routeStops.tech_id,
+          techName: profiles.full_name,
+          techEmail: profiles.email,
+          completedStops: sql<number>`COUNT(*) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          daysWorked: sql<number>`COUNT(DISTINCT ${routeStops.scheduled_date}) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          avgStopMinutes: sql<number | null>`
+            NULLIF(
+              AVG(
+                EXTRACT(EPOCH FROM (${routeStops.updated_at} - ${routeStops.started_at})) / 60.0
+              ) FILTER (WHERE ${routeStops.status} = 'complete' AND ${routeStops.started_at} IS NOT NULL),
+              0
+            )
+          `,
+          onTimeStops: sql<number>`COUNT(*) FILTER (
+            WHERE ${routeStops.status} = 'complete'
+            AND (${routeStops.updated_at})::date = (${routeStops.scheduled_date})::date
+          )::int`,
+        })
+        .from(routeStops)
+        .leftJoin(profiles, eq(routeStops.tech_id, profiles.id))
+        .where(
+          and(
+            eq(routeStops.tech_id, techId),
+            sql`${routeStops.scheduled_date} >= ${startDate}`,
+            sql`${routeStops.scheduled_date} <= ${endDate}`
+          )
+        )
+        .groupBy(routeStops.tech_id, profiles.full_name, profiles.email)
+
+      if (!stopRow) return null
+
+      // Visits — current period
+      const visitRows = await db
+        .select({
+          techId: serviceVisits.tech_id,
+          chemistry_readings: serviceVisits.chemistry_readings,
+          checklist_completion: serviceVisits.checklist_completion,
+          photo_urls: serviceVisits.photo_urls,
+        })
+        .from(serviceVisits)
+        .where(
+          and(
+            eq(serviceVisits.tech_id, techId),
+            sql`${serviceVisits.visited_at} >= ${startDate}::timestamptz`,
+            sql`${serviceVisits.visited_at} < (${endDate}::date + interval '1 day')::timestamptz`,
+            eq(serviceVisits.status, "complete")
+          )
+        )
+
+      // Stop metrics — previous period
+      const [prevStopRow] = await db
+        .select({
+          techId: routeStops.tech_id,
+          techName: profiles.full_name,
+          techEmail: profiles.email,
+          completedStops: sql<number>`COUNT(*) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          daysWorked: sql<number>`COUNT(DISTINCT ${routeStops.scheduled_date}) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+          avgStopMinutes: sql<number | null>`
+            NULLIF(
+              AVG(
+                EXTRACT(EPOCH FROM (${routeStops.updated_at} - ${routeStops.started_at})) / 60.0
+              ) FILTER (WHERE ${routeStops.status} = 'complete' AND ${routeStops.started_at} IS NOT NULL),
+              0
+            )
+          `,
+          onTimeStops: sql<number>`COUNT(*) FILTER (
+            WHERE ${routeStops.status} = 'complete'
+            AND (${routeStops.updated_at})::date = (${routeStops.scheduled_date})::date
+          )::int`,
+        })
+        .from(routeStops)
+        .leftJoin(profiles, eq(routeStops.tech_id, profiles.id))
+        .where(
+          and(
+            eq(routeStops.tech_id, techId),
+            sql`${routeStops.scheduled_date} >= ${prevStartStr}`,
+            sql`${routeStops.scheduled_date} <= ${prevEndStr}`
+          )
+        )
+        .groupBy(routeStops.tech_id, profiles.full_name, profiles.email)
+
+      // Visits — previous period
+      const prevVisitRows = await db
+        .select({
+          techId: serviceVisits.tech_id,
+          chemistry_readings: serviceVisits.chemistry_readings,
+          checklist_completion: serviceVisits.checklist_completion,
+          photo_urls: serviceVisits.photo_urls,
+        })
+        .from(serviceVisits)
+        .where(
+          and(
+            eq(serviceVisits.tech_id, techId),
+            sql`${serviceVisits.visited_at} >= ${prevStartStr}::timestamptz`,
+            sql`${serviceVisits.visited_at} < (${prevEndStr}::date + interval '1 day')::timestamptz`,
+            eq(serviceVisits.status, "complete")
+          )
+        )
+
+      return buildScorecardRow(
+        {
+          techId: stopRow.techId!,
+          techName: stopRow.techName,
+          techEmail: stopRow.techEmail,
+          completedStops: stopRow.completedStops ?? 0,
+          daysWorked: stopRow.daysWorked ?? 0,
+          avgStopMinutes: stopRow.avgStopMinutes ?? null,
+          onTimeStops: stopRow.onTimeStops ?? 0,
+        },
+        visitRows,
+        prevStopRow
+          ? {
+              techId: prevStopRow.techId!,
+              techName: prevStopRow.techName,
+              techEmail: prevStopRow.techEmail,
+              completedStops: prevStopRow.completedStops ?? 0,
+              daysWorked: prevStopRow.daysWorked ?? 0,
+              avgStopMinutes: prevStopRow.avgStopMinutes ?? null,
+              onTimeStops: prevStopRow.onTimeStops ?? 0,
+            }
+          : undefined,
+        prevVisitRows
+      )
+    })
+  } catch (err) {
+    console.error("[getTechScorecard] Error:", err)
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getPayrollPrep — owner-only payroll data
+// ---------------------------------------------------------------------------
+
+export async function getPayrollPrep(
+  startDate: string,
+  endDate: string
+): Promise<PayrollRow[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return []
+
+  try {
+    // Use adminDb for cross-table JSONB commission query
+    // Fetch all techs + owners in the org with pay config
+    const orgId = token["org_id"] as string
+    const techProfileRows = await adminDb
+      .select({
+        id: profiles.id,
+        full_name: profiles.full_name,
+        email: profiles.email,
+        role: profiles.role,
+        pay_type: profiles.pay_type,
+        pay_rate: profiles.pay_rate,
+      })
+      .from(profiles)
+      .where(
+        and(
+          eq(profiles.org_id, orgId),
+          inArray(profiles.role, ["tech", "owner"])
+        )
+      )
+
+    if (techProfileRows.length === 0) return []
+
+    const techIds = techProfileRows.map((p) => p.id)
+
+    // Completed stops per tech in date range
+    const stopCountRows = await adminDb
+      .select({
+        techId: routeStops.tech_id,
+        completedStops: sql<number>`COUNT(*) FILTER (WHERE ${routeStops.status} = 'complete')::int`,
+        totalMinutes: sql<number | null>`
+          SUM(
+            EXTRACT(EPOCH FROM (${routeStops.updated_at} - ${routeStops.started_at})) / 60.0
+          ) FILTER (WHERE ${routeStops.status} = 'complete' AND ${routeStops.started_at} IS NOT NULL)
+        `,
+      })
+      .from(routeStops)
+      .where(
+        and(
+          inArray(routeStops.tech_id, techIds),
+          sql`${routeStops.scheduled_date} >= ${startDate}`,
+          sql`${routeStops.scheduled_date} <= ${endDate}`
+        )
+      )
+      .groupBy(routeStops.tech_id)
+
+    const stopsByTech = new Map<string, { completedStops: number; totalMinutes: number | null }>()
+    for (const r of stopCountRows) {
+      if (!r.techId) continue
+      stopsByTech.set(r.techId, {
+        completedStops: r.completedStops ?? 0,
+        totalMinutes: r.totalMinutes ?? null,
+      })
+    }
+
+    // Org commission rate from org_settings
+    const [settingsRow] = await adminDb
+      .select({ wo_upsell_commission_pct: orgSettings.wo_upsell_commission_pct })
+      .from(orgSettings)
+      .where(eq(orgSettings.org_id, orgId))
+
+    const commissionPct = parseFloat(settingsRow?.wo_upsell_commission_pct ?? "0") / 100
+
+    // Tech-flagged WOs completed in date range, per tech
+    // Step 1: fetch WOs flagged by each tech, completed in date range
+    const flaggedWoRows = await adminDb
+      .select({
+        id: workOrders.id,
+        flaggedByTechId: workOrders.flagged_by_tech_id,
+      })
+      .from(workOrders)
+      .where(
+        and(
+          eq(workOrders.org_id, orgId),
+          inArray(workOrders.status, ["complete", "invoiced"]),
+          inArray(workOrders.flagged_by_tech_id, techIds),
+          sql`${workOrders.updated_at} >= ${startDate}::timestamptz`,
+          sql`${workOrders.updated_at} < (${endDate}::date + interval '1 day')::timestamptz`
+        )
+      )
+
+    // Step 2: For each tech's WO IDs, find invoices using JSONB containment
+    const commissionByTech = new Map<string, number>()
+
+    // Group WO IDs by tech
+    const wosByTech = new Map<string, string[]>()
+    for (const wo of flaggedWoRows) {
+      if (!wo.flaggedByTechId) continue
+      const arr = wosByTech.get(wo.flaggedByTechId) ?? []
+      arr.push(wo.id)
+      wosByTech.set(wo.flaggedByTechId, arr)
+    }
+
+    // For each tech, find matching invoices via JSONB array containment
+    for (const [techId, woIds] of wosByTech.entries()) {
+      let totalInvoiced = 0
+      for (const woId of woIds) {
+        const matchingInvoices = await adminDb
+          .select({
+            total: invoices.total,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.org_id, orgId),
+              inArray(invoices.status, ["sent", "paid"]),
+              sql`${invoices.work_order_ids} @> ${JSON.stringify([woId])}::jsonb`
+            )
+          )
+        for (const inv of matchingInvoices) {
+          totalInvoiced += parseFloat(inv.total ?? "0")
+        }
+      }
+      commissionByTech.set(techId, totalInvoiced * commissionPct)
+    }
+
+    // Assemble payroll rows
+    const payrollRows: PayrollRow[] = techProfileRows.map((profile) => {
+      const stopData = stopsByTech.get(profile.id) ?? { completedStops: 0, totalMinutes: null }
+      const payType = profile.pay_type ?? "per_stop"
+      const payRate = parseFloat(profile.pay_rate ?? "0")
+      const payRateConfigured = payRate > 0
+
+      const hoursWorked = stopData.totalMinutes != null
+        ? Math.round((stopData.totalMinutes / 60) * 100) / 100
+        : null
+
+      let basePay = 0
+      if (payType === "per_stop") {
+        basePay = stopData.completedStops * payRate
+      } else if (payType === "hourly") {
+        basePay = (hoursWorked ?? 0) * payRate
+      }
+
+      const upsellCommissions = commissionByTech.get(profile.id) ?? 0
+      const totalGross = basePay + upsellCommissions
+
+      return {
+        techId: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        payType,
+        completedStops: stopData.completedStops,
+        hoursWorked,
+        payRate,
+        payRateConfigured,
+        basePay,
+        upsellCommissions,
+        totalGross,
+      }
+    })
+
+    return payrollRows.sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) {
+    console.error("[getPayrollPrep] Error:", err)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// exportPayrollCsv — owner-only payroll CSV for Gusto/ADP
+// ---------------------------------------------------------------------------
+
+export async function exportPayrollCsv(
+  startDate: string,
+  endDate: string
+): Promise<{ success: boolean; csv?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can export payroll data" }
+
+  try {
+    const rows = await getPayrollPrep(startDate, endDate)
+
+    const headers = [
+      "Employee Name",
+      "Employee Email",
+      "Pay Type",
+      "Period Start",
+      "Period End",
+      "Completed Stops",
+      "Hours Worked",
+      "Pay Rate",
+      "Base Pay",
+      "Upsell Commissions",
+      "Total Gross Pay",
+    ]
+
+    const csvRows = rows.map((r) => [
+      csvEscape(r.name),
+      csvEscape(r.email),
+      r.payType === "per_stop" ? "Per Stop" : "Hourly",
+      startDate,
+      endDate,
+      String(r.completedStops),
+      r.hoursWorked != null ? r.hoursWorked.toFixed(2) : "",
+      r.payRate.toFixed(2),
+      r.basePay.toFixed(2),
+      r.upsellCommissions.toFixed(2),
+      r.totalGross.toFixed(2),
+    ])
+
+    const csv = [headers.join(","), ...csvRows.map((r) => r.join(","))].join("\n")
+    return { success: true, csv }
+  } catch (err) {
+    console.error("[exportPayrollCsv] Error:", err)
+    return { success: false, error: "Failed to export payroll data" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// exportTeamCsv — owner-only scorecard CSV export
+// ---------------------------------------------------------------------------
+
+export async function exportTeamCsv(
+  startDate: string,
+  endDate: string
+): Promise<{ success: boolean; csv?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can export team data" }
+
+  try {
+    const data = await getTeamMetrics(startDate, endDate)
+
+    const headers = [
+      "Tech Name",
+      "Stops/Day",
+      "Avg Stop Time (min)",
+      "On-Time Rate %",
+      "Chemistry Accuracy %",
+      "Checklist Rate %",
+      "Photo Rate %",
+    ]
+
+    const csvRows = data.techs.map((t) => [
+      csvEscape(t.techName),
+      t.stopsPerDay.toFixed(1),
+      t.avgStopMinutes.toFixed(1),
+      t.onTimeRate.toFixed(1),
+      t.chemistryAccuracy.toFixed(1),
+      t.checklistCompletionRate.toFixed(1),
+      t.photoRate.toFixed(1),
+    ])
+
+    const csv = [headers.join(","), ...csvRows.map((r) => r.join(","))].join("\n")
+    return { success: true, csv }
+  } catch (err) {
+    console.error("[exportTeamCsv] Error:", err)
+    return { success: false, error: "Failed to export team data" }
   }
 }
 

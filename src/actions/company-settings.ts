@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { orgSettings, orgs, checklistTasks, checklistTemplates } from "@/lib/db/schema"
+import { orgSettings, orgs, checklistTasks, checklistTemplates, profiles } from "@/lib/db/schema"
 import { eq, and, isNull, isNotNull, asc, ne } from "drizzle-orm"
 
 // ---------------------------------------------------------------------------
@@ -63,6 +63,8 @@ export interface OrgSettings {
   brand_color: string | null
   favicon_path: string | null
   portal_welcome_message: string | null
+  // Phase 9: Team payroll — upsell commission % for tech-flagged WOs
+  wo_upsell_commission_pct: string | null
   created_at: Date
   updated_at: Date
 }
@@ -130,6 +132,8 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   brand_color: null,
   favicon_path: null,
   portal_welcome_message: null,
+  // Phase 9 defaults
+  wo_upsell_commission_pct: "0",
 }
 
 // ---------------------------------------------------------------------------
@@ -1346,6 +1350,47 @@ export async function deleteCustomerTask(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to delete task",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateTechPayConfig — owner-only: update pay_type and pay_rate for a tech
+// profiles_update_policy allows owner to update any profile in their org
+// ---------------------------------------------------------------------------
+
+export async function updateTechPayConfig(
+  techId: string,
+  payType: "per_stop" | "hourly",
+  payRate: number
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data: claimsData } = await supabase.auth.getClaims()
+  if (!claimsData?.claims) return { success: false, error: "Not authenticated" }
+
+  const token = claimsData.claims as SupabaseToken
+  const role = token["user_role"] as string | undefined
+  if (role !== "owner") return { success: false, error: "Only the owner can configure pay rates" }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(profiles)
+        .set({
+          pay_type: payType,
+          pay_rate: String(payRate),
+          updated_at: new Date(),
+        })
+        .where(eq(profiles.id, techId))
+    })
+
+    revalidatePath("/settings")
+    return { success: true }
+  } catch (err) {
+    console.error("[updateTechPayConfig] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to update pay config",
     }
   }
 }
