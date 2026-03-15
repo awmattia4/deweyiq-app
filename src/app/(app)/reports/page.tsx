@@ -5,7 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArAgingView } from "@/components/reports/ar-aging-view"
 import { RevenueReport } from "@/components/reports/revenue-report"
 import { PnlReport } from "@/components/reports/pnl-report"
+import { RevenueDashboard } from "@/components/reports/revenue-dashboard"
 import { getArAging, getRevenueByCustomer, getPnlReport } from "@/actions/reports"
+import { getRevenueDashboard } from "@/actions/reporting"
 import { getExpenses } from "@/actions/expenses"
 import { toLocalDateString } from "@/lib/date-utils"
 
@@ -53,11 +55,12 @@ export default async function ReportsPage() {
   const defaultEndDate = toLocalDateString(today)
 
   // Fetch initial data for existing tabs in parallel — Phase 9 tabs add their own fetches
-  const [arAging, revenueData, pnlData, expensesData] = await Promise.all([
+  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData] = await Promise.all([
     getArAging(),
     getRevenueByCustomer(defaultStartDate, defaultEndDate),
     getPnlReport(defaultStartDate, defaultEndDate),
     getExpenses(defaultStartDate, defaultEndDate),
+    getRevenueDashboard(defaultStartDate, defaultEndDate),
   ])
 
   return (
@@ -101,11 +104,14 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
-        {/* Phase 9: New tab shells — Plans 02-05 replace these placeholders */}
+        {/* Phase 9: Revenue Dashboard — Plan 02 */}
         <TabsContent value="revenue-dashboard" className="mt-6">
-          <div className="text-sm text-muted-foreground italic">
-            Coming soon — Phase 9 Plan 02
-          </div>
+          <RevenueDashboard
+            initialData={revenueDashboardData}
+            defaultStartDate={defaultStartDate}
+            defaultEndDate={defaultEndDate}
+            isOwner={isOwner}
+          />
         </TabsContent>
 
         <TabsContent value="operations" className="mt-6">
