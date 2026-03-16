@@ -11,7 +11,9 @@ import { InviteDialog } from "@/components/team/invite-dialog"
 import { PtoManager } from "@/components/team/pto-manager"
 import { EmployeeDocs } from "@/components/team/employee-docs"
 import { EmployeeSchedule } from "@/components/team/employee-schedule"
+import { TeamDashboard } from "@/components/team/team-dashboard"
 import { getPtoBalances, getPtoRequests, getDocuments } from "@/actions/team-management"
+import { getTeamDashboard, getTeamAlerts } from "@/actions/team-dashboard"
 import { getTimesheets } from "@/actions/timesheets"
 import { TimesheetView } from "@/components/team/timesheet-view"
 
@@ -23,15 +25,17 @@ export const metadata: Metadata = {
  * Team — Lists all org members with PTO, documents, and schedule management.
  *
  * Tabs:
+ *   - Dashboard: live team status, labor costs, alerts (owner only)
  *   - Members: list of all org members with invite button (owner/office)
  *   - PTO: PTO balances + request/approval (owner/office/tech — tech sees own only)
  *   - Documents: certification tracking with expiry dates (owner/office — owner can upload/delete)
  *   - Schedules: availability windows + blocked dates (owner/office only)
+ *   - Timesheets: weekly timesheet review with edit/approve/QBO push (owner only)
  *
  * Role guards:
  *   - tech → only PTO tab (own requests/balances)
  *   - office → Members, PTO (read-only), Documents (read-only), Schedules (read-only)
- *   - owner → full access to all tabs
+ *   - owner → full access to all tabs including Dashboard
  */
 export default async function TeamPage() {
   const user = await getCurrentUser()
@@ -76,8 +80,8 @@ export default async function TeamPage() {
   const isOwner = user.role === "owner"
   const isOffice = user.role === "office"
   const isTech = user.role === "tech"
-  // Techs only see the PTO tab; owner/office see all tabs
-  const defaultTab = isTech ? "pto" : "members"
+  // Owner defaults to Dashboard tab; tech defaults to PTO; office defaults to Members
+  const defaultTab = isOwner ? "dashboard" : isTech ? "pto" : "members"
 
   // Fetch PTO data (owner sees all; office/tech restricted by RLS)
   const [ptoBalances, ptoRequests, documents] = await Promise.all([
@@ -99,6 +103,22 @@ export default async function TeamPage() {
     }
   }
 
+  // Fetch initial dashboard data for owner (server-side for first render)
+  let initialDashboardEmployees: import("@/actions/team-dashboard").EmployeeDashboardEntry[] = []
+  let initialDashboardAlerts: import("@/actions/team-dashboard").TeamAlert[] = []
+  if (isOwner) {
+    try {
+      const [dashResult, alertResult] = await Promise.all([
+        getTeamDashboard(),
+        getTeamAlerts(),
+      ])
+      if (dashResult.success) initialDashboardEmployees = dashResult.data.employees
+      if (alertResult.success) initialDashboardAlerts = alertResult.data
+    } catch {
+      // Non-fatal — TeamDashboard handles empty arrays gracefully
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Page header ──────────────────────────────────────────────────────── */}
@@ -117,6 +137,7 @@ export default async function TeamPage() {
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
       <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
         <TabsList className="self-start">
+          {isOwner && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
           {!isTech && <TabsTrigger value="members">Members</TabsTrigger>}
           <TabsTrigger value="pto">PTO</TabsTrigger>
           {(isOwner || isOffice) && (
