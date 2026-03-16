@@ -380,6 +380,11 @@ Recent decisions affecting current work:
 - [Phase 11]: Use adminDb for all Plaid access_token operations — never exposed to client via withRls
 - [Phase 11]: Plaid webhook always returns 200 to prevent retry loops; errors logged and alerted separately
 - [Phase 11-payroll-team-management-full-accounting]: ClockInBanner additive to routes page — does not modify Start Route or stop list. GPS failure never blocks clock-in. recordStopArrival/recordStopDeparture added to fix pre-existing broken imports in use-gps-broadcast.ts.
+- [Phase 11-06]: positive=debit/negative=credit numeric convention used for journal lines (not separate debit/credit columns) — simpler schema, balance validation is sum=0
+- [Phase 11-06]: All accounting auto-generation is fire-and-forget — accounting failure must never block payments or invoicing
+- [Phase 11-06]: ensureChartOfAccounts in journal.ts (not chart-of-accounts.ts) — keeps auto-generation self-contained, avoids circular import risk
+- [Phase 11-06]: Expenses treated as always-paid (Dr Expense / Cr Checking) — expenses schema has no status field; AP accrual deferred
+- [Phase 11-06]: Stripe fee extracted from balance_transaction.fee when available — safe optional chaining fallback to fee=0 when not expanded
 
 ### Pending Todos
 
