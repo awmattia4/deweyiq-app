@@ -89,6 +89,8 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P13 | 11 | 2 tasks | 13 files |
 | Phase 10-smart-features-ai P17 | 6 | 2 tasks | 5 files |
 | Phase 10-smart-features-ai P06 | 10 | 2 tasks | 12 files |
+| Phase 10-smart-features-ai P07 | 7 | 1 tasks | 5 files |
+| Phase 10-smart-features-ai P14 | 8 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -338,6 +340,13 @@ Recent decisions affecting current work:
 - [Phase 10-17]: urlBase64ToUint8Array returns ArrayBuffer (not Uint8Array) — TypeScript PushManager.subscribe applicationServerKey requires ArrayBuffer-compatible type
 - [Phase 10-17]: vibrate cast to any in sw.ts showNotification — TypeScript lib omits vibrate from NotificationOptions despite being valid in modern browsers
 - [Phase 10-17]: PwaInstallPrompt and PushPermissionPrompt integrated in AppShell client component (not server layout.tsx) — both components need browser APIs (localStorage, window.matchMedia, Notification)
+- [Phase 10-smart-features-ai]: adminDb for weather cron: checkWeatherForOrg runs without user JWT context; explicit org_id enforces data isolation
+- [Phase 10-smart-features-ai]: Weather proposal dedup: query existing proposals by (org_id, affected_date) before inserting prevents cron re-runs from duplicating pending proposals
+- [Phase 10-smart-features-ai]: approveProposal returns affectedCustomerIds list -- Plan 10-08 wires actual customer notification sends; weather plan only identifies who to notify
+- [Phase 10-07]: Daily forecast per route (not per-stop hourly) — all stops share one badge; pool routes are <30mi radius so one Open-Meteo API call is adequate
+- [Phase 10]: Activity signal for safety check uses MAX(updated_at WHERE status=complete) from route_stops — no GPS cache table; MIN(started_at) fallback for in-progress routes
+- [Phase 10-07]: null-as-clear propagation for weather badges — todayWeather=null on clear days so StopCard renders nothing; no badge clutter when weather is fine
+- [Phase 10]: dismissSafetyAlert uses adminDb for alert access — tech has no RLS SELECT on alerts; org_id check in action provides equivalent security
 
 ### Pending Todos
 
@@ -364,5 +373,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-17-PLAN.md
-Resume file: Phase 10 Plan 17 complete — Phase 10 all 17 plans done
+Stopped at: Completed 10-06-PLAN.md
+Resume file: Phase 10 Plan 06 complete — weather-aware scheduling with proposal engine and manual check
