@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
 Plan: 9/14 complete (01, 02, 03, 05, 06, 08 done)
-Status: Phase 11 Plan 03 complete — geofence utility (Haversine + 4-phase state machine, 30s/60s anti-bounce), GPS broadcast hook extended with geofence detection, recordStopArrival/Departure with drive time, getStopTimingForShift, autoDetectBreak
-Last activity: 2026-03-16 — Phase 11 Plan 03 committed (geofence-based per-stop time tracking)
+Status: Phase 11 Plan 05 complete — 13 PTO/availability/document server actions, PtoManager + EmployeeDocs + EmployeeSchedule components, Team page upgraded to 4-tab layout with role-based visibility
+Last activity: 2026-03-16 — Phase 11 Plan 05 committed (PTO management, certification tracking, availability scheduling)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -101,6 +101,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11-payroll-team-management-full-accounting P02 | 6 | 2 tasks | 4 files |
 | Phase 11-payroll-team-management-full-accounting P06 | 6 | 2 tasks | 4 files |
 | Phase 11-payroll-team-management-full-accounting P03 | 7 | 2 tasks | 3 files |
+| Phase 11-payroll-team-management-full-accounting P05 | 10 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -390,6 +391,7 @@ Recent decisions affecting current work:
 - [Phase 11-03]: Anti-bounce 30s arrival / 60s departure dwell — prevents GPS jitter at geofence edge from creating false events; entering/leaving phases provide the buffer
 - [Phase 11-03]: Geofence hook params all optional — backward-compatible with existing GpsBroadcaster(orgId, techId, true) usage; geofence detection activates only when all three new params provided
 - [Phase 11-03]: Drive time is best-effort in recordStopArrival — isolated in try/catch so arrival recording never fails due to drive time query error
+- [Phase 11-payroll-team-management-full-accounting]: updatePtoBalance uses select-then-upsert (no unique constraint on pto_balances)
 
 ### Pending Todos
 
