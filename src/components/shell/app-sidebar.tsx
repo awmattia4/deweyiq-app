@@ -19,6 +19,7 @@ import {
   ReceiptIcon,
   MessageCircleIcon,
   ClipboardListIcon,
+  BookOpenIcon,
 } from "lucide-react"
 import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
@@ -137,6 +138,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Reports",
     href: "/reports",
     icon: BarChart3Icon,
+    roles: ["owner", "office"],
+  },
+  // ── Available in Phase 11 ──────────────────────────────────────────────────
+  {
+    label: "Accounting",
+    href: "/accounting",
+    icon: BookOpenIcon,
     roles: ["owner", "office"],
   },
   // ── Available in Phase 8 ───────────────────────────────────────────────────

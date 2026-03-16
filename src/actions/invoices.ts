@@ -28,7 +28,7 @@ import {
   orgSettings,
   orgs,
 } from "@/lib/db/schema"
-import { eq, and, inArray, desc, sql } from "drizzle-orm"
+import { eq, and, inArray, desc, sql, isNull } from "drizzle-orm"
 import { updateWorkOrderStatus } from "@/actions/work-orders"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
@@ -41,6 +41,7 @@ import { Resend } from "resend"
 import { syncInvoiceToQbo } from "@/actions/qbo-sync"
 import { getResolvedTemplate } from "@/actions/notification-templates"
 import { createInvoiceJournalEntry, createRefundJournalEntry } from "@/lib/accounting/journal"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1911,5 +1912,122 @@ export async function getCustomerPhonesForInvoices(
   } catch (err) {
     console.error("[getCustomerPhonesForInvoices] Error:", err)
     return {}
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BillingInsights — key metrics for the billing dashboard
+// ---------------------------------------------------------------------------
+
+export interface BillingInsights {
+  draftsReadyToSend: number
+  draftsTotal: string
+  overdueCount: number
+  overdueTotal: string
+  outstandingCount: number
+  outstandingTotal: string
+  paidThisMonth: number
+  paidThisMonthTotal: string
+  uninvoicedWoCount: number
+  customersNoBillingModel: number
+}
+
+/**
+ * getBillingInsights — Aggregated billing stats for the billing dashboard.
+ *
+ * Returns counts and totals for draft/overdue/outstanding/paid invoices,
+ * plus action items (uninvoiced WOs, customers without billing model).
+ */
+export async function getBillingInsights(): Promise<BillingInsights | null> {
+  const token = await getRlsToken()
+  if (!token) return null
+
+  const role = token["user_role"] as string | undefined
+  if (!role || !["owner", "office"].includes(role)) return null
+
+  try {
+    return await withRls(token, async (db) => {
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+      // Fetch all invoices for aggregation (LEFT JOIN avoids correlated subquery)
+      const allInvoices = await db
+        .select({
+          id: invoices.id,
+          status: invoices.status,
+          total: invoices.total,
+          due_date: invoices.due_date,
+          paid_at: invoices.paid_at,
+        })
+        .from(invoices)
+
+      let draftsReadyToSend = 0
+      let draftsTotal = 0
+      let overdueCount = 0
+      let overdueTotal = 0
+      let outstandingCount = 0
+      let outstandingTotal = 0
+      let paidThisMonth = 0
+      let paidThisMonthTotal = 0
+
+      const todayStr = toLocalDateString(now)
+
+      for (const inv of allInvoices) {
+        const total = parseFloat(inv.total ?? "0") || 0
+
+        if (inv.status === "draft") {
+          draftsReadyToSend++
+          draftsTotal += total
+        }
+
+        if ((inv.status === "sent" || inv.status === "overdue") && !inv.paid_at) {
+          outstandingCount++
+          outstandingTotal += total
+
+          if (inv.due_date && inv.due_date < todayStr) {
+            overdueCount++
+            overdueTotal += total
+          }
+        }
+
+        if (inv.status === "paid" && inv.paid_at && inv.paid_at >= monthStart) {
+          paidThisMonth++
+          paidThisMonthTotal += total
+        }
+      }
+
+      // Count completed WOs not yet invoiced (status = 'complete', before 'invoiced')
+      const uninvoicedWos = await db
+        .select({ id: workOrders.id })
+        .from(workOrders)
+        .where(eq(workOrders.status, "complete"))
+
+      // Count active customers without billing model
+      const customersNoBilling = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.status, "active"),
+            isNull(customers.billing_model)
+          )
+        )
+
+      return {
+        draftsReadyToSend,
+        draftsTotal: draftsTotal.toFixed(2),
+        overdueCount,
+        overdueTotal: overdueTotal.toFixed(2),
+        outstandingCount,
+        outstandingTotal: outstandingTotal.toFixed(2),
+        paidThisMonth,
+        paidThisMonthTotal: paidThisMonthTotal.toFixed(2),
+        uninvoicedWoCount: uninvoicedWos.length,
+        customersNoBillingModel: customersNoBilling.length,
+      }
+    })
+  } catch (err) {
+    console.error("[getBillingInsights] Error:", err)
+    return null
   }
 }
