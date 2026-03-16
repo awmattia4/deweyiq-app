@@ -44,6 +44,12 @@ export * from "./notification-templates"
 export * from "./portal-messages"
 export * from "./service-requests"
 
+// Phase 10 tables
+export * from "./equipment-readings"
+export * from "./user-notifications"
+export * from "./push-subscriptions"
+export * from "./notification-prefs"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

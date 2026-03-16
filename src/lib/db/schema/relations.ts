@@ -33,6 +33,9 @@ import { expenses } from "./expenses"
 import { notificationTemplates } from "./notification-templates"
 import { portalMessages } from "./portal-messages"
 import { serviceRequests } from "./service-requests"
+import { userNotifications } from "./user-notifications"
+import { pushSubscriptions } from "./push-subscriptions"
+import { notificationPreferences } from "./notification-prefs"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -264,4 +267,23 @@ export const serviceRequestsRelations = relations(serviceRequests, ({ one, many 
   customer: one(customers, { fields: [serviceRequests.customer_id], references: [customers.id] }),
   pool: one(pools, { fields: [serviceRequests.pool_id], references: [pools.id] }),
   portalMessages: many(portalMessages),
+}))
+
+// Phase 10 relations
+
+export const userNotificationsRelations = relations(userNotifications, ({ one }) => ({
+  org: one(orgs, { fields: [userNotifications.org_id], references: [orgs.id] }),
+  recipient: one(profiles, {
+    fields: [userNotifications.recipient_id],
+    references: [profiles.id],
+  }),
+}))
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(profiles, { fields: [pushSubscriptions.user_id], references: [profiles.id] }),
+}))
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  org: one(orgs, { fields: [notificationPreferences.org_id], references: [orgs.id] }),
+  user: one(profiles, { fields: [notificationPreferences.user_id], references: [profiles.id] }),
 }))
