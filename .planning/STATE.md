@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
-Status: Phase 10 Plan 02 complete — OLS predictive chemistry alerts with R-squared confidence gate, visible on Alerts page, Dashboard, and tech stop cards
-Last activity: 2026-03-16 — Phase 10 Plan 02 committed (predictive chemistry alerts)
+Status: Phase 10 Plan 10 complete — notifyOrgRole/notifyUser wired into all server actions, 20 NOTIF event types covered, customer dual-channel SMS for service/payment/WO/portal events
+Last activity: 2026-03-16 — Phase 10 Plan 10 committed (comprehensive notifications wiring)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -94,6 +94,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10 P12 | 13 | 2 tasks | 10 files |
 | Phase 10-smart-features-ai P16 | 8 | 2 tasks | 5 files |
 | Phase 10-smart-features-ai P02 | 11 | 2 tasks | 9 files |
+| Phase 10-smart-features-ai P10 | 90 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -359,6 +360,10 @@ Recent decisions affecting current work:
 - [Phase 10]: eta_sms_count smallint on route_stops: 2-update cap tracked per stop row — avoids extra table, max value 2
 - [Phase 10-smart-features-ai]: adminDb for tech predictive alerts: techs lack SELECT on alerts table (owner+office RLS); server component uses adminDb with org_id filter for equivalent security
 - [Phase 10-smart-features-ai]: Record not Map for client boundary: Map is not JSON-serializable across server→client props; convert to Record<poolId, alert> before StopList
+- [Phase 10-10]: NOTIF-07/08/18/22 deferred with TODO comments — markCantComplete, finishRoute, weather proposal/alert server actions don't exist yet; wire when created
+- [Phase 10-10]: NOTIF-21 in bulkAssignStops sends single notification for all stops added (not per-stop) — avoids notification spam on bulk assignments
+- [Phase 10-10]: work-orders.ts NOTIF-31 uses service role createSupabaseAdmin() helper for Edge Function invocations from adminDb chain — no user session in post-transaction .then() context
+- [Phase 10-10]: Company name for WO SMS fetched from orgs table (not org_settings) — org_settings.company_name column does not exist; orgs.name is correct source
 
 ### Pending Todos
 
