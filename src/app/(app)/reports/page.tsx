@@ -10,9 +10,13 @@ import { OperationsDashboard } from "@/components/reports/operations-dashboard"
 import { TeamDashboard } from "@/components/reports/team-dashboard"
 import { TechSelfScorecard } from "@/components/reports/tech-self-scorecard"
 import { ProfitabilityDashboard } from "@/components/reports/profitability-dashboard"
+import { ExpenseTracker } from "@/components/accounting/expense-tracker"
+import { MileageLog } from "@/components/accounting/mileage-log"
 import { getArAging, getRevenueByCustomer, getPnlReport } from "@/actions/reports"
 import { getRevenueDashboard, getOperationsMetrics, getTeamMetrics, getPayrollPrep, getTechScorecard, getProfitabilityAnalysis } from "@/actions/reporting"
-import { getExpenses } from "@/actions/expenses"
+import { getExpenses, getExpenseSummary } from "@/actions/expenses"
+import { getMileageLog, getMileageSummary } from "@/actions/mileage"
+import { getTechProfiles } from "@/actions/work-orders"
 import { toLocalDateString } from "@/lib/date-utils"
 
 export const metadata: Metadata = {
@@ -24,10 +28,11 @@ export const metadata: Metadata = {
  *
  * Phase 7: Tabs: AR Aging, Revenue, P&L
  * Phase 9: Adds Revenue Dashboard, Operations, Team, Profitability tabs
+ * Phase 11 (Plan 10): Adds Expenses and Mileage tabs
  *
  * Access:
- * - Owner: all 7 tabs
- * - Office: all tabs except Team (owner-only payroll data)
+ * - Owner: all tabs
+ * - Office: all tabs except Team/Profitability (owner-only payroll/cost data)
  * - Tech: stripped-down "My Performance" view (no redirect)
  * - Customer: redirected to portal
  */
@@ -62,17 +67,35 @@ export default async function ReportsPage() {
     )
   }
 
-  // Fetch initial data for all tabs in parallel — Plans 02-05 add their fetches here
-  const [arAging, revenueData, pnlData, expensesData, revenueDashboardData, operationsData, teamData, payrollData, profitabilityData] = await Promise.all([
+  // Fetch initial data for all tabs in parallel
+  const [
+    arAging,
+    revenueData,
+    pnlData,
+    expensesData,
+    expenseSummaryData,
+    mileageData,
+    mileageSummaryData,
+    revenueDashboardData,
+    operationsData,
+    teamData,
+    payrollData,
+    profitabilityData,
+    techProfiles,
+  ] = await Promise.all([
     getArAging(),
     getRevenueByCustomer(defaultStartDate, defaultEndDate),
     getPnlReport(defaultStartDate, defaultEndDate),
     getExpenses(defaultStartDate, defaultEndDate),
+    getExpenseSummary(defaultStartDate, defaultEndDate),
+    isOwner ? getMileageLog(undefined, defaultStartDate, defaultEndDate) : Promise.resolve([]),
+    isOwner ? getMileageSummary(defaultStartDate, defaultEndDate) : Promise.resolve({ totalMiles: 0, totalDeduction: 0, tripCount: 0 }),
     getRevenueDashboard(defaultStartDate, defaultEndDate),
     getOperationsMetrics(defaultStartDate, defaultEndDate),
     getTeamMetrics(defaultStartDate, defaultEndDate),
     isOwner ? getPayrollPrep(defaultStartDate, defaultEndDate) : Promise.resolve([]),
     isOwner ? getProfitabilityAnalysis(defaultStartDate, defaultEndDate) : Promise.resolve({ pools: [], flaggedPools: [], techCosts: [], thresholdPct: 20, totalChemicalCost: 0, totalRecurringRevenue: 0, overallMarginPct: 0 }),
+    isOwner ? getTechProfiles() : Promise.resolve([]),
   ])
 
   return (
@@ -80,22 +103,21 @@ export default async function ReportsPage() {
       <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
 
       <Tabs defaultValue="ar-aging" className="w-full">
-        {/* 7 tabs — scrollable horizontal layout fits all screen sizes */}
+        {/* Scrollable tab list */}
         <TabsList className="flex w-full overflow-x-auto">
           <TabsTrigger value="ar-aging" className="whitespace-nowrap">AR Aging</TabsTrigger>
           <TabsTrigger value="revenue" className="whitespace-nowrap">Revenue</TabsTrigger>
           <TabsTrigger value="pnl" className="whitespace-nowrap">P&L</TabsTrigger>
-          {/* Phase 9: New reporting tabs — Plans 02-05 fill these in */}
+          <TabsTrigger value="expenses" className="whitespace-nowrap">Expenses</TabsTrigger>
+          <TabsTrigger value="mileage" className="whitespace-nowrap">Mileage</TabsTrigger>
           <TabsTrigger value="revenue-dashboard" className="whitespace-nowrap">Revenue Dashboard</TabsTrigger>
           <TabsTrigger value="operations" className="whitespace-nowrap">Operations</TabsTrigger>
           <TabsTrigger value="team" className="whitespace-nowrap">Team</TabsTrigger>
-          {/* Profitability tab — owner only (chemical cost data is sensitive) */}
           {isOwner && (
             <TabsTrigger value="profitability" className="whitespace-nowrap">Profitability</TabsTrigger>
           )}
         </TabsList>
 
-        {/* Existing tabs — unchanged */}
         <TabsContent value="ar-aging" className="mt-6">
           <ArAgingView data={arAging} isOwner={isOwner} />
         </TabsContent>
@@ -119,7 +141,32 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
-        {/* Phase 9: Revenue Dashboard — Plan 02 */}
+        {/* Phase 11 Plan 10: Expense tracking tab */}
+        <TabsContent value="expenses" className="mt-6">
+          <ExpenseTracker
+            initialExpenses={expensesData}
+            initialSummary={expenseSummaryData}
+            startDate={defaultStartDate}
+            endDate={defaultEndDate}
+            isOwner={isOwner}
+          />
+        </TabsContent>
+
+        {/* Phase 11 Plan 10: Mileage log tab (owner only) */}
+        {isOwner && (
+          <TabsContent value="mileage" className="mt-6">
+            <MileageLog
+              initialEntries={mileageData}
+              initialSummary={mileageSummaryData}
+              startDate={defaultStartDate}
+              endDate={defaultEndDate}
+              isOwner={isOwner}
+              techOptions={techProfiles.map((t) => ({ id: t.id, full_name: t.full_name }))}
+              currentUserId={user.id}
+            />
+          </TabsContent>
+        )}
+
         <TabsContent value="revenue-dashboard" className="mt-6">
           <RevenueDashboard
             initialData={revenueDashboardData}
@@ -129,7 +176,6 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
-        {/* Phase 9: Operations Dashboard — Plan 03 */}
         <TabsContent value="operations" className="mt-6">
           <OperationsDashboard
             initialData={operationsData}
@@ -149,7 +195,6 @@ export default async function ReportsPage() {
           />
         </TabsContent>
 
-        {/* Phase 9: Profitability Dashboard — Plan 05 (owner only — financial cost data is sensitive) */}
         {isOwner && (
           <TabsContent value="profitability" className="mt-6">
             <ProfitabilityDashboard

@@ -13,6 +13,7 @@ import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
 import { StartRouteButton } from "@/components/field/start-route-button"
 import { ClockInBanner } from "@/components/field/clock-in-banner"
+import { QuickExpenseButton } from "@/components/field/quick-expense"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -145,6 +146,12 @@ export default async function RoutesPage() {
       {/* ── Start Route button — tech-only, shown when there are stops ──── */}
       {user.role === "tech" && stops.length > 0 && (
         <StartRouteButton alreadyStarted={routeAlreadyStarted} />
+      )}
+
+      {/* ── Quick expense button — field expense logging for tech/owner ─── */}
+      {/* Phase 11 Plan 10: Accessible from routes page for minimal-friction field expense capture */}
+      {isFieldUser && (
+        <QuickExpenseButton />
       )}
 
       {/* ── Progress bar ─────────────────────────────────────────────────── */}
