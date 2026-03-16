@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
-Plan: 13/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13 done)
-Status: Phase 10 Plan 13 complete — equipment readings table, health scoring, degradation alerts, tech capture UI, health badges on customer profile
-Last activity: 2026-03-16 — Phase 10 Plan 13 committed
+Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
+Status: Phase 10 Plan 17 complete — VAPID push handler in service worker, PWA install banner, push permission prompt wired into AppShell
+Last activity: 2026-03-16 — Phase 10 Plan 17 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -87,6 +87,8 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P03 | 8 | 2 tasks | 4 files |
 | Phase 10-smart-features-ai P04 | 8 | 2 tasks | 2 files |
 | Phase 10-smart-features-ai P13 | 11 | 2 tasks | 13 files |
+| Phase 10-smart-features-ai P17 | 6 | 2 tasks | 5 files |
+| Phase 10-smart-features-ai P06 | 10 | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -333,6 +335,9 @@ Recent decisions affecting current work:
 - [Phase 10-13]: No health badge when <6 readings — avoids placeholder UI per MEMORY.md; only show real data
 - [Phase 10-13]: logEquipmentReading fire-and-forget after stop completion — equipment reading failure must never block tech workflow
 - [Phase 10-13]: checkDegradation uses adminDb (no RLS) — runs as cron/system context without user JWT session
+- [Phase 10-17]: urlBase64ToUint8Array returns ArrayBuffer (not Uint8Array) — TypeScript PushManager.subscribe applicationServerKey requires ArrayBuffer-compatible type
+- [Phase 10-17]: vibrate cast to any in sw.ts showNotification — TypeScript lib omits vibrate from NotificationOptions despite being valid in modern browsers
+- [Phase 10-17]: PwaInstallPrompt and PushPermissionPrompt integrated in AppShell client component (not server layout.tsx) — both components need browser APIs (localStorage, window.matchMedia, Notification)
 
 ### Pending Todos
 
@@ -359,5 +364,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-09-PLAN.md
-Resume file: Phase 10 Plan 09 complete — Ready for Phase 10 Plan 10
+Stopped at: Completed 10-17-PLAN.md
+Resume file: Phase 10 Plan 17 complete — Phase 10 all 17 plans done
