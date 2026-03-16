@@ -40,6 +40,7 @@ import { BankFeed } from "./bank-feed"
 import { SalesTaxManager } from "./sales-tax-manager"
 import { PeriodClose } from "./period-close"
 import { AuditTrail } from "./audit-trail"
+import { ApWorkflow } from "./ap-workflow"
 import {
   getProfitAndLoss,
   getBalanceSheet,
@@ -433,6 +434,10 @@ export function FinancialDashboard({
           {/* Bank Feed tab — shown to owners who have Plaid connected */}
           {isOwner && (
             <TabsTrigger value="bank-feed">Bank Feed</TabsTrigger>
+          )}
+          {/* Accounts Payable — visible to all owners in both modes */}
+          {isOwner && (
+            <TabsTrigger value="ap">Accounts Payable</TabsTrigger>
           )}
           {/* Sales Tax — visible to all owners (applies to billing, not just accountant mode) */}
           {isOwner && (
@@ -880,6 +885,13 @@ export function FinancialDashboard({
                 }}
               />
             )}
+          </TabsContent>
+        )}
+
+        {/* ── Accounts Payable tab (owner, both modes) ───────────────────── */}
+        {isOwner && (
+          <TabsContent value="ap" className="mt-6">
+            <ApWorkflow isOwner={isOwner} />
           </TabsContent>
         )}
 
