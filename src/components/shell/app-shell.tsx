@@ -6,6 +6,8 @@ import { OfflineBanner } from "@/components/shell/offline-banner"
 import { AppSidebar } from "@/components/shell/app-sidebar"
 import { AppHeader } from "@/components/shell/app-header"
 import { SyncInitializer } from "@/components/shell/sync-initializer"
+import { PwaInstallPrompt } from "@/components/notifications/pwa-install-prompt"
+import { PushPermissionPrompt } from "@/components/notifications/push-permission-prompt"
 import type { AuthUser } from "@/actions/auth"
 
 interface AppShellProps {
@@ -15,6 +17,7 @@ interface AppShellProps {
   orgName?: string | null
   orgLogoUrl?: string | null
   orgId?: string | null
+  unreadNotificationCount?: number
 }
 
 /**
@@ -37,7 +40,7 @@ interface AppShellProps {
  * SyncInitializer renders null but wires initSyncListener() and
  * prefetchTodayRoutes() on mount (per locked decision on pre-caching).
  */
-export function AppShell({ user, children, alertCount = 0, orgName, orgLogoUrl, orgId }: AppShellProps) {
+export function AppShell({ user, children, alertCount = 0, orgName, orgLogoUrl, orgId, unreadNotificationCount = 0 }: AppShellProps) {
   return (
     <TooltipProvider>
       {/* Offline indicator — fixed at viewport top, renders null when online */}
@@ -53,7 +56,7 @@ export function AppShell({ user, children, alertCount = 0, orgName, orgLogoUrl, 
         {/* Main content area (sidebar inset) */}
         <SidebarInset>
           {/* Top header bar */}
-          <AppHeader user={user} />
+          <AppHeader user={user} unreadNotificationCount={unreadNotificationCount} />
 
           {/* Page content */}
           <main className="flex flex-1 flex-col gap-4 p-4 pt-4">
@@ -61,6 +64,12 @@ export function AppShell({ user, children, alertCount = 0, orgName, orgLogoUrl, 
           </main>
         </SidebarInset>
       </SidebarProvider>
+
+      {/* PWA install prompt — fixed bottom banner, self-managing visibility */}
+      <PwaInstallPrompt />
+
+      {/* Push notification permission prompt — appears after install/first login */}
+      <PushPermissionPrompt />
     </TooltipProvider>
   )
 }
