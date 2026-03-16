@@ -20,10 +20,18 @@ import {
   customers,
   alerts,
   orgs,
+  bankTransactions,
+  chartOfAccounts,
 } from "@/lib/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 import { syncPaymentToQbo } from "@/actions/qbo-sync"
-import { createPaymentJournalEntry, createRefundJournalEntry } from "@/lib/accounting/journal"
+import {
+  createPaymentJournalEntry,
+  createRefundJournalEntry,
+  createJournalEntry,
+  ensureChartOfAccounts,
+  getJournalEntriesForSource,
+} from "@/lib/accounting/journal"
 import { createElement } from "react"
 import { render as renderEmail } from "@react-email/render"
 import { ReceiptEmail } from "@/lib/emails/receipt-email"
@@ -659,4 +667,173 @@ export async function handleChargeRefunded(
     originalRecord.invoice_id,
     isFullRefund ? "(full refund)" : "(partial refund)"
   )
+}
+
+// ---------------------------------------------------------------------------
+// handlePayoutPaid
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles payout.paid events from Stripe Connect.
+ *
+ * When Stripe sends a payout to the owner's bank, this creates a journal entry:
+ *   Dr Checking Account (1000)       +payout_amount
+ *   Cr Stripe Clearing (1020)        -payout_amount
+ *
+ * This moves money from the Stripe Clearing account (where payment receipts land)
+ * to the Checking account (the real bank). Per-charge Stripe fees are already
+ * recorded at payment time via createPaymentJournalEntry.
+ *
+ * Idempotent: if an entry already exists for this payout_id, skips.
+ * Auto-matches to bank_transaction if an exact-amount match exists within 3 days.
+ *
+ * Multi-tenant: if more than one org exists and we can't determine ownership,
+ * logs a warning and skips (safe — no data is corrupted).
+ */
+export async function handlePayoutPaid(payout: Stripe.Payout): Promise<void> {
+  const payoutId = payout.id
+  const netAmount = payout.amount / 100 // cents to dollars
+  const arrivalDate = payout.arrival_date
+    ? new Date(payout.arrival_date * 1000).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0]
+
+  console.log(`[handlePayoutPaid] Payout ${payoutId}: $${netAmount.toFixed(2)} arriving ${arrivalDate}`)
+
+  // Idempotency check
+  const existing = await getJournalEntriesForSource("payout", payoutId)
+  if (existing.length > 0) {
+    console.log(`[handlePayoutPaid] Journal entry already exists for payout ${payoutId}, skipping`)
+    return
+  }
+
+  // Determine org_id for this payout.
+  // In a Connect setup, each payout belongs to a connected account.
+  // We look up orgs via org_settings — if only one org, use it.
+  // In multi-tenant, the webhook route handler should pass account context.
+  const orgRows = await adminDb
+    .select({ org_id: orgSettings.org_id })
+    .from(orgSettings)
+    .limit(50)
+
+  if (orgRows.length === 0) {
+    console.warn(`[handlePayoutPaid] No orgs found, skipping payout ${payoutId}`)
+    return
+  }
+
+  if (orgRows.length > 1) {
+    console.warn(
+      `[handlePayoutPaid] Multiple orgs found (${orgRows.length}). Cannot determine payout owner without account context. ` +
+      `Skipping payout ${payoutId}. For multi-tenant, pass Stripe-Account header context to this handler.`
+    )
+    return
+  }
+
+  const orgId = orgRows[0].org_id
+
+  // Ensure chart of accounts is seeded
+  await ensureChartOfAccounts(orgId)
+
+  // Look up Checking and Stripe Clearing accounts
+  const accountRows = await adminDb
+    .select({
+      id: chartOfAccounts.id,
+      account_number: chartOfAccounts.account_number,
+    })
+    .from(chartOfAccounts)
+    .where(and(eq(chartOfAccounts.org_id, orgId), eq(chartOfAccounts.is_active, true)))
+
+  const byNumber = new Map(accountRows.map((a) => [a.account_number, a.id]))
+  const checkingId = byNumber.get("1000")
+  const stripeClearingId = byNumber.get("1020")
+
+  if (!checkingId || !stripeClearingId) {
+    console.error(
+      `[handlePayoutPaid] Missing accounts for org ${orgId}: ` +
+      `checking=${checkingId ? "found" : "MISSING"}, ` +
+      `clearing=${stripeClearingId ? "found" : "MISSING"}`
+    )
+    return
+  }
+
+  // Create balanced journal entry: Dr Checking, Cr Stripe Clearing
+  let journalEntryId: string | null = null
+  try {
+    journalEntryId = await createJournalEntry({
+      orgId,
+      entryDate: arrivalDate,
+      description: `Stripe payout ${payoutId}`,
+      sourceType: "payout",
+      sourceId: payoutId,
+      lines: [
+        {
+          accountId: checkingId,
+          amount: netAmount.toFixed(2), // Dr Checking: positive = debit
+          description: `Stripe payout ${payoutId} arrival`,
+        },
+        {
+          accountId: stripeClearingId,
+          amount: (-netAmount).toFixed(2), // Cr Stripe Clearing: negative = credit
+          description: `Stripe payout ${payoutId} cleared`,
+        },
+      ],
+    })
+    console.log(`[handlePayoutPaid] Created journal entry ${journalEntryId} for payout ${payoutId}`)
+  } catch (err) {
+    console.error(`[handlePayoutPaid] Failed to create journal entry:`, err)
+    return
+  }
+
+  // Auto-match to a bank transaction if one exists with the same amount ±$0.01 within 3 days
+  if (!journalEntryId) return
+
+  try {
+    const candidates = await adminDb
+      .select({
+        id: bankTransactions.id,
+        amount: bankTransactions.amount,
+        date: bankTransactions.date,
+      })
+      .from(bankTransactions)
+      .where(
+        and(
+          eq(bankTransactions.org_id, orgId),
+          eq(bankTransactions.status, "unmatched"),
+          // Arrival date ± 3 days window
+          sql`${bankTransactions.date}::date >= (${arrivalDate}::date - interval '3 days')`,
+          sql`${bankTransactions.date}::date <= (${arrivalDate}::date + interval '3 days')`
+        )
+      )
+      .limit(20)
+
+    // Find exact amount match (Plaid uses negative for deposits; payout is positive in our convention)
+    // Plaid amounts: positive = debit (money out), negative = credit (money in)
+    // Our payout amount is positive (depositing into account)
+    // Plaid will show deposit as negative amount
+    const exactMatch = candidates.find((txn) => {
+      const txnAbs = Math.abs(parseFloat(txn.amount))
+      return Math.abs(txnAbs - netAmount) <= 0.01
+    })
+
+    if (exactMatch) {
+      await adminDb
+        .update(bankTransactions)
+        .set({
+          status: "matched",
+          matched_entry_id: journalEntryId,
+          matched_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(eq(bankTransactions.id, exactMatch.id))
+
+      console.log(
+        `[handlePayoutPaid] Auto-matched bank transaction ${exactMatch.id} to payout entry ${journalEntryId}`
+      )
+    } else {
+      console.log(
+        `[handlePayoutPaid] No matching bank transaction found for payout $${netAmount.toFixed(2)} on ${arrivalDate}`
+      )
+    }
+  } catch (matchErr) {
+    console.warn(`[handlePayoutPaid] Auto-match failed (non-fatal):`, matchErr)
+  }
 }

@@ -21,6 +21,7 @@ import {
   handlePaymentFailed,
   handleAccountUpdated,
   handleChargeRefunded,
+  handlePayoutPaid,
 } from "@/lib/stripe/webhook-handlers"
 
 export async function POST(req: NextRequest) {
@@ -83,6 +84,11 @@ export async function POST(req: NextRequest) {
 
       case "charge.refunded":
         await handleChargeRefunded(event.data.object as Stripe.Charge)
+        break
+
+      case "payout.paid":
+        // Auto-creates journal entry and matches to bank transaction
+        await handlePayoutPaid(event.data.object as Stripe.Payout)
         break
 
       default:
