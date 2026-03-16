@@ -268,7 +268,7 @@ Plans:
 - [ ] 10-17-PLAN.md — PWA install prompt and Web Push notifications
 
 ### Phase 11: Payroll, Team Management & Full Accounting
-**Goal**: The platform is a complete QuickBooks replacement for pool companies — owner runs native payroll with direct deposit, check printing, and automatic tax filing; tracks employee time, PTO, certifications, and break compliance; manages full double-entry accounting with bank reconciliation via Plaid; and gets payment reconciliation from whichever payment path (Stripe Connect or QBO) they chose in Phase 7
+**Goal**: DeweyIQ collects time data (clock-in/out, per-stop geofence timing, breaks, mileage) and pushes to QBO for payroll; provides full double-entry accounting with simplified owner view and accountant mode; integrates Plaid bank feeds with smart reconciliation; tracks expenses with receipt capture; manages PTO, certifications, and employee scheduling; and extends billing with payment plans, customer credits, and collections — all without requiring the owner to understand accounting terminology
 **Depends on**: Phase 9 (tech scorecards, per-stop metrics, **tech pay/commission tracking and payroll export** — review and extend what Phase 9 built, don't rebuild), Phase 7 (billing/payments, Stripe Connect or QBO integration), Phase 3 (field tech route timestamps)
 **Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05, TEAM-06, TEAM-07, TEAM-08, TEAM-09, TEAM-10, TEAM-11, TEAM-12, TEAM-13, TEAM-14, PAYRL-01, PAYRL-02, PAYRL-03, PAYRL-04, PAYRL-05, PAYRL-06, PAYRL-07, PAYRL-08, PAYRL-09, PAYRL-10, PAYRL-11, PAYRL-12, PAYRL-13, PAYRL-14, PAYRL-15, ACCT-01, ACCT-02, ACCT-03, ACCT-04, ACCT-05, ACCT-06, ACCT-07, ACCT-08, ACCT-09, ACCT-10, ACCT-11, ACCT-12, ACCT-13, ACCT-14, ACCT-15, PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07
 **Success Criteria** (what must be TRUE):
@@ -287,32 +287,23 @@ Plans:
   13. The owner can configure deductions (health insurance, retirement, HSA), garnishments, commission structures (per upsell, per WO), and bonus payroll runs — every edge case covered
   14. The owner can offer payment plans for large invoices and apply customer credits/prepayments to future invoices
   15. Payroll data can be exported to QuickBooks Online — payroll runs, journal entries, tax liabilities, and employee records sync to QBO so companies using QBO as their accountant-facing system of record can keep their bookkeeper/CPA in the loop without manual re-entry
-**Plans**: TBD
+**Plans**: 14 plans
 
 Plans:
-- [ ] 11-01: Schema foundation — time_entries, pay_rates, pay_periods, payroll_runs, employees, journal_entries, accounts, bank_connections tables + RLS
-- [ ] 11-02: Clock in/out system — manual punch in/out (single tap, GPS stamp), geofence-based auto per-stop tracking (configurable radius, background mode, arrival/departure logging), dual-mode support (punch defines shift, geofence gives stop-level detail), auto-close shift on inactivity, tech app UI, shift management server actions
-- [ ] 11-03: Auto time tracking — drive time vs. on-site time from geofence + route timestamps, break detection, time categorization engine, real-time tech location map for office
-- [ ] 11-04: Timesheet UI — weekly view per employee, auto-populated, editable, approvable, overtime calculation, PTO entries
-- [ ] 11-05: Pay rate management — per-employee rate config (hourly/per-stop/hybrid), overtime rules, rate history, effective dates, W-2 vs 1099 classification
-- [ ] 11-06: Tax calculation engine — federal income tax, state/local tax, Social Security, Medicare, FUTA/SUTA, employer-side FICA match, multi-state support
-- [ ] 11-07: Payroll run processing — gross-to-net calculation, deductions, garnishments, pay stubs, pay period auto-close, bonus payroll runs
-- [ ] 11-08: Direct deposit & checks — ACH integration for direct deposit, employee bank account setup, printable check generation with pay stub
-- [ ] 11-09: Tax filing & year-end — quarterly 941 filing, W-2/W-3 generation, 1099-NEC generation, state equivalent filings
-- [ ] 11-10: PTO & scheduling — accrual rules, balance tracking, request/approval flow, availability windows, blocked dates
-- [ ] 11-11: Commission & bonus tracking — per upsell, per WO completion, configurable rates, running totals, bonus payroll runs
-- [ ] 11-12: Certifications & documents — CPO, license, insurance tracking, expiration alerts, document upload to Supabase Storage
-- [ ] 11-13: Chart of accounts & double-entry engine — pre-seeded accounts, auto journal entries for all transactions, manual journal entries, audit trail
-- [ ] 11-14: Financial statements — P&L, Balance Sheet, Cash Flow, custom date ranges, period comparison, budget vs. actual
-- [ ] 11-15: Bank feeds & reconciliation — Plaid integration, auto-import transactions, categorization suggestions, reconciliation workflow
-- [ ] 11-16: Expense tracking & AP — expense categorization, receipt photo capture, mileage logging, vendor bills, AP aging
-- [ ] 11-17: Payment reconciliation — Stripe payout reconciliation, QBO payment reconciliation, fee tracking, net deposit matching
-- [ ] 11-18: Advanced collections — payment plans, customer credits/prepayments, auto-apply balances, collections dashboard
-- [ ] 11-19: Sales tax management — tax liability tracking by jurisdiction, filing-ready reports, due date reminders
-- [ ] 11-20: Team & financial dashboards — employee overview (clock, hours, PTO, certs), financial overview (cash, revenue, AR/AP, payroll costs), labor cost analysis
-- [ ] 11-21: Payroll reports — payroll register, tax liability summary, deduction summary, labor distribution, retroactive adjustments
-- [ ] 11-22: Period close & audit — monthly/quarterly/annual close, closing entries, complete audit trail, tax prep exports
-- [ ] 11-23: End-to-end verification checkpoint
+- [ ] 11-01-PLAN.md — Schema foundation: time_entries, break_events, time_entry_stops, chart_of_accounts, journal_entries, journal_entry_lines, accounting_periods, bank_accounts, bank_transactions, pto_balances, pto_requests, employee_availability, employee_blocked_dates, employee_documents, mileage_logs, vendors tables + RLS + org_settings extensions + profiles.qbo_employee_id
+- [ ] 11-02-PLAN.md — Clock in/out system: manual punch with GPS stamp, break start/end, break compliance alerts, ClockInBanner on routes page
+- [ ] 11-03-PLAN.md — Geofence per-stop timing: haversine geofence detection in GPS hook, arrival/departure recording, drive time calculation, auto-break detection
+- [ ] 11-04-PLAN.md — Timesheets + QBO push: weekly timesheet view, edit/approve workflow, QBO TimeActivity push, Employee sync, time tracking settings
+- [ ] 11-05-PLAN.md — PTO, scheduling, certifications: PTO balance/accrual/request/approval, availability windows, blocked dates, document upload with expiry alerts
+- [ ] 11-06-PLAN.md — Double-entry accounting engine: chart of accounts seed, journal entry creation/reversal, auto-generation for invoices/payments/expenses/refunds
+- [ ] 11-07-PLAN.md — Financial statements + dashboard: P&L, Balance Sheet, Cash Flow, simplified owner view, accountant mode, /accounting page
+- [ ] 11-08-PLAN.md — Plaid bank feeds: Plaid Link integration, transaction sync, webhook handler, bank account management in settings
+- [ ] 11-09-PLAN.md — Bank reconciliation: smart auto-match algorithm, reconciliation UI, Stripe payout auto-reconciliation with fee tracking
+- [ ] 11-10-PLAN.md — Expense tracking + mileage: receipt photo capture, category-to-account mapping, auto mileage from GPS, IRS-compliant mileage export
+- [ ] 11-11-PLAN.md — Payment reconciliation + collections: QBO payment reconciliation, payment plans, customer credits, collections dashboard, refund entries
+- [ ] 11-12-PLAN.md — Sales tax + period close + audit: per-jurisdiction tax rates, period close workflow, immutable audit trail
+- [ ] 11-13-PLAN.md — Team dashboard + labor costs: live employee status, hours/PTO/alerts overview, labor cost per stop/route/customer
+- [ ] 11-14-PLAN.md — End-to-end verification checkpoint
 
 ### Phase 12: Projects & Renovations
 **Goal**: Pool service companies that also build, renovate, and remodel pools can manage the entire project lifecycle — from lead capture and site survey through multi-tier proposals with deposits, permitting, material procurement, subcontractor coordination, phased execution with tech field tools, inspections, change orders, progress billing, final walkthrough, and warranty activation — with full customer portal visibility and real-time profitability tracking
