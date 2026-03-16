@@ -36,6 +36,7 @@ import { serviceRequests } from "./service-requests"
 import { userNotifications } from "./user-notifications"
 import { pushSubscriptions } from "./push-subscriptions"
 import { notificationPreferences } from "./notification-prefs"
+import { weatherRescheduleProposals } from "./weather-proposals"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -287,3 +288,16 @@ export const notificationPreferencesRelations = relations(notificationPreference
   org: one(orgs, { fields: [notificationPreferences.org_id], references: [orgs.id] }),
   user: one(profiles, { fields: [notificationPreferences.user_id], references: [profiles.id] }),
 }))
+
+// Phase 10-06 relations
+
+export const weatherRescheduleProposalsRelations = relations(
+  weatherRescheduleProposals,
+  ({ one }) => ({
+    org: one(orgs, { fields: [weatherRescheduleProposals.org_id], references: [orgs.id] }),
+    approvedBy: one(profiles, {
+      fields: [weatherRescheduleProposals.approved_by_id],
+      references: [profiles.id],
+    }),
+  })
+)

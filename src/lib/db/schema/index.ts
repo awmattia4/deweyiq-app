@@ -49,6 +49,7 @@ export * from "./equipment-readings"
 export * from "./user-notifications"
 export * from "./push-subscriptions"
 export * from "./notification-prefs"
+export * from "./weather-proposals"
 
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
