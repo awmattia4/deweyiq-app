@@ -22,6 +22,7 @@ import { DunningSettings } from "@/components/settings/dunning-settings"
 import { TemplateEditor } from "@/components/settings/template-editor"
 import { TeamPaySettings } from "@/components/settings/team-pay-settings"
 import { ChemistryCostSettings } from "@/components/settings/chemistry-cost-settings"
+import { SafetySettings } from "@/components/settings/safety-settings"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
 import type { TemplateRow } from "@/actions/notification-templates"
@@ -91,6 +92,8 @@ interface SettingsTabsProps {
   techProfiles: Array<{ id: string; fullName: string; payType: string | null; payRate: string | null }>
   // Phase 9: Chemical cost settings
   chemicalProducts: Array<{ id: string; name: string; chemicalType: string; unit: string; costPerUnit: string | null }>
+  // Phase 10-14: Safety team members for escalation chain dropdown
+  safetyTeamMembers: Array<{ id: string; fullName: string; role: "owner" | "office" | "tech" }>
   // Notification templates
   notifTemplates: TemplateRow[]
   orgTemplateSettings: {
@@ -129,6 +132,7 @@ export function SettingsTabs({
   dunningMaxRetries,
   techProfiles,
   chemicalProducts,
+  safetyTeamMembers,
   notifTemplates,
   orgTemplateSettings,
   signOutAction,
@@ -323,6 +327,23 @@ export function SettingsTabs({
               />
             </CardContent>
           </Card>
+
+          {orgSettings && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Lone Worker Safety</CardTitle>
+                <CardDescription>
+                  Alert the right people if a tech becomes unresponsive during an active route. Configure how long before the alert fires and who gets notified.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SafetySettings
+                  settings={orgSettings}
+                  teamMembers={safetyTeamMembers}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

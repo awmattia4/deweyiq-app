@@ -66,15 +66,17 @@ export default async function SettingsPage() {
       ])
     : [null, [], null, [], [], null, null, null, [], null]
 
-  // Fetch tech profiles for pay configuration (owner only)
+  // Fetch team profiles for pay configuration and safety escalation (owner only)
   // adminDb bypasses RLS, so explicitly filter by org_id
   let techProfiles: Array<{ id: string; fullName: string; payType: string | null; payRate: string | null }> = []
+  let safetyTeamMembers: Array<{ id: string; fullName: string; role: "owner" | "office" | "tech" }> = []
   if (isOwner && user.org_id) {
     try {
-      const techRows = await adminDb
+      const teamRows = await adminDb
         .select({
           id: profiles.id,
           full_name: profiles.full_name,
+          role: profiles.role,
           pay_type: profiles.pay_type,
           pay_rate: profiles.pay_rate,
         })
@@ -82,17 +84,24 @@ export default async function SettingsPage() {
         .where(
           and(
             eq(profiles.org_id, user.org_id),
-            inArray(profiles.role, ["tech", "owner"])
+            inArray(profiles.role, ["tech", "owner", "office"])
           )
         )
-      techProfiles = techRows.map((r) => ({
+      techProfiles = teamRows
+        .filter((r) => r.role === "tech" || r.role === "owner")
+        .map((r) => ({
+          id: r.id,
+          fullName: r.full_name,
+          payType: r.pay_type ?? null,
+          payRate: r.pay_rate ?? null,
+        }))
+      safetyTeamMembers = teamRows.map((r) => ({
         id: r.id,
         fullName: r.full_name,
-        payType: r.pay_type ?? null,
-        payRate: r.pay_rate ?? null,
+        role: r.role as "owner" | "office" | "tech",
       }))
     } catch (err) {
-      console.error("[SettingsPage] Failed to fetch tech profiles:", err)
+      console.error("[SettingsPage] Failed to fetch team profiles:", err)
     }
   }
 
@@ -164,6 +173,7 @@ export default async function SettingsPage() {
         dunningMaxRetries={dunningConfig?.maxRetries ?? 3}
         techProfiles={techProfiles}
         chemicalProducts={chemicalProductList}
+        safetyTeamMembers={safetyTeamMembers}
         notifTemplates={notifTemplates ?? []}
         orgTemplateSettings={orgTemplateSettings ?? null}
         signOutAction={async () => {
