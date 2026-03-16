@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 9 — Reporting & Team Analytics (Phase 7 Plan 09 deferred)
+**Current focus:** Phase 10 — Smart Features & AI
 
 ## Current Position
 
-Phase: 9 of 17 (Reporting & Team Analytics) — COMPLETE
-Plan: 6/6 complete (01, 02, 03, 04, 05, 06 done)
-Status: Phase 9 Plan 06 complete — started_at and dosing_amounts capture wired in field stop workflow
-Last activity: 2026-03-16 — Phase 9 Plan 06 committed
+Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
+Plan: 1/17 complete (01 done)
+Status: Phase 10 Plan 01 complete — Open-Meteo weather client + OLS regression + smart dosing modifiers
+Last activity: 2026-03-16 — Phase 10 Plan 01 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -81,6 +81,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 09-reporting-team-analytics P04 | 8 | 2 tasks | 8 files |
 | Phase 09-reporting-team-analytics P05 | 8 | 2 tasks | 9 files |
 | Phase 09-reporting-team-analytics P06 | 3 | 2 tasks | 3 files |
+| Phase 10-smart-features-ai P01 | 4 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -310,6 +311,9 @@ Recent decisions affecting current work:
 - [Phase 09-06]: routeStopId in StopContext: route_stop id fetched in getStopContext and exposed so client can call markStopStarted without a second query
 - [Phase 09-06]: useRef for dosingAmountsRef: avoids re-renders on chemistry input and stale closure risk in executeComplete — ref read is always synchronous and current
 - [Phase 09-06]: onDosingChange is optional prop on ChemistryDosing: backward-compatible, existing usages outside stop-workflow unaffected
+- [Phase 10-01]: OLS x-axis = visit index (not timestamp) — evenly-spaced visits; avoids date arithmetic; adequate for pool chemistry trend detection
+- [Phase 10-01]: Modifiers stack additively on dosing doses (not multiplicatively) — avoids compounding; 15%+10%=25% not 26.5%
+- [Phase 10-01]: History modifier requires R²>=0.4 threshold — filters noisy trends; prevents random fluctuations from triggering preemptive dose changes
 
 ### Pending Todos
 
@@ -336,6 +340,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 09-06-PLAN.md
-Resume file: Phase 9 complete — Ready for Phase 10
-Resume file: Ready for Phase 9 Plan 05 (Profitability Dashboard)
+Stopped at: Completed 10-01-PLAN.md
+Resume file: Phase 10 Plan 01 complete — Ready for Phase 10 Plan 02
