@@ -103,6 +103,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11-payroll-team-management-full-accounting P03 | 7 | 2 tasks | 3 files |
 | Phase 11-payroll-team-management-full-accounting P05 | 10 | 2 tasks | 5 files |
 | Phase 11 P09 | 12 | 2 tasks | 8 files |
+| Phase 11 P11 | 14 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -394,6 +395,7 @@ Recent decisions affecting current work:
 - [Phase 11-03]: Drive time is best-effort in recordStopArrival — isolated in try/catch so arrival recording never fails due to drive time query error
 - [Phase 11-payroll-team-management-full-accounting]: updatePtoBalance uses select-then-upsert (no unique constraint on pto_balances)
 - [Phase 11]: Score >= 80 for auto-match (conservative), 50-79 for review; Stripe payout = Dr Checking / Cr Stripe Clearing (per-charge fees already in payment entries)
+- [Phase 11]: Payment lifecycle complete with QBO reconciliation, installment plans, credits, and collections dashboard in Billing page tabs
 
 ### Pending Todos
 
