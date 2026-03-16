@@ -148,6 +148,7 @@ export function PoolList({ pools, customerId }: PoolListProps) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         customerId={customerId}
+        existingPools={pools}
       />
     </div>
   )

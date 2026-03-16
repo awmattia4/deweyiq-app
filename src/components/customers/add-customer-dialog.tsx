@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete"
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Lightbulb, X } from "lucide-react"
 
 // ─── Form state type ───────────────────────────────────────────────────────────
 
@@ -75,9 +77,11 @@ function validate(state: FormState): Record<string, string> {
 
 export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
   const [form, setForm] = useState<FormState>(defaultState)
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [rootError, setRootError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [gateCodeDismissed, setGateCodeDismissed] = useState(false)
 
   function update(field: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -94,8 +98,10 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
   function handleOpenChange(next: boolean) {
     if (!next) {
       setForm(defaultState)
+      setCoords(null)
       setErrors({})
       setRootError(null)
+      setGateCodeDismissed(false)
     }
     onOpenChange(next)
   }
@@ -114,6 +120,8 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
       const result = await createCustomer({
         full_name: form.full_name.trim(),
         address: form.address.trim() || undefined,
+        lat: coords?.lat,
+        lng: coords?.lng,
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
         gate_code: form.gate_code.trim() || undefined,
@@ -129,6 +137,9 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
       }
     })
   }
+
+  // Show gate code reminder when address is filled but gate code is empty
+  const showGateCodeHint = form.address.trim().length > 0 && !form.gate_code.trim() && !gateCodeDismissed
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -169,11 +180,13 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
             {/* Address */}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="customer-address">Address</Label>
-              <Input
+              <AddressAutocomplete
                 id="customer-address"
-                placeholder="123 Main St, City, ST 12345"
                 value={form.address}
-                onChange={(e) => update("address", e.target.value)}
+                onChange={(address, newCoords) => {
+                  update("address", address)
+                  if (newCoords) setCoords(newCoords)
+                }}
                 disabled={isPending}
               />
             </div>
@@ -229,6 +242,24 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
                 disabled={isPending}
               />
             </div>
+
+            {/* Gate code smart suggestion */}
+            {showGateCodeHint && (
+              <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+                <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground flex-1">
+                  Does this property have a gate? Adding the code now saves techs time on every visit.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setGateCodeDismissed(true)}
+                  className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                  aria-label="Dismiss suggestion"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
 
             {/* Access Notes */}
             <div className="flex flex-col gap-1.5">

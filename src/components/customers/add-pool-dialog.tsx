@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Lightbulb, X } from "lucide-react"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,10 +47,22 @@ const defaultState: FormState = {
   notes: "",
 }
 
+// ─── Existing pool summary (passed from parent) ───────────────────────────────
+
+type ExistingPool = {
+  id: string
+  name: string
+  type: "pool" | "spa" | "fountain"
+  volume_gallons?: number | null
+  sanitizer_type?: string | null
+}
+
 interface AddPoolDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   customerId: string
+  /** Pools already on this customer — used for multi-pool smart suggestions */
+  existingPools?: ExistingPool[]
 }
 
 // ─── Validation ────────────────────────────────────────────────────────────────
@@ -71,6 +84,107 @@ function validate(state: FormState): Record<string, string> {
   return errors
 }
 
+// ─── Suggestion engine ────────────────────────────────────────────────────────
+
+type Suggestion = {
+  id: string
+  text: string
+}
+
+function buildSuggestions(
+  form: FormState,
+  existingPools: ExistingPool[],
+): Suggestion[] {
+  const suggestions: Suggestion[] = []
+
+  // ── Multi-pool detection ───────────────────────────────────────────────────
+  if (existingPools.length >= 1) {
+    // Generic multi-pool reminder
+    suggestions.push({
+      id: "multi-pool-notes",
+      text: "This customer has multiple water features. Consider noting this in Access Notes (e.g., \u2018Two bodies of water \u2014 main pool and spa\u2019) so techs can plan their visit.",
+    })
+
+    // Pool + spa combo detection
+    const existingTypes = existingPools.map((p) => p.type)
+    const isAddingSpa = form.type === "spa"
+    const isAddingPool = form.type === "pool"
+    const hasExistingPool = existingTypes.includes("pool")
+    const hasExistingSpa = existingTypes.includes("spa")
+
+    if ((isAddingSpa && hasExistingPool) || (isAddingPool && hasExistingSpa)) {
+      suggestions.push({
+        id: "pool-spa-frequency",
+        text: "Pool + Spa combo detected. Consider matching service frequency for both to keep chemistry balanced.",
+      })
+    }
+  }
+
+  // ── Service frequency recommendation ──────────────────────────────────────
+  const vol = form.volume_gallons !== "" ? Number(form.volume_gallons) : null
+
+  if (form.type === "spa") {
+    suggestions.push({
+      id: "freq-spa",
+      text: "Spas need frequent chemical attention — weekly service is recommended.",
+    })
+  } else if (form.type === "pool" && vol !== null) {
+    if (vol > 20000) {
+      suggestions.push({
+        id: "freq-large-pool",
+        text: `${vol.toLocaleString()} gal is a large pool. Weekly service is recommended to maintain water quality.`,
+      })
+    } else if (vol >= 10000) {
+      suggestions.push({
+        id: "freq-mid-pool",
+        text: `${vol.toLocaleString()} gal pool — weekly or biweekly service works well depending on usage and bather load.`,
+      })
+    }
+  }
+
+  // ── Equipment combo suggestions ───────────────────────────────────────────
+  if (form.type === "pool" && form.sanitizer_type === "salt") {
+    suggestions.push({
+      id: "equip-salt-pool",
+      text: "Salt pools typically use: salt chlorine generator, variable speed pump, and cartridge filter.",
+    })
+  }
+
+  if (form.type === "spa") {
+    suggestions.push({
+      id: "equip-spa",
+      text: "Common spa equipment: heater, circulation pump, and ozone generator.",
+    })
+  }
+
+  return suggestions
+}
+
+// ─── Suggestion Banner ────────────────────────────────────────────────────────
+
+function SuggestionBanner({
+  suggestion,
+  onDismiss,
+}: {
+  suggestion: Suggestion
+  onDismiss: (id: string) => void
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+      <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+      <p className="text-xs text-muted-foreground flex-1">{suggestion.text}</p>
+      <button
+        type="button"
+        onClick={() => onDismiss(suggestion.id)}
+        className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+        aria-label="Dismiss suggestion"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 /**
@@ -80,12 +194,20 @@ function validate(state: FormState): Record<string, string> {
  * to match the established codebase pattern (AddCustomerDialog).
  *
  * Three visual sections: Basic Info, Water Chemistry, Notes.
+ *
+ * Accepts optional `existingPools` for smart multi-pool suggestions.
  */
-export function AddPoolDialog({ open, onOpenChange, customerId }: AddPoolDialogProps) {
+export function AddPoolDialog({
+  open,
+  onOpenChange,
+  customerId,
+  existingPools = [],
+}: AddPoolDialogProps) {
   const [form, setForm] = useState<FormState>(defaultState)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [rootError, setRootError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
 
   function update<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -103,8 +225,13 @@ export function AddPoolDialog({ open, onOpenChange, customerId }: AddPoolDialogP
       setForm(defaultState)
       setErrors({})
       setRootError(null)
+      setDismissedSuggestions(new Set())
     }
     onOpenChange(next)
+  }
+
+  function dismissSuggestion(id: string) {
+    setDismissedSuggestions((prev) => new Set([...prev, id]))
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -135,6 +262,10 @@ export function AddPoolDialog({ open, onOpenChange, customerId }: AddPoolDialogP
       }
     })
   }
+
+  // Compute visible suggestions (built fresh on each render from current form state)
+  const allSuggestions = buildSuggestions(form, existingPools)
+  const visibleSuggestions = allSuggestions.filter((s) => !dismissedSuggestions.has(s.id))
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -287,6 +418,19 @@ export function AddPoolDialog({ open, onOpenChange, customerId }: AddPoolDialogP
               />
             </div>
           </div>
+
+          {/* ── Smart suggestions ─────────────────────────────────────── */}
+          {visibleSuggestions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {visibleSuggestions.map((suggestion) => (
+                <SuggestionBanner
+                  key={suggestion.id}
+                  suggestion={suggestion}
+                  onDismiss={dismissSuggestion}
+                />
+              ))}
+            </div>
+          )}
 
           {/* ── Root error ────────────────────────────────────────────── */}
           {rootError && (
