@@ -83,6 +83,9 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 09-reporting-team-analytics P06 | 3 | 2 tasks | 3 files |
 | Phase 10-smart-features-ai P01 | 4 | 2 tasks | 4 files |
 | Phase 10-smart-features-ai P05 | 10 | 1 tasks | 3 files |
+| Phase 10-smart-features-ai P09 | 8 | 2 tasks | 8 files |
+| Phase 10-smart-features-ai P03 | 8 | 2 tasks | 4 files |
+| Phase 10-smart-features-ai P04 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -317,6 +320,11 @@ Recent decisions affecting current work:
 - [Phase 10-01]: History modifier requires R²>=0.4 threshold — filters noisy trends; prevents random fluctuations from triggering preemptive dose changes
 - [Phase 10-smart-features-ai]: ExistingPool type minimal — only type/volume_gallons/sanitizer_type needed; pool-list already has these so no API changes required
 - [Phase 10-smart-features-ai]: Suggestions rebuild as pure function on each render — no stale derived state; suggestion engine is a cheap O(1) pure function
+- [Phase 10-09]: adminDb for sendPushToUser: push sends run without user JWT context — RLS would block subscription reads
+- [Phase 10-09]: notifyUser is non-blocking by design: notification failures must never roll back the originating mutation
+- [Phase 10-09]: VAPID lazy config: avoids build errors in dev without keys; graceful skip on missing config
+- [Phase 10-smart-features-ai]: Heuristic 25 min/stop in getWorkloadBalance avoids ORS call; fast enough for imbalance detection
+- [Phase 10-smart-features-ai]: autoScheduleWeek preview-before-persist: returns proposal without writing; applyAutoSchedule persists after office approval
 
 ### Pending Todos
 
@@ -343,5 +351,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-01-PLAN.md
-Resume file: Phase 10 Plan 01 complete — Ready for Phase 10 Plan 02
+Stopped at: Completed 10-09-PLAN.md
+Resume file: Phase 10 Plan 09 complete — Ready for Phase 10 Plan 10
