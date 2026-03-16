@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
 Status: Phase 10 Plan 17 complete — VAPID push handler in service worker, PWA install banner, push permission prompt wired into AppShell
-Last activity: 2026-03-16 — Phase 10 Plan 17 committed
+Last activity: 2026-03-16 — Phase 10 Plan 12 committed (ETA engine, portal tracker, dispatch overlay)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -91,6 +91,8 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P06 | 10 | 2 tasks | 12 files |
 | Phase 10-smart-features-ai P07 | 7 | 1 tasks | 5 files |
 | Phase 10-smart-features-ai P14 | 8 | 2 tasks | 7 files |
+| Phase 10 P12 | 13 | 2 tasks | 10 files |
+| Phase 10-smart-features-ai P16 | 8 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -347,6 +349,10 @@ Recent decisions affecting current work:
 - [Phase 10]: Activity signal for safety check uses MAX(updated_at WHERE status=complete) from route_stops — no GPS cache table; MIN(started_at) fallback for in-progress routes
 - [Phase 10-07]: null-as-clear propagation for weather badges — todayWeather=null on clear days so StopCard renders nothing; no badge clutter when weather is fine
 - [Phase 10]: dismissSafetyAlert uses adminDb for alert access — tech has no RLS SELECT on alerts; org_id check in action provides equivalent security
+- [Phase 10]: haversine not ORS for portal ETA — too expensive at GPS ping frequency; close approximation acceptable
+- [Phase 10-smart-features-ai]: Broadcast history stored in org_settings JSONB (last 10) — avoids dedicated table since no complex queries on history
+- [Phase 10-smart-features-ai]: SMS broadcast via existing send-invoice-sms Edge Function with customText — reuses deployed Twilio infrastructure
+- [Phase 10]: eta_sms_count smallint on route_stops: 2-update cap tracked per stop row — avoids extra table, max value 2
 
 ### Pending Todos
 
