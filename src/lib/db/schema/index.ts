@@ -56,6 +56,7 @@ export * from "./time-entries"
 export * from "./accounting"
 export * from "./bank-accounts"
 export * from "./team-management"
+export * from "./vendor-bills"
 
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.

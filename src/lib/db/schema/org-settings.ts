@@ -118,6 +118,9 @@ export const orgSettings = pgTable(
     accountant_mode_enabled: boolean("accountant_mode_enabled").notNull().default(false),
     // When accounting is enabled, sets the historical start date for financial records
     accounting_start_date: date("accounting_start_date"),
+    // Phase 11 Plan 12: Sales tax rates per jurisdiction
+    // Array of { jurisdiction: string; rate: number } — falls back to default_tax_rate when empty/null
+    sales_tax_rates: jsonb("sales_tax_rates").$type<Array<{ jurisdiction: string; rate: number }>>(),
 
     // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
     // No complex queries needed on broadcast history; JSONB avoids a separate table.

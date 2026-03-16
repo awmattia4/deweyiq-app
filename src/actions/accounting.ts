@@ -1,12 +1,14 @@
 "use server"
 
 /**
- * accounting.ts — Server actions for chart of accounts and journal entries.
+ * accounting.ts — Server actions for chart of accounts, journal entries,
+ * sales tax, period close, and audit trail.
  *
  * Access control:
  * - Chart of accounts: owner + office (read); owner only (write)
  * - Journal entries: owner + office (read); owner only (manual entries)
  * - Manual journal entries: owner only, accountant_mode_enabled required
+ * - Sales tax / period close / audit trail: owner only
  *
  * Key patterns:
  * - withRls for all user-facing queries
@@ -22,8 +24,10 @@ import {
   journalEntries,
   journalEntryLines,
   orgSettings,
+  accountingPeriods,
+  profiles,
 } from "@/lib/db/schema"
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gte, lte, or, sql } from "drizzle-orm"
 import { ensureChartOfAccounts } from "@/lib/accounting/journal"
 import { createJournalEntry, validateEntryBalance } from "@/lib/accounting/journal"
 
@@ -615,6 +619,679 @@ export async function createManualJournalEntry(input: {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to create journal entry",
+    }
+  }
+}
+
+// ===========================================================================
+// Sales Tax Management
+// ===========================================================================
+
+export interface SalesTaxRate {
+  jurisdiction: string
+  rate: number
+}
+
+export interface SalesTaxReport {
+  startDate: string
+  endDate: string
+  totalCollected: number
+  totalRemitted: number
+  net: number
+}
+
+/**
+ * Returns the org's configured sales tax rates.
+ *
+ * Falls back to { jurisdiction: "Default", rate: default_tax_rate } when
+ * no custom rates have been configured.
+ *
+ * Access: owner only.
+ */
+export async function getSalesTaxRates(): Promise<
+  { success: true; rates: SalesTaxRate[]; defaultRate: number } | { success: false; error: string }
+> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can manage sales tax" }
+  }
+
+  try {
+    const [settings] = await withRls(token, (db) =>
+      db
+        .select({
+          default_tax_rate: orgSettings.default_tax_rate,
+          sales_tax_rates: orgSettings.sales_tax_rates,
+        })
+        .from(orgSettings)
+        .where(eq(orgSettings.org_id, orgId))
+        .limit(1)
+    )
+
+    const defaultRate = parseFloat(settings?.default_tax_rate ?? "0.0875")
+    const rates: SalesTaxRate[] = settings?.sales_tax_rates ?? []
+
+    return { success: true, rates, defaultRate }
+  } catch (err) {
+    console.error("[getSalesTaxRates] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to load tax rates",
+    }
+  }
+}
+
+/**
+ * Updates the org's sales tax rate configuration.
+ *
+ * Access: owner only.
+ */
+export async function updateSalesTaxRates(
+  rates: SalesTaxRate[]
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can update sales tax rates" }
+  }
+
+  try {
+    // Validate rates
+    for (const rate of rates) {
+      if (!rate.jurisdiction || rate.jurisdiction.trim() === "") {
+        return { success: false, error: "Each tax rate must have a jurisdiction name" }
+      }
+      if (rate.rate < 0 || rate.rate > 1) {
+        return { success: false, error: `Rate for "${rate.jurisdiction}" must be between 0 and 1 (e.g. 0.07 for 7%)` }
+      }
+    }
+
+    await withRls(token, (db) =>
+      db
+        .update(orgSettings)
+        .set({ sales_tax_rates: rates, updated_at: new Date() })
+        .where(eq(orgSettings.org_id, orgId))
+    )
+
+    return { success: true }
+  } catch (err) {
+    console.error("[updateSalesTaxRates] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to update tax rates",
+    }
+  }
+}
+
+/**
+ * Returns a summary of sales tax collected for a given date range.
+ *
+ * Reads credit-side journal_entry_lines on account 2100 (Sales Tax Payable).
+ * Collected = sum of credits to 2100 (negative amounts in our convention).
+ * Remitted = sum of debits to 2100 (positive amounts = payments to tax authority).
+ *
+ * Access: owner only.
+ */
+export async function getSalesTaxReport(
+  startDate: string,
+  endDate: string
+): Promise<
+  { success: true; report: SalesTaxReport } | { success: false; error: string }
+> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can view tax reports" }
+  }
+
+  try {
+    await ensureChartOfAccounts(orgId)
+
+    // Find account 2100 — Sales Tax Payable
+    const [taxAccount] = await withRls(token, (db) =>
+      db
+        .select({ id: chartOfAccounts.id })
+        .from(chartOfAccounts)
+        .where(
+          and(
+            eq(chartOfAccounts.org_id, orgId),
+            eq(chartOfAccounts.account_number, "2100")
+          )
+        )
+        .limit(1)
+    )
+
+    if (!taxAccount) {
+      return { success: true, report: { startDate, endDate, totalCollected: 0, totalRemitted: 0, net: 0 } }
+    }
+
+    // Get all journal entries in the date range
+    const entryRows = await withRls(token, (db) =>
+      db
+        .select({ id: journalEntries.id })
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.org_id, orgId),
+            gte(journalEntries.entry_date, startDate),
+            lte(journalEntries.entry_date, endDate)
+          )
+        )
+    )
+
+    if (entryRows.length === 0) {
+      return { success: true, report: { startDate, endDate, totalCollected: 0, totalRemitted: 0, net: 0 } }
+    }
+
+    // Get tax account lines for these entries
+    const [taxSums] = await withRls(token, (db) =>
+      db
+        .select({
+          // Negative amounts = credits to tax payable (collected from customers)
+          collected: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntryLines.amount}::numeric < 0 THEN ABS(${journalEntryLines.amount}::numeric) ELSE 0 END), 0)::text`,
+          // Positive amounts = debits to tax payable (paid to tax authority)
+          remitted: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntryLines.amount}::numeric > 0 THEN ${journalEntryLines.amount}::numeric ELSE 0 END), 0)::text`,
+        })
+        .from(journalEntryLines)
+        .where(
+          and(
+            eq(journalEntryLines.org_id, orgId),
+            eq(journalEntryLines.account_id, taxAccount.id)
+          )
+        )
+    )
+
+    const totalCollected = parseFloat(taxSums?.collected ?? "0")
+    const totalRemitted = parseFloat(taxSums?.remitted ?? "0")
+
+    return {
+      success: true,
+      report: {
+        startDate,
+        endDate,
+        totalCollected,
+        totalRemitted,
+        net: totalCollected - totalRemitted,
+      },
+    }
+  } catch (err) {
+    console.error("[getSalesTaxReport] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to generate tax report",
+    }
+  }
+}
+
+// ===========================================================================
+// Period Close Management
+// ===========================================================================
+
+export interface AccountingPeriodRow {
+  id: string
+  org_id: string
+  period_start: string
+  period_end: string
+  status: string
+  closed_at: Date | null
+  closed_by: string | null
+  closed_by_name: string | null
+  created_at: Date
+}
+
+/**
+ * Returns all accounting periods for the org, ordered newest first.
+ *
+ * Access: owner only.
+ */
+export async function getAccountingPeriods(): Promise<
+  { success: true; periods: AccountingPeriodRow[] } | { success: false; error: string }
+> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can manage accounting periods" }
+  }
+
+  try {
+    const periodRows = await withRls(token, (db) =>
+      db
+        .select({
+          id: accountingPeriods.id,
+          org_id: accountingPeriods.org_id,
+          period_start: accountingPeriods.period_start,
+          period_end: accountingPeriods.period_end,
+          status: accountingPeriods.status,
+          closed_at: accountingPeriods.closed_at,
+          closed_by: accountingPeriods.closed_by,
+          created_at: accountingPeriods.created_at,
+        })
+        .from(accountingPeriods)
+        .where(eq(accountingPeriods.org_id, orgId))
+        .orderBy(desc(accountingPeriods.period_start))
+    )
+
+    // Fetch closed_by profile names in one query
+    const closedByIds = periodRows
+      .map((p) => p.closed_by)
+      .filter(Boolean) as string[]
+
+    const profileMap = new Map<string, string>()
+    if (closedByIds.length > 0) {
+      const profileRows = await withRls(token, (db) =>
+        db
+          .select({ id: profiles.id, full_name: profiles.full_name })
+          .from(profiles)
+          .where(eq(profiles.org_id, orgId))
+      )
+      for (const p of profileRows) {
+        profileMap.set(p.id, p.full_name)
+      }
+    }
+
+    const periods: AccountingPeriodRow[] = periodRows.map((p) => ({
+      id: p.id,
+      org_id: p.org_id,
+      period_start: p.period_start,
+      period_end: p.period_end,
+      status: p.status,
+      closed_at: p.closed_at,
+      closed_by: p.closed_by,
+      closed_by_name: p.closed_by ? (profileMap.get(p.closed_by) ?? null) : null,
+      created_at: p.created_at,
+    }))
+
+    return { success: true, periods }
+  } catch (err) {
+    console.error("[getAccountingPeriods] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to load accounting periods",
+    }
+  }
+}
+
+/**
+ * Creates a new accounting period.
+ *
+ * Validates that the period does not overlap with existing periods.
+ * Access: owner only.
+ */
+export async function createAccountingPeriod(
+  periodStart: string,
+  periodEnd: string
+): Promise<{ success: boolean; periodId?: string; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can create accounting periods" }
+  }
+
+  if (periodStart >= periodEnd) {
+    return { success: false, error: "Period start must be before period end" }
+  }
+
+  try {
+    // Check for overlapping periods
+    const overlapping = await withRls(token, (db) =>
+      db
+        .select({ id: accountingPeriods.id })
+        .from(accountingPeriods)
+        .where(
+          and(
+            eq(accountingPeriods.org_id, orgId),
+            // Overlap condition: new period overlaps if start < existing.end AND end > existing.start
+            sql`${accountingPeriods.period_start} < ${periodEnd}::date`,
+            sql`${accountingPeriods.period_end} > ${periodStart}::date`
+          )
+        )
+        .limit(1)
+    )
+
+    if (overlapping.length > 0) {
+      return { success: false, error: "This period overlaps with an existing accounting period" }
+    }
+
+    const [created] = await withRls(token, (db) =>
+      db
+        .insert(accountingPeriods)
+        .values({
+          org_id: orgId,
+          period_start: periodStart,
+          period_end: periodEnd,
+          status: "open",
+        })
+        .returning({ id: accountingPeriods.id })
+    )
+
+    return { success: true, periodId: created?.id }
+  } catch (err) {
+    console.error("[createAccountingPeriod] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create accounting period",
+    }
+  }
+}
+
+/**
+ * Closes an accounting period.
+ *
+ * After closing, createJournalEntry will reject any entries dated within
+ * this period (enforced in journal.ts). Sets closed_at and closed_by.
+ *
+ * Access: owner only.
+ */
+export async function closePeriod(
+  periodId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  const userId = token.sub as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can close accounting periods" }
+  }
+
+  try {
+    const [period] = await withRls(token, (db) =>
+      db
+        .select({ id: accountingPeriods.id, status: accountingPeriods.status })
+        .from(accountingPeriods)
+        .where(
+          and(
+            eq(accountingPeriods.id, periodId),
+            eq(accountingPeriods.org_id, orgId)
+          )
+        )
+        .limit(1)
+    )
+
+    if (!period) {
+      return { success: false, error: "Period not found" }
+    }
+    if (period.status === "closed") {
+      return { success: false, error: "Period is already closed" }
+    }
+
+    await withRls(token, (db) =>
+      db
+        .update(accountingPeriods)
+        .set({
+          status: "closed",
+          closed_at: new Date(),
+          closed_by: userId ?? null,
+          updated_at: new Date(),
+        })
+        .where(and(eq(accountingPeriods.id, periodId), eq(accountingPeriods.org_id, orgId)))
+    )
+
+    return { success: true }
+  } catch (err) {
+    console.error("[closePeriod] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to close period",
+    }
+  }
+}
+
+/**
+ * Reopens a closed accounting period.
+ *
+ * Safety net for corrections. After reopening, journal entries can be
+ * posted to dates within this period again.
+ *
+ * Access: owner only.
+ */
+export async function reopenPeriod(
+  periodId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can reopen accounting periods" }
+  }
+
+  try {
+    const [period] = await withRls(token, (db) =>
+      db
+        .select({ id: accountingPeriods.id, status: accountingPeriods.status })
+        .from(accountingPeriods)
+        .where(
+          and(
+            eq(accountingPeriods.id, periodId),
+            eq(accountingPeriods.org_id, orgId)
+          )
+        )
+        .limit(1)
+    )
+
+    if (!period) {
+      return { success: false, error: "Period not found" }
+    }
+    if (period.status === "open") {
+      return { success: false, error: "Period is already open" }
+    }
+
+    await withRls(token, (db) =>
+      db
+        .update(accountingPeriods)
+        .set({
+          status: "open",
+          closed_at: null,
+          closed_by: null,
+          updated_at: new Date(),
+        })
+        .where(and(eq(accountingPeriods.id, periodId), eq(accountingPeriods.org_id, orgId)))
+    )
+
+    return { success: true }
+  } catch (err) {
+    console.error("[reopenPeriod] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to reopen period",
+    }
+  }
+}
+
+// ===========================================================================
+// Audit Trail
+// ===========================================================================
+
+export interface AuditTrailEntry {
+  id: string
+  date: string
+  action: string
+  description: string
+  source_type: string
+  source_id: string | null
+  user_name: string | null
+  amount: number | null
+  is_reversed: boolean
+  reversal_of: string | null
+  created_at: Date
+}
+
+export interface AuditTrailFilters {
+  entityType?: string
+  entityId?: string
+  userId?: string
+  startDate?: string
+  endDate?: string
+  limit?: number
+  offset?: number
+}
+
+/**
+ * Returns a chronological audit trail of financial events.
+ *
+ * Uses the immutable journal_entries table as the source of truth.
+ * Reversals are linked to their originals via reversal_of.
+ * Amounts shown are the total absolute debit value (sum of positive lines).
+ *
+ * Access: owner only.
+ */
+export async function getAuditTrail(
+  filters?: AuditTrailFilters
+): Promise<
+  { success: true; entries: AuditTrailEntry[]; total: number } | { success: false; error: string }
+> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can view the audit trail" }
+  }
+
+  try {
+    const pageLimit = filters?.limit ?? 100
+    const pageOffset = filters?.offset ?? 0
+
+    const conditions = [eq(journalEntries.org_id, orgId)]
+
+    if (filters?.startDate) {
+      conditions.push(gte(journalEntries.entry_date, filters.startDate))
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(journalEntries.entry_date, filters.endDate))
+    }
+    if (filters?.entityType) {
+      conditions.push(eq(journalEntries.source_type, filters.entityType))
+    }
+    if (filters?.entityId) {
+      conditions.push(sql`${journalEntries.source_id} = ${filters.entityId}`)
+    }
+    if (filters?.userId) {
+      conditions.push(sql`${journalEntries.created_by} = ${filters.userId}::uuid`)
+    }
+
+    const entryRows = await withRls(token, (db) =>
+      db
+        .select({
+          id: journalEntries.id,
+          entry_date: journalEntries.entry_date,
+          description: journalEntries.description,
+          source_type: journalEntries.source_type,
+          source_id: journalEntries.source_id,
+          is_reversed: journalEntries.is_reversed,
+          reversal_of: journalEntries.reversal_of,
+          created_by: journalEntries.created_by,
+          created_at: journalEntries.created_at,
+        })
+        .from(journalEntries)
+        .where(and(...conditions))
+        .orderBy(desc(journalEntries.created_at))
+        .limit(pageLimit)
+        .offset(pageOffset)
+    )
+
+    // Count total
+    const [countResult] = await withRls(token, (db) =>
+      db
+        .select({ count: sql<string>`COUNT(*)::text` })
+        .from(journalEntries)
+        .where(and(...conditions))
+    )
+    const total = parseInt(countResult?.count ?? "0", 10)
+
+    if (entryRows.length === 0) {
+      return { success: true, entries: [], total }
+    }
+
+    // Fetch creator profile names
+    const creatorIds = entryRows.map((e) => e.created_by).filter(Boolean) as string[]
+    const profileMap = new Map<string, string>()
+
+    if (creatorIds.length > 0) {
+      const profileRows = await withRls(token, (db) =>
+        db
+          .select({ id: profiles.id, full_name: profiles.full_name })
+          .from(profiles)
+          .where(eq(profiles.org_id, orgId))
+      )
+      for (const p of profileRows) {
+        profileMap.set(p.id, p.full_name)
+      }
+    }
+
+    // Fetch total debits per entry for amount display
+    const entryIds = entryRows.map((e) => e.id)
+    const amountRows = await withRls(token, (db) =>
+      db
+        .select({
+          journal_entry_id: journalEntryLines.journal_entry_id,
+          total_debit: sql<string>`COALESCE(SUM(CASE WHEN ${journalEntryLines.amount}::numeric > 0 THEN ${journalEntryLines.amount}::numeric ELSE 0 END), 0)::text`,
+        })
+        .from(journalEntryLines)
+        .where(eq(journalEntryLines.org_id, orgId))
+        .groupBy(journalEntryLines.journal_entry_id)
+    )
+
+    const entryIdSet = new Set(entryIds)
+    const amountMap = new Map<string, number>()
+    for (const row of amountRows) {
+      if (entryIdSet.has(row.journal_entry_id)) {
+        amountMap.set(row.journal_entry_id, parseFloat(row.total_debit))
+      }
+    }
+
+    const entries: AuditTrailEntry[] = entryRows.map((entry) => ({
+      id: entry.id,
+      date: entry.entry_date,
+      action: entry.reversal_of
+        ? "Reversal"
+        : entry.is_reversed
+        ? "Reversed Entry"
+        : "Journal Entry",
+      description: entry.description,
+      source_type: entry.source_type,
+      source_id: entry.source_id,
+      user_name: entry.created_by ? (profileMap.get(entry.created_by) ?? null) : null,
+      amount: amountMap.get(entry.id) ?? null,
+      is_reversed: entry.is_reversed,
+      reversal_of: entry.reversal_of ?? null,
+      created_at: entry.created_at,
+    }))
+
+    return { success: true, entries, total }
+  } catch (err) {
+    console.error("[getAuditTrail] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to load audit trail",
     }
   }
 }
