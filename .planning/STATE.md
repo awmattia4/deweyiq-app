@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
-Plan: 5/17 complete (01, 02, 03, 04, 05 done)
-Status: Phase 10 Plan 04 complete — ML-enhanced VROOM optimizer with historical service durations and AI-Optimized badge
-Last activity: 2026-03-16 — Phase 10 Plan 04 committed
+Plan: 13/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13 done)
+Status: Phase 10 Plan 13 complete — equipment readings table, health scoring, degradation alerts, tech capture UI, health badges on customer profile
+Last activity: 2026-03-16 — Phase 10 Plan 13 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -86,6 +86,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P09 | 8 | 2 tasks | 8 files |
 | Phase 10-smart-features-ai P03 | 8 | 2 tasks | 4 files |
 | Phase 10-smart-features-ai P04 | 8 | 2 tasks | 2 files |
+| Phase 10-smart-features-ai P13 | 11 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -328,6 +329,10 @@ Recent decisions affecting current work:
 - [Phase 10-04]: Historical duration query uses adminDb (not withRls) for cross-session ML aggregate queries; explicit org_id filter enforces data isolation
 - [Phase 10-04]: VROOM job.service field set to per-pool historical median service duration in seconds; falls back to org-wide median then 25-min default
 - [Phase 10-04]: AI-Optimized badge requires >= 50% historical coverage; Standard Optimization shown otherwise
+- [Phase 10-13]: JSONB metrics column for equipment readings — equipment types vary too widely for fixed schema; avoids migrations when new equipment types added
+- [Phase 10-13]: No health badge when <6 readings — avoids placeholder UI per MEMORY.md; only show real data
+- [Phase 10-13]: logEquipmentReading fire-and-forget after stop completion — equipment reading failure must never block tech workflow
+- [Phase 10-13]: checkDegradation uses adminDb (no RLS) — runs as cron/system context without user JWT session
 
 ### Pending Todos
 
