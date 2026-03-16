@@ -94,6 +94,30 @@ export const orgSettings = pgTable(
     brand_color: text("brand_color"),
     favicon_path: text("favicon_path"),
     portal_welcome_message: text("portal_welcome_message"),
+    // Phase 10-14: Safety — unresponsive tech detection
+    // Minutes without stop completion before triggering a safety alert (default 30)
+    safety_timeout_minutes: integer("safety_timeout_minutes").notNull().default(30),
+    // Escalation chain: ordered array of { role: 'owner' | 'office' | string (user ID), delay_minutes: number }
+    // The first entry is always notified immediately (delay_minutes: 0); subsequent entries after their delay.
+    safety_escalation_chain: jsonb("safety_escalation_chain")
+      .$type<Array<{ role: string; delay_minutes: number }>>()
+      .default(sql`'[{"role":"owner","delay_minutes":0}]'::jsonb`),
+    // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
+    // No complex queries needed on broadcast history; JSONB avoids a separate table.
+    broadcast_history: jsonb("broadcast_history")
+      .$type<Array<{
+        id: string
+        sent_at: string
+        segment_type: string
+        segment_label: string
+        channels: string[]
+        subject: string
+        total_targeted: number
+        email_sent: number
+        email_failed: number
+        sms_sent: number
+        sms_failed: number
+      }>>(),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

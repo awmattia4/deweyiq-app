@@ -67,6 +67,9 @@ export interface OrgSettings {
   wo_upsell_commission_pct: string | null
   // Phase 9: Chemical profitability threshold — minimum % margin before flagging
   chem_profit_margin_threshold_pct: string | null
+  // Phase 10-14: Safety — unresponsive tech detection
+  safety_timeout_minutes: number
+  safety_escalation_chain: Array<{ role: string; delay_minutes: number }> | null
   created_at: Date
   updated_at: Date
 }
@@ -137,6 +140,9 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   // Phase 9 defaults
   wo_upsell_commission_pct: "0",
   chem_profit_margin_threshold_pct: "20",
+  // Phase 10-14 defaults
+  safety_timeout_minutes: 30,
+  safety_escalation_chain: [{ role: "owner", delay_minutes: 0 }],
 }
 
 // ---------------------------------------------------------------------------

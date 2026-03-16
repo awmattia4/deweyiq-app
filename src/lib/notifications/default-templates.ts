@@ -20,6 +20,7 @@ export interface DefaultTemplate {
 
 export type TemplateType =
   | "service_report_email"
+  | "service_report_sms"
   | "pre_arrival_email"
   | "pre_arrival_sms"
   | "quote_email"
@@ -27,8 +28,17 @@ export type TemplateType =
   | "invoice_email"
   | "invoice_sms"
   | "receipt_email"
+  | "payment_receipt_sms"
+  | "payment_failure_email"
+  | "payment_failure_sms"
   | "dunning_email"
   | "autopay_confirmation_email"
+  | "wo_status_email"
+  | "wo_status_sms"
+  | "portal_reply_email"
+  | "portal_reply_sms"
+  | "weather_delay_email"
+  | "weather_delay_sms"
 
 // ---------------------------------------------------------------------------
 // Template type metadata (labels for the UI)
@@ -36,6 +46,7 @@ export type TemplateType =
 
 export const TEMPLATE_TYPE_META: Record<TemplateType, { label: string; channel: "email" | "sms" }> = {
   service_report_email: { label: "Service Report", channel: "email" },
+  service_report_sms: { label: "Service Report SMS", channel: "sms" },
   pre_arrival_email: { label: "Pre-Arrival", channel: "email" },
   pre_arrival_sms: { label: "Pre-Arrival SMS", channel: "sms" },
   quote_email: { label: "Quote", channel: "email" },
@@ -43,12 +54,22 @@ export const TEMPLATE_TYPE_META: Record<TemplateType, { label: string; channel: 
   invoice_email: { label: "Invoice", channel: "email" },
   invoice_sms: { label: "Invoice SMS", channel: "sms" },
   receipt_email: { label: "Payment Receipt", channel: "email" },
+  payment_receipt_sms: { label: "Payment Receipt SMS", channel: "sms" },
+  payment_failure_email: { label: "Payment Failed", channel: "email" },
+  payment_failure_sms: { label: "Payment Failed SMS", channel: "sms" },
   dunning_email: { label: "Payment Reminder", channel: "email" },
   autopay_confirmation_email: { label: "AutoPay Confirmation", channel: "email" },
+  wo_status_email: { label: "Work Order Status", channel: "email" },
+  wo_status_sms: { label: "Work Order Status SMS", channel: "sms" },
+  portal_reply_email: { label: "Portal Reply", channel: "email" },
+  portal_reply_sms: { label: "Portal Reply SMS", channel: "sms" },
+  weather_delay_email: { label: "Weather Delay", channel: "email" },
+  weather_delay_sms: { label: "Weather Delay SMS", channel: "sms" },
 }
 
 export const ALL_TEMPLATE_TYPES: TemplateType[] = [
   "service_report_email",
+  "service_report_sms",
   "pre_arrival_email",
   "pre_arrival_sms",
   "quote_email",
@@ -56,8 +77,17 @@ export const ALL_TEMPLATE_TYPES: TemplateType[] = [
   "invoice_email",
   "invoice_sms",
   "receipt_email",
+  "payment_receipt_sms",
+  "payment_failure_email",
+  "payment_failure_sms",
   "dunning_email",
   "autopay_confirmation_email",
+  "wo_status_email",
+  "wo_status_sms",
+  "portal_reply_email",
+  "portal_reply_sms",
+  "weather_delay_email",
+  "weather_delay_sms",
 ]
 
 // ---------------------------------------------------------------------------
@@ -166,5 +196,75 @@ AutoPay has been enabled on your account with {{company_name}}. Your saved payme
 If you have any questions or need to make changes, please contact us.
 
 {{custom_footer}}`,
+  },
+
+  service_report_sms: {
+    sms_text: `{{company_name}}: Your pool was serviced today by {{tech_name}}. View report: {{report_link}} {{sms_signature}}`,
+  },
+
+  payment_receipt_sms: {
+    sms_text: `{{company_name}}: Payment of {{invoice_total}} received for Invoice {{invoice_number}}. Thank you! {{sms_signature}}`,
+  },
+
+  payment_failure_email: {
+    subject: "Payment Failed -- Invoice {{invoice_number}}",
+    body_html: `Hi {{customer_name}},
+
+We were unable to process your payment of {{invoice_total}} for Invoice #{{invoice_number}}.
+
+Please update your payment method or contact us to resolve this:
+
+{{portal_link}}
+
+{{custom_footer}}`,
+  },
+
+  payment_failure_sms: {
+    sms_text: `{{company_name}}: Payment of {{invoice_total}} failed for Invoice {{invoice_number}}. Update your payment method: {{portal_link}} {{sms_signature}}`,
+  },
+
+  wo_status_email: {
+    subject: "Work Order Update from {{company_name}}",
+    body_html: `Hi {{customer_name}},
+
+Your work order "{{wo_title}}" has been updated.
+
+Status: {{status}}
+
+{{custom_footer}}`,
+  },
+
+  wo_status_sms: {
+    sms_text: `{{company_name}}: Your work order "{{wo_title}}" is now {{status}}. {{sms_signature}}`,
+  },
+
+  portal_reply_email: {
+    subject: "New reply from {{company_name}}",
+    body_html: `Hi {{customer_name}},
+
+You have a new reply from {{company_name}} regarding your message.
+
+View your conversation: {{portal_link}}
+
+{{custom_footer}}`,
+  },
+
+  portal_reply_sms: {
+    sms_text: `{{company_name}}: New reply to your message. View: {{portal_link}} {{sms_signature}}`,
+  },
+
+  weather_delay_email: {
+    subject: "Service Reschedule Notice from {{company_name}}",
+    body_html: `Hi {{customer_name}},
+
+Your scheduled service on {{original_date}} has been moved to {{new_date}} due to {{weather_reason}}.
+
+If you have any questions, please contact us.
+
+{{custom_footer}}`,
+  },
+
+  weather_delay_sms: {
+    sms_text: `{{company_name}}: Your {{original_date}} service has been moved to {{new_date}} due to {{weather_reason}}. {{sms_signature}}`,
   },
 }
