@@ -13,6 +13,9 @@ import { getStripeAccountStatus } from "@/actions/stripe-connect"
 import { getQboStatus } from "@/actions/qbo-sync"
 import { getDunningConfig } from "@/actions/dunning"
 import { getTemplates, getOrgTemplateSettings } from "@/actions/notification-templates"
+import { getBroadcastHistory, getTechProfilesForBroadcast } from "@/actions/broadcast"
+import { getNotificationPreferences } from "@/actions/user-notifications"
+import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -105,6 +108,22 @@ export default async function SettingsPage() {
     }
   }
 
+  // Fetch broadcast data (owner only)
+  let broadcastTechProfileList: Array<{ id: string; fullName: string }> = []
+  let broadcastHistoryList: BroadcastHistoryEntry[] = []
+  if (isOwner) {
+    try {
+      const [techResult, historyResult] = await Promise.all([
+        getTechProfilesForBroadcast(),
+        getBroadcastHistory(),
+      ])
+      if (!("error" in techResult)) broadcastTechProfileList = techResult
+      if (!("error" in historyResult)) broadcastHistoryList = historyResult
+    } catch (err) {
+      console.error("[SettingsPage] Failed to fetch broadcast data:", err)
+    }
+  }
+
   // Fetch chemical products for cost configuration (owner only)
   let chemicalProductList: Array<{ id: string; name: string; chemicalType: string; unit: string; costPerUnit: string | null }> = []
   if (isOwner && user.org_id) {
@@ -136,6 +155,10 @@ export default async function SettingsPage() {
       console.error("[SettingsPage] Failed to fetch chemical products:", err)
     }
   }
+
+  // Fetch user's notification preferences (all roles)
+  const notifPrefsResult = await getNotificationPreferences()
+  const initialNotifPreferences = notifPrefsResult.success ? (notifPrefsResult.data ?? []) : []
 
   return (
     <div className="flex flex-col gap-6 max-w-xl">
@@ -176,6 +199,9 @@ export default async function SettingsPage() {
         safetyTeamMembers={safetyTeamMembers}
         notifTemplates={notifTemplates ?? []}
         orgTemplateSettings={orgTemplateSettings ?? null}
+        broadcastTechProfiles={broadcastTechProfileList}
+        broadcastHistory={broadcastHistoryList}
+        initialNotifPreferences={initialNotifPreferences}
         signOutAction={async () => {
           "use server"
           await signOut()

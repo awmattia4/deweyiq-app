@@ -23,6 +23,10 @@ import { TemplateEditor } from "@/components/settings/template-editor"
 import { TeamPaySettings } from "@/components/settings/team-pay-settings"
 import { ChemistryCostSettings } from "@/components/settings/chemistry-cost-settings"
 import { SafetySettings } from "@/components/settings/safety-settings"
+import { BroadcastMessaging } from "@/components/settings/broadcast-messaging"
+import { NotificationPreferences } from "@/components/settings/notification-preferences"
+import type { BroadcastHistoryEntry } from "@/actions/broadcast"
+import type { NotificationPreferenceRow } from "@/actions/user-notifications"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
 import type { TemplateRow } from "@/actions/notification-templates"
@@ -102,6 +106,11 @@ interface SettingsTabsProps {
     custom_email_footer: string | null
     custom_sms_signature: string | null
   } | null
+  // Phase 10-16: Broadcast messaging
+  broadcastTechProfiles: Array<{ id: string; fullName: string }>
+  broadcastHistory: BroadcastHistoryEntry[]
+  // Phase 10-11: Per-user notification preferences (all roles)
+  initialNotifPreferences: NotificationPreferenceRow[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -135,6 +144,9 @@ export function SettingsTabs({
   safetyTeamMembers,
   notifTemplates,
   orgTemplateSettings,
+  broadcastTechProfiles,
+  broadcastHistory,
+  initialNotifPreferences,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -258,6 +270,21 @@ export function SettingsTabs({
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Broadcast Messaging</CardTitle>
+              <CardDescription>
+                Send a one-time message to all customers or a filtered segment. Use for seasonal announcements, holiday schedules, or emergency notices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BroadcastMessaging
+                techProfiles={broadcastTechProfiles}
+                initialHistory={broadcastHistory}
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -569,6 +596,22 @@ export function SettingsTabs({
             </CardContent>
           </Card>
         )}
+
+        {/* My Notification Preferences — all roles */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BellIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <CardTitle className="text-base">My Notification Preferences</CardTitle>
+            </div>
+            <CardDescription>
+              Choose which notifications you receive and how — in-app, push, or email. Changes apply only to your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <NotificationPreferences initialPreferences={initialNotifPreferences} />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
