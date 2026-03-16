@@ -15,6 +15,8 @@ import { getDunningConfig } from "@/actions/dunning"
 import { getTemplates, getOrgTemplateSettings } from "@/actions/notification-templates"
 import { getBroadcastHistory, getTechProfilesForBroadcast } from "@/actions/broadcast"
 import { getNotificationPreferences } from "@/actions/user-notifications"
+import { getBankAccounts } from "@/actions/bank-feeds"
+import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 
 export const metadata: Metadata = {
@@ -160,6 +162,17 @@ export default async function SettingsPage() {
   const notifPrefsResult = await getNotificationPreferences()
   const initialNotifPreferences = notifPrefsResult.success ? (notifPrefsResult.data ?? []) : []
 
+  // Fetch bank accounts (owner only)
+  let initialBankAccounts: BankAccountRow[] = []
+  if (isOwner) {
+    try {
+      const bankResult = await getBankAccounts()
+      if (!("error" in bankResult)) initialBankAccounts = bankResult
+    } catch (err) {
+      console.error("[SettingsPage] Failed to fetch bank accounts:", err)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-xl">
       {/* ── Page header ──────────────────────────────────────────────────── */}
@@ -202,6 +215,7 @@ export default async function SettingsPage() {
         broadcastTechProfiles={broadcastTechProfileList}
         broadcastHistory={broadcastHistoryList}
         initialNotifPreferences={initialNotifPreferences}
+        initialBankAccounts={initialBankAccounts}
         signOutAction={async () => {
           "use server"
           await signOut()
