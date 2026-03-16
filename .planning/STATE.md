@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 9/14 complete (01, 02, 03, 05, 06, 08 done)
-Status: Phase 11 Plan 05 complete — 13 PTO/availability/document server actions, PtoManager + EmployeeDocs + EmployeeSchedule components, Team page upgraded to 4-tab layout with role-based visibility
-Last activity: 2026-03-16 — Phase 11 Plan 05 committed (PTO management, certification tracking, availability scheduling)
+Plan: 10/14 complete (01, 02, 03, 05, 06, 08, 09 done)
+Status: Phase 11 Plan 09 complete — smart bank reconciliation matching algorithm, BankFeed + ReconcilePanel UI in Accounting page, Stripe payout.paid auto-reconciliation webhook
+Last activity: 2026-03-16 — Phase 11 Plan 09 committed (bank reconciliation, Stripe payout auto-reconcile)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -102,6 +102,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11-payroll-team-management-full-accounting P06 | 6 | 2 tasks | 4 files |
 | Phase 11-payroll-team-management-full-accounting P03 | 7 | 2 tasks | 3 files |
 | Phase 11-payroll-team-management-full-accounting P05 | 10 | 2 tasks | 5 files |
+| Phase 11 P09 | 12 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -392,6 +393,7 @@ Recent decisions affecting current work:
 - [Phase 11-03]: Geofence hook params all optional — backward-compatible with existing GpsBroadcaster(orgId, techId, true) usage; geofence detection activates only when all three new params provided
 - [Phase 11-03]: Drive time is best-effort in recordStopArrival — isolated in try/catch so arrival recording never fails due to drive time query error
 - [Phase 11-payroll-team-management-full-accounting]: updatePtoBalance uses select-then-upsert (no unique constraint on pto_balances)
+- [Phase 11]: Score >= 80 for auto-match (conservative), 50-79 for review; Stripe payout = Dr Checking / Cr Stripe Clearing (per-charge fees already in payment entries)
 
 ### Pending Todos
 
