@@ -2,7 +2,9 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
-import { getTodayStops, getRouteStartedStatus } from "@/actions/routes"
+import { getTodayStops, getRouteStartedStatus, getRouteAreaCoordinates } from "@/actions/routes"
+import { fetchWeatherForecast, classifyWeatherDay } from "@/lib/weather/open-meteo"
+import type { WeatherType } from "@/lib/weather/open-meteo"
 import { StopList } from "@/components/field/stop-list"
 import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
@@ -26,6 +28,11 @@ export const metadata: Metadata = {
  * Phase 4: Map view toggle will render an actual map. For now the button
  *          exists but map view shows a stub.
  *
+ * Phase 10-07: Weather badge — fetches a single daily forecast for the route
+ *              area and passes today's weather classification to all stop cards.
+ *              Clear days show no badge (no clutter). Rain/storm/heat/wind show
+ *              a small pill badge on each card.
+ *
  * Role guard: customers are redirected to /portal.
  */
 export default async function RoutesPage() {
@@ -47,6 +54,26 @@ export default async function RoutesPage() {
     getTodayStops(),
     user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
   ])
+
+  // ── Weather fetch (Phase 10-07) ──────────────────────────────────────────
+  // Fetch a single daily forecast for the route area — all stops share the same
+  // badge since this is a daily-level forecast, not per-stop hourly data.
+  // Gracefully skips if no geocoded coordinates are available.
+  let todayWeather: { type: WeatherType; label: string } | null = null
+
+  if (stops.length > 0) {
+    const coords = await getRouteAreaCoordinates(stops)
+    if (coords) {
+      const forecast = await fetchWeatherForecast(coords.lat, coords.lng)
+      if (forecast) {
+        const classification = classifyWeatherDay(forecast, 0)
+        if (classification && classification.type !== "clear") {
+          todayWeather = { type: classification.type, label: classification.label }
+        }
+        // Clear weather: leave todayWeather null — no badge shown
+      }
+    }
+  }
 
   // Calculate completed stops for the progress bar
   const completedStops = stops.filter(
@@ -94,7 +121,7 @@ export default async function RoutesPage() {
       )}
 
       {/* ── Stop list ────────────────────────────────────────────────────── */}
-      <StopList initialStops={stops} />
+      <StopList initialStops={stops} weather={todayWeather} />
 
       {/* ── Tech context footer ──────────────────────────────────────────── */}
       {user.role === "tech" && (

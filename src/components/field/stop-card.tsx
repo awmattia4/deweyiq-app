@@ -5,6 +5,8 @@ import Link from "next/link"
 import { MapPinIcon, GripVerticalIcon, WavesIcon, FlameIcon, SparklesIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { RouteStop } from "@/actions/routes"
+import type { WeatherType } from "@/lib/weather/open-meteo"
+import { WeatherBadge } from "@/components/weather/weather-badge"
 import type { DraggableSyntheticListeners, DraggableAttributes } from "@dnd-kit/core"
 
 // ─── Map navigation ───────────────────────────────────────────────────────────
@@ -106,6 +108,11 @@ interface StopCardProps {
   dragListeners?: DraggableSyntheticListeners
   dragAttributes?: DraggableAttributes
   className?: string
+  /**
+   * Today's weather classification for the route area.
+   * Null when clear — no badge is rendered on the card.
+   */
+  weather?: { type: WeatherType; label: string } | null
 }
 
 /**
@@ -116,6 +123,9 @@ interface StopCardProps {
  *
  * FIELD-11: 44px minimum card height, generous padding for wet-hand tapping.
  * Navigate button opens Apple Maps or Google Maps based on stored preference.
+ *
+ * Phase 10-07: weather badge shown in the header row when weather is non-clear.
+ * All stops share the same badge — daily forecast for the route area.
  */
 export function StopCard({
   stop,
@@ -123,6 +133,7 @@ export function StopCard({
   dragListeners,
   dragAttributes,
   className,
+  weather,
 }: StopCardProps) {
   const lastServiceLabel = stop.lastServiceDate
     ? new Date(stop.lastServiceDate).toLocaleDateString("en-US", {
@@ -184,11 +195,15 @@ export function StopCard({
         className="flex flex-1 flex-col py-3 pr-3 pl-2 gap-1 min-w-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50 hover:bg-muted/10 transition-colors duration-150 active:bg-muted/20"
         aria-label={`Open stop for ${stop.customerName}`}
       >
-        {/* Row 1: Customer name + status badge */}
+        {/* Row 1: Customer name + status badge + weather badge */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-sm text-foreground truncate flex-1">
             {stop.customerName}
           </span>
+          {/* Weather badge — only shown for non-clear conditions */}
+          {weather && weather.type !== "clear" && (
+            <WeatherBadge type={weather.type} label={weather.label} />
+          )}
           <span
             className={cn(
               "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none transition-colors duration-300",

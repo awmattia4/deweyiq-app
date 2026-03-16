@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { MapPinIcon } from "lucide-react"
 import { offlineDb } from "@/lib/offline/db"
 import type { RouteStop } from "@/actions/routes"
+import type { WeatherType } from "@/lib/weather/open-meteo"
 import { StopCard } from "./stop-card"
 import { cn } from "@/lib/utils"
 
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils"
 interface SortableStopCardProps {
   stop: RouteStop
   showDragHandle: boolean
+  weather: { type: WeatherType; label: string } | null
 }
 
 /**
@@ -39,7 +41,7 @@ interface SortableStopCardProps {
  * Drag handle receives listeners/attributes from useSortable for touch/mouse
  * activation.
  */
-function SortableStopCard({ stop, showDragHandle }: SortableStopCardProps) {
+function SortableStopCard({ stop, showDragHandle, weather }: SortableStopCardProps) {
   const {
     attributes,
     listeners,
@@ -73,6 +75,7 @@ function SortableStopCard({ stop, showDragHandle }: SortableStopCardProps) {
         showDragHandle={showDragHandle}
         dragListeners={listeners ?? undefined}
         dragAttributes={attributes}
+        weather={weather}
       />
     </div>
   )
@@ -83,6 +86,11 @@ function SortableStopCard({ stop, showDragHandle }: SortableStopCardProps) {
 interface StopListProps {
   /** Initial stop list from SSR — mutated locally on drag reorder */
   initialStops: RouteStop[]
+  /**
+   * Today's weather classification for the route area.
+   * Passed to each stop card. Null when clear (no badge shown).
+   */
+  weather: { type: WeatherType; label: string } | null
 }
 
 /**
@@ -105,8 +113,10 @@ interface StopListProps {
  *   system is overhauled.
  *
  * Empty state: "No stops scheduled for today" with map pin icon.
+ *
+ * Phase 10-07: weather prop passed through to each stop card for weather badges.
  */
-export function StopList({ initialStops }: StopListProps) {
+export function StopList({ initialStops, weather }: StopListProps) {
   const [stops, setStops] = useState<RouteStop[]>(initialStops)
 
   // Sensor configuration
@@ -206,6 +216,7 @@ export function StopList({ initialStops }: StopListProps) {
               key={`stop-${stop.stopIndex}-${stop.customerId}`}
               stop={stop}
               showDragHandle={showDragHandles}
+              weather={weather}
             />
           ))}
         </div>

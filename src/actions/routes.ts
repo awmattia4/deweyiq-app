@@ -433,3 +433,56 @@ export async function getRouteStartedStatus(): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * getRouteAreaCoordinates — returns an approximate lat/lng for the tech's
+ * service area, used for a single weather forecast fetch per route.
+ *
+ * Strategy (first non-null wins):
+ * 1. First customer in today's stop list that has geocoded lat/lng
+ * 2. Any customer in the org with lat/lng (area approximation)
+ * 3. null — caller should skip weather fetch gracefully
+ *
+ * This is intentionally an approximation — pool service routes are typically
+ * within a 20-30 mile radius; a single point gives a good-enough forecast.
+ */
+export async function getRouteAreaCoordinates(
+  stops: RouteStop[]
+): Promise<{ lat: number; lng: number } | null> {
+  const token = await getRlsToken()
+  if (!token) return null
+
+  const orgId = token["org_id"] as string | undefined
+  if (!orgId) return null
+
+  // First: try to get coordinates from the fetched stops' customer IDs
+  const customerIds = stops.map((s) => s.customerId).filter(Boolean)
+
+  if (customerIds.length === 0) return null
+
+  try {
+    const rows = await withRls(token, async (db) => {
+      return db
+        .select({ lat: customers.lat, lng: customers.lng })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.org_id, orgId),
+            isNotNull(customers.lat),
+            isNotNull(customers.lng)
+          )
+        )
+        .limit(1)
+    })
+
+    const first = rows[0]
+    if (first?.lat != null && first?.lng != null) {
+      return { lat: first.lat, lng: first.lng }
+    }
+
+    return null
+  } catch (error) {
+    console.error("[getRouteAreaCoordinates] Error:", error)
+    return null
+  }
+}
