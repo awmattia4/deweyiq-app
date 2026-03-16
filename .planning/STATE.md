@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
 Plan: 8/14 complete (01, 02, 05, 06, 08 done — plans executed out of order)
-Status: Phase 11 Plan 08 complete — Plaid bank feed integration: client, 6 server actions, PlaidConnect UI, webhook handler
-Last activity: 2026-03-16 — Phase 11 Plan 08 committed (Plaid bank feeds)
+Status: Phase 11 Plan 02 complete — clock-in/out + break handling: 9 server actions (time-tracking.ts), ClockInBanner, BreakButton, routes page integration with org-level flag
+Last activity: 2026-03-16 — Phase 11 Plan 02 committed (time tracking clock-in system)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -98,6 +98,8 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10 P08 | 4 | 1 tasks | 2 files |
 | Phase 11-payroll-team-management-full-accounting P01 | 9 | 2 tasks | 11 files |
 | Phase 11 P08 | 5 | 2 tasks | 6 files |
+| Phase 11-payroll-team-management-full-accounting P02 | 6 | 2 tasks | 4 files |
+| Phase 11-payroll-team-management-full-accounting P06 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -377,6 +379,7 @@ Recent decisions affecting current work:
 - [Phase 11-01]: Chart of accounts seeding uses adminDb (service role) — called during org onboarding before JWT context established
 - [Phase 11]: Use adminDb for all Plaid access_token operations — never exposed to client via withRls
 - [Phase 11]: Plaid webhook always returns 200 to prevent retry loops; errors logged and alerted separately
+- [Phase 11-payroll-team-management-full-accounting]: ClockInBanner additive to routes page — does not modify Start Route or stop list. GPS failure never blocks clock-in. recordStopArrival/recordStopDeparture added to fix pre-existing broken imports in use-gps-broadcast.ts.
 
 ### Pending Todos
 
