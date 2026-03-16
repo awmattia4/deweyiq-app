@@ -367,6 +367,9 @@ Recent decisions affecting current work:
 - [Phase 10-10]: Company name for WO SMS fetched from orgs table (not org_settings) — org_settings.company_name column does not exist; orgs.name is correct source
 - [Phase 10]: weather_delay_email/sms template types reused (not new weather_reschedule_* names) — types already existed in template system
 - [Phase 10]: Fire-and-forget void+.then() pattern for notification dispatch in approveProposal — failure logged but never blocks reschedule
+- [Phase 10-15]: InternalNotes collapsible in stop workflow — tech opens when needed, reducing friction on routine stops; previous tech notes nested inside for handoff context
+- [Phase 10-15]: Role gate at prop level for internal notes — userRole passed from server page to ServiceHistoryTimeline; internal notes section absent from DOM for tech/customer roles
+- [Phase 10-15]: FlagBadge exported from internal-notes.tsx for reuse in timeline and handoff sections without circular dependency
 
 ### Pending Todos
 
