@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 8/14 complete (01, 02, 05, 06, 08 done — plans executed out of order)
-Status: Phase 11 Plan 02 complete — clock-in/out + break handling: 9 server actions (time-tracking.ts), ClockInBanner, BreakButton, routes page integration with org-level flag
-Last activity: 2026-03-16 — Phase 11 Plan 02 committed (time tracking clock-in system)
+Plan: 9/14 complete (01, 02, 03, 05, 06, 08 done)
+Status: Phase 11 Plan 03 complete — geofence utility (Haversine + 4-phase state machine, 30s/60s anti-bounce), GPS broadcast hook extended with geofence detection, recordStopArrival/Departure with drive time, getStopTimingForShift, autoDetectBreak
+Last activity: 2026-03-16 — Phase 11 Plan 03 committed (geofence-based per-stop time tracking)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -100,6 +100,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11 P08 | 5 | 2 tasks | 6 files |
 | Phase 11-payroll-team-management-full-accounting P02 | 6 | 2 tasks | 4 files |
 | Phase 11-payroll-team-management-full-accounting P06 | 6 | 2 tasks | 4 files |
+| Phase 11-payroll-team-management-full-accounting P03 | 7 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -385,6 +386,10 @@ Recent decisions affecting current work:
 - [Phase 11-06]: ensureChartOfAccounts in journal.ts (not chart-of-accounts.ts) — keeps auto-generation self-contained, avoids circular import risk
 - [Phase 11-06]: Expenses treated as always-paid (Dr Expense / Cr Checking) — expenses schema has no status field; AP accrual deferred
 - [Phase 11-06]: Stripe fee extracted from balance_transaction.fee when available — safe optional chaining fallback to fee=0 when not expanded
+- [Phase 11-03]: Geofence states stored in useRef map (not React state) — GPS callbacks need latest state without stale closures; useRef avoids re-renders and Dexie liveQuery issues
+- [Phase 11-03]: Anti-bounce 30s arrival / 60s departure dwell — prevents GPS jitter at geofence edge from creating false events; entering/leaving phases provide the buffer
+- [Phase 11-03]: Geofence hook params all optional — backward-compatible with existing GpsBroadcaster(orgId, techId, true) usage; geofence detection activates only when all three new params provided
+- [Phase 11-03]: Drive time is best-effort in recordStopArrival — isolated in try/catch so arrival recording never fails due to drive time query error
 
 ### Pending Todos
 
@@ -411,5 +416,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-02-PLAN.md
-Resume file: Phase 10 Plan 02 complete — predictive chemistry alerts with OLS regression, visible on Alerts page, Dashboard, and tech stop cards
+Stopped at: Completed 11-03-PLAN.md
+Resume file: Phase 11 Plan 03 complete — geofence utility (Haversine + 4-phase state machine, 30s/60s anti-bounce), GPS broadcast hook extended with geofence detection, recordStopArrival/Departure with drive time, getStopTimingForShift, autoDetectBreak
