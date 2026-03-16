@@ -1748,3 +1748,510 @@ export async function removeWorkOrderFromRoute(
     return { success: false, error: "Failed to remove work order from route" }
   }
 }
+
+// ─── Workload Balance + Auto-Schedule ────────────────────────────────────────
+
+/**
+ * WorkloadMetrics — per-tech workload metrics for a given week.
+ * Used by getWorkloadBalance and as the metrics payload in AutoScheduleProposal.
+ */
+export interface WorkloadMetrics {
+  techId: string
+  techName: string
+  totalStops: number
+  stopsPerDay: Record<string, number> // YYYY-MM-DD → count
+  estimatedDriveMinutes: number
+}
+
+/**
+ * AutoScheduleAssignment — a single stop assignment in an auto-schedule proposal.
+ */
+export interface AutoScheduleAssignment {
+  stopId: string | null // null for newly proposed stops not yet in DB
+  ruleId: string
+  techId: string
+  techName: string
+  day: string // YYYY-MM-DD
+  customerName: string
+  poolName: string | null
+  customerId: string
+  poolId: string | null
+  lat: number | null
+  lng: number | null
+  isNew: boolean // true if this is a new assignment; false if existing stop is being moved
+}
+
+/**
+ * AutoScheduleProposal — the full output of autoScheduleWeek.
+ * Not persisted — office must call applyAutoSchedule to commit.
+ */
+export interface AutoScheduleProposal {
+  weekStart: string
+  assignments: AutoScheduleAssignment[]
+  metrics: {
+    before: WorkloadMetrics[]
+    after: WorkloadMetrics[]
+    totalStopsProposed: number
+    totalUnassignable: number
+  }
+}
+
+/**
+ * haversineDistanceBalancer — great-circle distance in km between two lat/lng points.
+ * Used for workload balance geographic scoring.
+ */
+function haversineDistanceBalancer(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+/**
+ * getWeekDatesFromStart — return the Mon–Fri date strings for the ISO week starting on weekStartDate.
+ * weekStartDate must be a Monday (YYYY-MM-DD).
+ */
+function getWeekDatesFromStart(weekStartDate: string): string[] {
+  const monday = new Date(weekStartDate + "T00:00:00")
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return toLocalDateString(d)
+  })
+}
+
+/**
+ * getWorkloadBalance — return per-tech workload metrics for a given week.
+ *
+ * Queries all route_stops for Mon–Fri of the given week, groups by tech and day,
+ * returns stop counts per day and a heuristic drive-time estimate (25 min/stop average).
+ *
+ * Two-query pattern avoids correlated subquery RLS pitfall (MEMORY.md).
+ * Owner/office only.
+ */
+export async function getWorkloadBalance(weekStartDate: string): Promise<{
+  success: boolean
+  error?: string
+  metrics: WorkloadMetrics[]
+}> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated", metrics: [] }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token", metrics: [] }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions", metrics: [] }
+  }
+
+  try {
+    const weekDates = getWeekDatesFromStart(weekStartDate)
+    const weekEnd = weekDates[weekDates.length - 1] ?? weekStartDate
+
+    // Two-query pattern (MEMORY.md: no correlated subqueries inside withRls)
+    const [stopRows, profileRows] = await withRls(token, async (db) => {
+      const stops = await db
+        .select({
+          id: routeStops.id,
+          tech_id: routeStops.tech_id,
+          scheduled_date: routeStops.scheduled_date,
+        })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.org_id, orgId),
+            gte(routeStops.scheduled_date, weekStartDate),
+            lte(routeStops.scheduled_date, weekEnd)
+          )
+        )
+
+      const techIds = [...new Set(stops.flatMap((s) => (s.tech_id ? [s.tech_id] : [])))]
+      const profs = techIds.length > 0
+        ? await db
+            .select({ id: profiles.id, full_name: profiles.full_name })
+            .from(profiles)
+            .where(inArray(profiles.id, techIds))
+        : ([] as { id: string; full_name: string | null }[])
+
+      return [stops, profs] as const
+    })
+
+    const profileMap = new Map(profileRows.map((p) => [p.id, p.full_name ?? "Unknown"]))
+
+    // Group stops by tech
+    const techStopMap = new Map<string, typeof stopRows>()
+    for (const stop of stopRows) {
+      if (!stop.tech_id) continue
+      const existing = techStopMap.get(stop.tech_id) ?? []
+      existing.push(stop)
+      techStopMap.set(stop.tech_id, existing)
+    }
+
+    const metrics: WorkloadMetrics[] = []
+    for (const [techId, stops] of techStopMap) {
+      const stopsPerDay: Record<string, number> = {}
+      for (const d of weekDates) stopsPerDay[d] = 0
+      for (const stop of stops) {
+        stopsPerDay[stop.scheduled_date] = (stopsPerDay[stop.scheduled_date] ?? 0) + 1
+      }
+      // Heuristic: 25 min average per stop (no ORS call for speed)
+      metrics.push({
+        techId,
+        techName: profileMap.get(techId) ?? "Unknown",
+        totalStops: stops.length,
+        stopsPerDay,
+        estimatedDriveMinutes: stops.length * 25,
+      })
+    }
+
+    metrics.sort((a, b) => a.techName.localeCompare(b.techName))
+    return { success: true, metrics }
+  } catch (error) {
+    console.error("[getWorkloadBalance] Error:", error)
+    return { success: false, error: "Failed to fetch workload balance", metrics: [] }
+  }
+}
+
+/**
+ * autoScheduleWeek — generate a balanced weekly route proposal without persisting it.
+ *
+ * Algorithm:
+ * 1. Fetch all active schedule_rules for the org.
+ * 2. Use generateDatesForRule to find which rules fire in the target week.
+ * 3. Respect existing DB stops (already-assigned stops kept as-is).
+ * 4. For unassigned stops, use greedy geographic clustering:
+ *    - Score each (tech, day) by proximity to tech's centroid that day + load factor.
+ * 5. Return an AutoScheduleProposal (preview only — not persisted).
+ *
+ * Owner/office only.
+ */
+export async function autoScheduleWeek(weekStartDate: string): Promise<{
+  success: boolean
+  error?: string
+  proposal: AutoScheduleProposal | null
+}> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated", proposal: null }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token", proposal: null }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions", proposal: null }
+  }
+
+  try {
+    const weekDates = getWeekDatesFromStart(weekStartDate)
+    const weekEnd = weekDates[weekDates.length - 1] ?? weekStartDate
+
+    // Fetch everything in two withRls calls to avoid correlated subquery pitfall
+    const ruleRows = await withRls(token, (db) =>
+      db
+        .select()
+        .from(scheduleRules)
+        .where(and(eq(scheduleRules.org_id, orgId), eq(scheduleRules.active, true)))
+    )
+
+    const custIds = [...new Set(ruleRows.map((r) => r.customer_id))]
+    const poolIds = [...new Set(ruleRows.flatMap((r) => (r.pool_id ? [r.pool_id] : [])))]
+
+    const [customerRows, poolRows, profileRows, existingStops] = await withRls(token, async (db) => {
+      const [custs, poolList, profs, stops] = await Promise.all([
+        custIds.length > 0
+          ? db
+              .select({ id: customers.id, full_name: customers.full_name, lat: customers.lat, lng: customers.lng })
+              .from(customers)
+              .where(inArray(customers.id, custIds))
+          : Promise.resolve([] as { id: string; full_name: string; lat: number | null; lng: number | null }[]),
+        poolIds.length > 0
+          ? db.select({ id: pools.id, name: pools.name }).from(pools).where(inArray(pools.id, poolIds))
+          : Promise.resolve([] as { id: string; name: string }[]),
+        db
+          .select({ id: profiles.id, full_name: profiles.full_name, role: profiles.role })
+          .from(profiles)
+          .where(and(eq(profiles.org_id, orgId), inArray(profiles.role, ["tech", "owner", "office"]))),
+        db
+          .select({
+            id: routeStops.id,
+            tech_id: routeStops.tech_id,
+            customer_id: routeStops.customer_id,
+            pool_id: routeStops.pool_id,
+            scheduled_date: routeStops.scheduled_date,
+          })
+          .from(routeStops)
+          .where(
+            and(
+              eq(routeStops.org_id, orgId),
+              gte(routeStops.scheduled_date, weekStartDate),
+              lte(routeStops.scheduled_date, weekEnd)
+            )
+          ),
+      ])
+      return [custs, poolList, profs, stops] as const
+    })
+
+    const customerMap = new Map(customerRows.map((c) => [c.id, c]))
+    const poolMap = new Map(poolRows.map((p) => [p.id, p.name]))
+    const techMap = new Map(profileRows.map((p) => [p.id, p.full_name ?? "Unknown"]))
+    const techIds = profileRows.map((p) => p.id)
+
+    const existingKey = (cid: string, pid: string | null) => `${cid}:${pid ?? "null"}`
+    const existingStopMap = new Map(
+      existingStops.map((s) => [existingKey(s.customer_id, s.pool_id), s])
+    )
+
+    // Determine which rules fire in this week
+    const weekStart = new Date(weekStartDate + "T00:00:00")
+    const weekEndDate = new Date(weekEnd + "T23:59:59")
+
+    interface RuleFiring {
+      rule: typeof ruleRows[number]
+      firedDate: string
+    }
+    interface AssignedFiring extends RuleFiring {
+      techId: string
+      day: string
+    }
+    interface UnassignedFiring extends RuleFiring {
+      day: string
+    }
+
+    const assignedFirings: AssignedFiring[] = []
+    const unassignedFirings: UnassignedFiring[] = []
+
+    for (const rule of ruleRows) {
+      const dates = generateDatesForRule(rule, weekStart, weekEndDate)
+      for (const d of dates) {
+        const dateStr = toLocalDateString(d)
+        if (!weekDates.includes(dateStr)) continue
+        const existing = existingStopMap.get(existingKey(rule.customer_id, rule.pool_id))
+        if (existing?.tech_id) {
+          // Already in DB with a tech — keep as-is
+          assignedFirings.push({ rule, firedDate: dateStr, techId: existing.tech_id, day: dateStr })
+        } else if (rule.tech_id) {
+          // Rule has preferred tech
+          const prefDay = rule.preferred_day_of_week != null
+            ? (weekDates[rule.preferred_day_of_week === 0 ? 0 : Math.min(rule.preferred_day_of_week - 1, 4)] ?? dateStr)
+            : dateStr
+          assignedFirings.push({ rule, firedDate: prefDay, techId: rule.tech_id, day: prefDay })
+        } else {
+          unassignedFirings.push({ rule, firedDate: dateStr, day: dateStr })
+        }
+      }
+    }
+
+    // Build load state from assigned firings
+    // techDayCoords: techId → day → {lat, lng} array for centroid
+    const techDayCoords = new Map<string, Map<string, Array<{ lat: number | null; lng: number | null }>>>()
+    const initTechDay = (tid: string, day: string) => {
+      if (!techDayCoords.has(tid)) techDayCoords.set(tid, new Map())
+      if (!techDayCoords.get(tid)!.has(day)) techDayCoords.get(tid)!.set(day, [])
+    }
+    for (const tid of techIds) {
+      for (const d of weekDates) initTechDay(tid, d)
+    }
+
+    const assignments: AutoScheduleAssignment[] = []
+
+    for (const af of assignedFirings) {
+      const customer = customerMap.get(af.rule.customer_id)
+      initTechDay(af.techId, af.day)
+      techDayCoords.get(af.techId)!.get(af.day)!.push({ lat: customer?.lat ?? null, lng: customer?.lng ?? null })
+      const existing = existingStopMap.get(existingKey(af.rule.customer_id, af.rule.pool_id))
+      assignments.push({
+        stopId: existing?.id ?? null,
+        ruleId: af.rule.id,
+        techId: af.techId,
+        techName: techMap.get(af.techId) ?? "Unknown",
+        day: af.day,
+        customerName: customer?.full_name ?? "Unknown",
+        poolName: af.rule.pool_id ? (poolMap.get(af.rule.pool_id) ?? null) : null,
+        customerId: af.rule.customer_id,
+        poolId: af.rule.pool_id,
+        lat: customer?.lat ?? null,
+        lng: customer?.lng ?? null,
+        isNew: !existing?.id,
+      })
+    }
+
+    // Greedy geographic clustering for unassigned stops
+    let totalUnassignable = 0
+
+    for (const uf of unassignedFirings) {
+      if (techIds.length === 0) {
+        totalUnassignable++
+        continue
+      }
+
+      const customer = customerMap.get(uf.rule.customer_id)
+      const stopLat = customer?.lat ?? null
+      const stopLng = customer?.lng ?? null
+
+      let bestTechId: string | null = null
+      let bestDay: string | null = null
+      let bestScore = Infinity
+
+      for (const tid of techIds) {
+        const daysToCheck = uf.rule.preferred_day_of_week != null
+          ? [weekDates[uf.rule.preferred_day_of_week === 0 ? 0 : Math.min(uf.rule.preferred_day_of_week - 1, 4)] ?? uf.day]
+          : weekDates
+
+        for (const day of daysToCheck) {
+          const dayStops = techDayCoords.get(tid)?.get(day) ?? []
+          const loadCount = dayStops.length
+
+          let geoScore = 0
+          if (stopLat !== null && stopLng !== null && dayStops.length > 0) {
+            const geocoded = dayStops.filter(
+              (s): s is { lat: number; lng: number } => s.lat !== null && s.lng !== null
+            )
+            if (geocoded.length > 0) {
+              const centLat = geocoded.reduce((sum, s) => sum + s.lat, 0) / geocoded.length
+              const centLng = geocoded.reduce((sum, s) => sum + s.lng, 0) / geocoded.length
+              geoScore = haversineDistanceBalancer(stopLat, stopLng, centLat, centLng)
+            }
+          }
+
+          const avgLoad = techIds.reduce((sum, t) => sum + (techDayCoords.get(t)?.get(day)?.length ?? 0), 0) / Math.max(techIds.length, 1)
+          const loadScore = Math.max(0, loadCount - avgLoad) * 5
+          const totalScore = geoScore + loadScore
+
+          if (totalScore < bestScore) {
+            bestScore = totalScore
+            bestTechId = tid
+            bestDay = day
+          }
+        }
+      }
+
+      if (!bestTechId || !bestDay) {
+        totalUnassignable++
+        continue
+      }
+
+      initTechDay(bestTechId, bestDay)
+      techDayCoords.get(bestTechId)!.get(bestDay)!.push({ lat: stopLat, lng: stopLng })
+
+      const existing = existingStopMap.get(existingKey(uf.rule.customer_id, uf.rule.pool_id))
+      assignments.push({
+        stopId: existing?.id ?? null,
+        ruleId: uf.rule.id,
+        techId: bestTechId,
+        techName: techMap.get(bestTechId) ?? "Unknown",
+        day: bestDay,
+        customerName: customer?.full_name ?? "Unknown",
+        poolName: uf.rule.pool_id ? (poolMap.get(uf.rule.pool_id) ?? null) : null,
+        customerId: uf.rule.customer_id,
+        poolId: uf.rule.pool_id,
+        lat: stopLat,
+        lng: stopLng,
+        isNew: !existing?.id,
+      })
+    }
+
+    // Before metrics from DB
+    const beforeResult = await getWorkloadBalance(weekStartDate)
+
+    // After metrics from proposal
+    const afterTechMap = new Map<string, WorkloadMetrics>()
+    for (const a of assignments) {
+      if (!afterTechMap.has(a.techId)) {
+        const stopsPerDay: Record<string, number> = {}
+        for (const d of weekDates) stopsPerDay[d] = 0
+        afterTechMap.set(a.techId, { techId: a.techId, techName: a.techName, totalStops: 0, stopsPerDay, estimatedDriveMinutes: 0 })
+      }
+      const m = afterTechMap.get(a.techId)!
+      m.totalStops++
+      m.stopsPerDay[a.day] = (m.stopsPerDay[a.day] ?? 0) + 1
+      m.estimatedDriveMinutes = m.totalStops * 25
+    }
+    const afterMetrics = Array.from(afterTechMap.values()).sort((a, b) => a.techName.localeCompare(b.techName))
+
+    return {
+      success: true,
+      proposal: {
+        weekStart: weekStartDate,
+        assignments,
+        metrics: {
+          before: beforeResult.metrics,
+          after: afterMetrics,
+          totalStopsProposed: assignments.length,
+          totalUnassignable,
+        },
+      },
+    }
+  } catch (error) {
+    console.error("[autoScheduleWeek] Error:", error)
+    return { success: false, error: "Failed to generate auto-schedule proposal", proposal: null }
+  }
+}
+
+/**
+ * applyAutoSchedule — persist an approved AutoScheduleProposal to the database.
+ *
+ * For each assignment:
+ * - If stopId is set: update tech_id + scheduled_date on the existing stop.
+ * - If stopId is null: insert a new route_stop row (sort_index=999, office can reorder).
+ *
+ * Uses onConflictDoNothing for idempotency. Owner/office only.
+ */
+export async function applyAutoSchedule(proposal: AutoScheduleProposal): Promise<{
+  success: boolean
+  error?: string
+  applied: number
+}> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated", applied: 0 }
+
+  const userRole = token["user_role"] as string | undefined
+  const orgId = token["org_id"] as string | undefined
+
+  if (!orgId) return { success: false, error: "Invalid token", applied: 0 }
+  if (userRole !== "owner" && userRole !== "office") {
+    return { success: false, error: "Insufficient permissions", applied: 0 }
+  }
+
+  try {
+    let applied = 0
+    await withRls(token, async (db) => {
+      for (const assignment of proposal.assignments) {
+        if (assignment.stopId) {
+          await db
+            .update(routeStops)
+            .set({ tech_id: assignment.techId, scheduled_date: assignment.day, updated_at: new Date() })
+            .where(and(eq(routeStops.id, assignment.stopId), eq(routeStops.org_id, orgId)))
+          applied++
+        } else {
+          await db
+            .insert(routeStops)
+            .values({
+              org_id: orgId,
+              tech_id: assignment.techId,
+              customer_id: assignment.customerId,
+              pool_id: assignment.poolId,
+              schedule_rule_id: assignment.ruleId,
+              scheduled_date: assignment.day,
+              sort_index: 999,
+              status: "scheduled",
+            })
+            .onConflictDoNothing()
+          applied++
+        }
+      }
+    })
+
+    revalidatePath("/schedule")
+    return { success: true, applied }
+  } catch (error) {
+    console.error("[applyAutoSchedule] Error:", error)
+    return { success: false, error: "Failed to apply auto-schedule", applied: 0 }
+  }
+}
