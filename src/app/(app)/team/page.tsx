@@ -12,6 +12,8 @@ import { PtoManager } from "@/components/team/pto-manager"
 import { EmployeeDocs } from "@/components/team/employee-docs"
 import { EmployeeSchedule } from "@/components/team/employee-schedule"
 import { getPtoBalances, getPtoRequests, getDocuments } from "@/actions/team-management"
+import { getTimesheets } from "@/actions/timesheets"
+import { TimesheetView } from "@/components/team/timesheet-view"
 
 export const metadata: Metadata = {
   title: "Team",
@@ -71,6 +73,12 @@ export default async function TeamPage() {
     }
   }
 
+  const isOwner = user.role === "owner"
+  const isOffice = user.role === "office"
+  const isTech = user.role === "tech"
+  // Techs only see the PTO tab; owner/office see all tabs
+  const defaultTab = isTech ? "pto" : "members"
+
   // Fetch PTO data (owner sees all; office/tech restricted by RLS)
   const [ptoBalances, ptoRequests, documents] = await Promise.all([
     getPtoBalances().catch(() => []),
@@ -78,11 +86,18 @@ export default async function TeamPage() {
     getDocuments().catch(() => []),
   ])
 
-  const isOwner = user.role === "owner"
-  const isOffice = user.role === "office"
-  const isTech = user.role === "tech"
-  // Techs only see the PTO tab; owner/office see all tabs
-  const defaultTab = isTech ? "pto" : "members"
+  // Fetch initial timesheet data for owner (current week)
+  let initialTimesheetData: import("@/actions/timesheets").TimesheetWeekResult | null = null
+  if (isOwner || isOffice) {
+    try {
+      const result = await getTimesheets(getCurrentWeekMonday())
+      if (result.success && result.data) {
+        initialTimesheetData = result.data
+      }
+    } catch {
+      // Non-fatal — TimesheetView handles null gracefully
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -109,6 +124,9 @@ export default async function TeamPage() {
           )}
           {(isOwner || isOffice) && (
             <TabsTrigger value="schedules">Schedules</TabsTrigger>
+          )}
+          {isOwner && (
+            <TabsTrigger value="timesheets">Timesheets</TabsTrigger>
           )}
         </TabsList>
 
@@ -211,12 +229,31 @@ export default async function TeamPage() {
             />
           </TabsContent>
         )}
+        {/* ── Timesheets tab (owner only) ────────────────────────────────── */}
+        {isOwner && (
+          <TabsContent value="timesheets">
+            <TimesheetView
+              initialData={initialTimesheetData}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns the Monday of the current week as YYYY-MM-DD (server-side safe). */
+function getCurrentWeekMonday(): string {
+  const today = new Date()
+  const jsDay = today.getDay() // 0=Sun, 1=Mon, ...
+  const daysFromMonday = jsDay === 0 ? -6 : 1 - jsDay
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + daysFromMonday)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
+}
 
 function getInitials(name: string): string {
   return name

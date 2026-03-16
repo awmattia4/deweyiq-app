@@ -829,3 +829,63 @@ export async function autoDetectBreak(
     return { success: false, error: "Failed to auto-detect break" }
   }
 }
+
+// ─── updateTimeTrackingSettings ────────────────────────────────────────────────
+
+/**
+ * updateTimeTrackingSettings — updates time tracking configuration in org_settings.
+ *
+ * Owner only. Updates: time_tracking_enabled, geofence_radius_meters,
+ * break_auto_detect_minutes, overtime_threshold_hours, pay_period_type.
+ */
+export async function updateTimeTrackingSettings(settings: {
+  time_tracking_enabled?: boolean
+  geofence_radius_meters?: number
+  break_auto_detect_minutes?: number
+  overtime_threshold_hours?: number
+  pay_period_type?: string
+}): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  if (userRole !== "owner") {
+    return { success: false, error: "Only owners can update time tracking settings" }
+  }
+
+  const orgId = token["org_id"] as string | undefined
+  if (!orgId) return { success: false, error: "Invalid session" }
+
+  try {
+    await withRls(token, async (db) => {
+      const updates: Record<string, unknown> = { updated_at: new Date() }
+
+      if (settings.time_tracking_enabled !== undefined) {
+        updates.time_tracking_enabled = settings.time_tracking_enabled
+      }
+      if (settings.geofence_radius_meters !== undefined) {
+        updates.geofence_radius_meters = settings.geofence_radius_meters
+      }
+      if (settings.break_auto_detect_minutes !== undefined) {
+        updates.break_auto_detect_minutes = settings.break_auto_detect_minutes
+      }
+      if (settings.overtime_threshold_hours !== undefined) {
+        updates.overtime_threshold_hours = settings.overtime_threshold_hours
+      }
+      if (settings.pay_period_type !== undefined) {
+        updates.pay_period_type = settings.pay_period_type
+      }
+
+      await db
+        .update(orgSettings)
+        .set(updates)
+        .where(eq(orgSettings.org_id, orgId))
+    })
+
+    revalidatePath("/settings")
+    return { success: true }
+  } catch (error) {
+    console.error("[updateTimeTrackingSettings] Error:", error)
+    return { success: false, error: "Failed to update time tracking settings" }
+  }
+}

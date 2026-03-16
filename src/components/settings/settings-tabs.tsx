@@ -26,6 +26,7 @@ import { SafetySettings } from "@/components/settings/safety-settings"
 import { BroadcastMessaging } from "@/components/settings/broadcast-messaging"
 import { NotificationPreferences } from "@/components/settings/notification-preferences"
 import { PlaidConnect } from "@/components/settings/plaid-connect"
+import { TimeTrackingSettings } from "@/components/settings/time-tracking-settings"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
@@ -55,7 +56,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "company" | "service" | "work-orders" | "billing" | "account"
+type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "account"
 
 interface TabDef {
   id: TabId
@@ -67,6 +68,7 @@ const OWNER_TABS: TabDef[] = [
   { id: "service", label: "Service" },
   { id: "work-orders", label: "Work Orders" },
   { id: "billing", label: "Billing" },
+  { id: "time-tracking", label: "Time Tracking" },
   { id: "account", label: "Account" },
 ]
 
@@ -525,6 +527,31 @@ export function SettingsTabs({
             </CardHeader>
             <CardContent>
               <PlaidConnect initialAccounts={initialBankAccounts} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Time Tracking tab — owner only */}
+      {isOwner && orgSettings && (
+        <div className={cn("flex flex-col gap-6", activeTab === "time-tracking" ? "block" : "hidden")}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Time Tracking</CardTitle>
+              <CardDescription>
+                Configure how DeweyIQ tracks technician time. Approved entries push to QuickBooks Online as TimeActivity records for payroll processing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TimeTrackingSettings
+                initialSettings={{
+                  time_tracking_enabled: orgSettings.time_tracking_enabled,
+                  geofence_radius_meters: orgSettings.geofence_radius_meters,
+                  break_auto_detect_minutes: orgSettings.break_auto_detect_minutes,
+                  overtime_threshold_hours: orgSettings.overtime_threshold_hours,
+                  pay_period_type: orgSettings.pay_period_type,
+                }}
+              />
             </CardContent>
           </Card>
         </div>

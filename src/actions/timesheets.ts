@@ -689,3 +689,36 @@ export async function getTimesheetSummary(
     return { success: false, error: "Failed to load timesheet summary" }
   }
 }
+
+// ─── pushWeekToQbo ─────────────────────────────────────────────────────────────
+
+/**
+ * pushWeekToQbo — server action wrapper for batch QBO time push.
+ *
+ * Owner only. Calls pushPayPeriodToQbo for a given tech's approved week.
+ * Exists as a server action so client components can call it without importing
+ * the QBO library directly (which is server-only).
+ */
+export async function pushWeekToQbo(
+  techId: string,
+  weekStartDate: string
+): Promise<{ pushed: number; failed: number; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { pushed: 0, failed: 0, error: "Not authenticated" }
+
+  const userRole = token["user_role"] as string | undefined
+  if (userRole !== "owner") {
+    return { pushed: 0, failed: 0, error: "Only owners can push to QBO" }
+  }
+
+  const orgId = token["org_id"] as string | undefined
+  if (!orgId) return { pushed: 0, failed: 0, error: "Invalid session" }
+
+  try {
+    const result = await pushPayPeriodToQbo(orgId, techId, weekStartDate)
+    return result
+  } catch (error) {
+    console.error("[pushWeekToQbo] Error:", error)
+    return { pushed: 0, failed: 0, error: "QBO push failed" }
+  }
+}
