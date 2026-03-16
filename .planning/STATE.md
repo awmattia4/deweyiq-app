@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 11/14 complete (01, 02, 03, 05, 06, 07, 08, 09, 11 done)
-Status: Phase 11 Plan 07 complete — financial report server actions: P&L, Balance Sheet, Cash Flow, Snapshot, Trial Balance aggregating journal_entry_lines by account type
-Last activity: 2026-03-16 — Phase 11 Plan 07 committed (financial-reports.ts server actions)
+Plan: 12/14 complete (01, 02, 03, 05, 06, 07, 08, 09, 10, 11 done)
+Status: Phase 11 Plan 10 complete — expense tracker UI with receipt upload, mileage log with IRS CSV export, QuickExpenseButton on routes page
+Last activity: 2026-03-16 — Phase 11 Plan 10 committed (expense-tracker, mileage-log, quick-expense components)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -105,6 +105,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11 P09 | 12 | 2 tasks | 8 files |
 | Phase 11 P11 | 14 | 2 tasks | 9 files |
 | Phase 11 P07 | 17 | 1 tasks | 1 files |
+| Phase 11-payroll-team-management-full-accounting P10 | 90 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,11 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 11-10]: Recharts hex colors only (not oklch) — Tailwind oklch tokens cannot be used in Recharts paint props (same constraint as MapLibre GL)
+- [Phase 11-10]: QuickExpenseButton uses inline panel toggle (not modal) — avoids z-index stacking on routes page and keeps layout clean
+- [Phase 11-10]: Receipt upload failure is non-blocking — createExpense saves first, receipt upload attempted second; any error caught silently so expense always records
+- [Phase 11-10]: Mileage tab is owner-only at server component level — data fetch skipped entirely for non-owner roles; office cannot see all-tech mileage data
+- [Phase 11-10]: browser-image-compression loaded via dynamic import — avoids bloating the initial bundle on the routes page
 - [Roadmap]: Web-first PWA (Next.js + Serwist) chosen over native mobile — faster to market, single codebase
 - [Roadmap]: Supabase chosen as all-in-one backend (Postgres + Auth + Realtime + Storage)
 - [Roadmap]: Drizzle ORM over Prisma — edge/serverless native, better Supabase pooler compatibility
