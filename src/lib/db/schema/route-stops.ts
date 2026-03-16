@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, text, time, timestamp, unique, uuid } from "drizzle-orm/pg-core"
+import { boolean, index, integer, pgTable, smallint, text, time, timestamp, unique, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -63,6 +63,10 @@ export const routeStops = pgTable(
     pre_arrival_sent_at: timestamp("pre_arrival_sent_at", { withTimezone: true }),
     // Phase 9: Set when tech marks stop in_progress; used for stop duration calculation
     started_at: timestamp("started_at", { withTimezone: true }),
+    // Phase 10-12: ETA SMS counter — capped at 2 update notifications per visit (per user decision)
+    eta_sms_count: smallint("eta_sms_count").notNull().default(0),
+    // Phase 10-12: Previous ETA stored for shift detection (15-minute threshold)
+    eta_previous_minutes: integer("eta_previous_minutes"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

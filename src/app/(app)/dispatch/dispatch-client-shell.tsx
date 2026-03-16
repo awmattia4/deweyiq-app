@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { MapPinIcon } from "lucide-react"
 import type { DispatchData } from "@/actions/dispatch"
 import { TechFilter } from "@/components/dispatch/tech-filter"
+import { EtaOverlay } from "@/components/dispatch/eta-overlay"
 
 // DispatchMap MUST be loaded client-side only — MapLibre accesses window on import.
 const DispatchMap = dynamic(
@@ -79,6 +80,12 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
             orgId={orgId}
             selectedTechId={selectedTechId}
           />
+          {/* ETA overlay — shown when a specific tech is selected */}
+          {selectedTechId && (
+            <div className="absolute top-3 right-3 z-10 pointer-events-auto">
+              <EtaOverlay techId={selectedTechId} orgId={orgId} />
+            </div>
+          )}
         </div>
       ) : (
         /* Empty state when no stops today */

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getAlertCount } from "@/actions/alerts"
 import { getOrgBranding } from "@/actions/company-settings"
+import { getUnreadCount } from "@/actions/user-notifications"
 import { AppShell } from "@/components/shell/app-shell"
 
 /**
@@ -40,10 +41,11 @@ export default async function AppLayout({
     redirect("/portal")
   }
 
-  // Fetch alert count and org branding in parallel
-  const [alertCount, orgBranding] = await Promise.all([
+  // Fetch alert count, org branding, and unread notification count in parallel
+  const [alertCount, orgBranding, unreadNotificationCount] = await Promise.all([
     getAlertCount(),
     getOrgBranding(),
+    getUnreadCount(),
   ])
 
   return (
@@ -53,6 +55,7 @@ export default async function AppLayout({
       orgName={orgBranding?.name ?? null}
       orgLogoUrl={orgBranding?.logoUrl ?? null}
       orgId={user.org_id}
+      unreadNotificationCount={unreadNotificationCount}
     >
       {children}
     </AppShell>

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SyncStatusIcon } from "@/components/shell/sync-status-icon"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 import { signOut } from "@/actions/auth"
 import type { AuthUser } from "@/actions/auth"
 
@@ -45,7 +46,7 @@ function getPageTitle(pathname: string): string {
     if (pathname.startsWith(route + "/")) return title
   }
 
-  return "PoolCo"
+  return "DeweyIQ"
 }
 
 function getInitials(name: string): string {
@@ -61,6 +62,7 @@ function getInitials(name: string): string {
 
 interface AppHeaderProps {
   user: AuthUser
+  unreadNotificationCount?: number
 }
 
 /**
@@ -75,7 +77,7 @@ interface AppHeaderProps {
  * Note: TooltipProvider must be in an ancestor component for SyncStatusIcon
  * tooltips to render. The AppShell wraps in TooltipProvider via root layout.
  */
-export function AppHeader({ user }: AppHeaderProps) {
+export function AppHeader({ user, unreadNotificationCount = 0 }: AppHeaderProps) {
   const pathname = usePathname()
   const pageTitle = getPageTitle(pathname)
   const initials = getInitials(user.full_name || user.email)
@@ -92,10 +94,16 @@ export function AppHeader({ user }: AppHeaderProps) {
       {/* ── Spacer ─────────────────────────────────────────────────────── */}
       <div className="flex-1" />
 
-      {/* ── Right: sync icon + user avatar ────────────────────────────── */}
+      {/* ── Right: sync icon + notification bell + user avatar ──────── */}
       <div className="flex items-center gap-1">
         {/* Sync status icon — shows synced/syncing/pending/error state */}
         <SyncStatusIcon />
+
+        {/* Notification bell — live unread count via Supabase Realtime */}
+        <NotificationBell
+          userId={user.id}
+          initialCount={unreadNotificationCount}
+        />
 
         <Separator orientation="vertical" className="mx-1 h-4" />
 
