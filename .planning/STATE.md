@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 12/14 complete (01, 02, 03, 05, 06, 07, 08, 09, 10, 11 done)
-Status: Phase 11 Plan 10 complete — expense tracker UI with receipt upload, mileage log with IRS CSV export, QuickExpenseButton on routes page
-Last activity: 2026-03-16 — Phase 11 Plan 10 committed (expense-tracker, mileage-log, quick-expense components)
+Plan: 13/14 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11 done)
+Status: Phase 11 Plan 04 complete — weekly timesheet review UI with edit/approve/QBO push, QBO time sync module, time tracking settings tab
+Last activity: 2026-03-16 — Phase 11 Plan 04 committed (timesheets.ts, time-sync.ts, timesheet-view.tsx, time-tracking-settings.tsx)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -106,6 +106,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11 P11 | 14 | 2 tasks | 9 files |
 | Phase 11 P07 | 17 | 1 tasks | 1 files |
 | Phase 11-payroll-team-management-full-accounting P10 | 90 | 2 tasks | 5 files |
+| Phase 11-payroll-team-management-full-accounting P04 | 45 | 2 tasks | 27 files |
 
 ## Accumulated Context
 
@@ -405,6 +406,10 @@ Recent decisions affecting current work:
 - [Phase 11]: Payment lifecycle complete with QBO reconciliation, installment plans, credits, and collections dashboard in Billing page tabs
 - [Phase 11]: Financial reports use getAccountBalances helper with INNER JOIN (not correlated subquery) to filter by date and respect RLS
 - [Phase 11]: Positive=debit/negative=credit convention: income displayed as positive (negate credits), expenses/assets as positive (use debits), liabilities/equity as positive (negate credits)
+- [Phase 11-04]: DeweyIQ pushes time entries to QBO only — QBO handles all pay calculation, deductions, and payroll processing (PAYRL requirements satisfied via QBO)
+- [Phase 11-04]: pushWeekToQbo server action wrapper in timesheets.ts — client components must never import server-only QBO modules directly; wrapper enables client-safe QBO batch push
+- [Phase 11-04]: node-quickbooks TS types don't include Employee or TimeActivity methods — cast qbo to any at call sites; runtime behavior is correct
+- [Phase 11-04]: Timesheet approval is per-tech per-week — approveTimesheet marks all entries approved_at/approved_by, then triggers QBO batch push via pushPayPeriodToQbo
 
 ### Pending Todos
 
@@ -431,5 +436,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 11-03-PLAN.md
-Resume file: Phase 11 Plan 03 complete — geofence utility (Haversine + 4-phase state machine, 30s/60s anti-bounce), GPS broadcast hook extended with geofence detection, recordStopArrival/Departure with drive time, getStopTimingForShift, autoDetectBreak
+Stopped at: Completed 11-04-PLAN.md
+Resume file: Phase 11 Plan 04 complete — weekly timesheet review UI with edit/approve/QBO push workflow, QBO time sync module (syncEmployeeToQbo, pushTimeEntryToQbo, pushPayPeriodToQbo), time tracking settings, Timesheets tab in Team page
