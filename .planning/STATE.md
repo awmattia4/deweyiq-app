@@ -339,6 +339,9 @@ Recent decisions affecting current work:
 - [Phase 10-13]: No health badge when <6 readings — avoids placeholder UI per MEMORY.md; only show real data
 - [Phase 10-13]: logEquipmentReading fire-and-forget after stop completion — equipment reading failure must never block tech workflow
 - [Phase 10-13]: checkDegradation uses adminDb (no RLS) — runs as cron/system context without user JWT session
+- [Phase 10-11]: INSERT-only Realtime subscription on user_notifications — UPDATE/DELETE skipped due to REPLICA IDENTITY not configured; INSERT sufficient for live unread count increments
+- [Phase 10-11]: NotificationPreferences in Account tab (not Company tab) — personal per-user setting belongs with user profile; Notification Templates (company-wide, owner-only) stays in Company tab
+- [Phase 10-11]: unreadNotificationCount SSR'd in layout, Realtime increments client-side — zero-flicker initial render; Realtime handles live updates after page mount
 - [Phase 10-17]: urlBase64ToUint8Array returns ArrayBuffer (not Uint8Array) — TypeScript PushManager.subscribe applicationServerKey requires ArrayBuffer-compatible type
 - [Phase 10-17]: vibrate cast to any in sw.ts showNotification — TypeScript lib omits vibrate from NotificationOptions despite being valid in modern browsers
 - [Phase 10-17]: PwaInstallPrompt and PushPermissionPrompt integrated in AppShell client component (not server layout.tsx) — both components need browser APIs (localStorage, window.matchMedia, Notification)
@@ -379,5 +382,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-07-PLAN.md
-Resume file: Phase 10 Plan 07 complete — WeatherBadge on tech route stop cards
+Stopped at: Completed 10-11-PLAN.md
+Resume file: Phase 10 Plan 11 complete — notification bell, panel, and per-user preferences
