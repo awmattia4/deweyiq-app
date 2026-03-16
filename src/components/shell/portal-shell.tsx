@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, ChevronDownIcon, LogOutIcon, BuildingIcon } from "lucide-react"
+import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon, ChevronDownIcon, LogOutIcon, BuildingIcon } from "lucide-react"
 import { signOut } from "@/actions/auth"
 import type { AuthUser } from "@/actions/auth"
 import type { OrgBranding } from "@/actions/portal-data"
@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Invoices", href: "/portal/invoices", icon: FileTextIcon },
   { label: "Messages", href: "/portal/messages", icon: MessageCircleIcon },
   { label: "Request Service", href: "/portal/requests", icon: WrenchIcon },
+  { label: "Track Service", href: "/portal/eta", icon: MapPinIcon },
 ]
 
 /**

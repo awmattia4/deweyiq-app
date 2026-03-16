@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getOrgBranding } from "@/actions/portal-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon } from "lucide-react"
+import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "My Portal",
@@ -37,7 +37,7 @@ export default async function PortalHomePage() {
       </div>
 
       {/* ── Quick-link cards ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <Link href="/portal/history" className="block">
           <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
             <CardHeader className="pb-3">
@@ -105,6 +105,24 @@ export default async function PortalHomePage() {
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 Submit a one-off service request — repair, opening, or other needs.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/portal/eta" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
+                  <MapPinIcon className="h-4 w-4 text-green-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Track Service</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                See your tech&apos;s live arrival time and track their route progress.
               </p>
             </CardContent>
           </Card>
