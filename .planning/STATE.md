@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 1/14 complete (01 done)
-Status: Phase 11 Plan 01 complete — 15 new DB tables (time tracking, accounting, bank feeds, team management), org_settings+profiles extended, CoA seed data
-Last activity: 2026-03-16 — Phase 11 Plan 01 committed (database schema foundation)
+Plan: 8/14 complete (01, 02, 05, 06, 08 done — plans executed out of order)
+Status: Phase 11 Plan 08 complete — Plaid bank feed integration: client, 6 server actions, PlaidConnect UI, webhook handler
+Last activity: 2026-03-16 — Phase 11 Plan 08 committed (Plaid bank feeds)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -97,6 +97,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P10 | 90 | 2 tasks | 10 files |
 | Phase 10 P08 | 4 | 1 tasks | 2 files |
 | Phase 11-payroll-team-management-full-accounting P01 | 9 | 2 tasks | 11 files |
+| Phase 11 P08 | 5 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -374,6 +375,8 @@ Recent decisions affecting current work:
 - [Phase 11-01]: bank_accounts owner-only RLS for ALL operations — plaid_access_token must never reach client
 - [Phase 11-01]: Journal entry immutability enforced at app layer (not RLS) — allows owner/office writes on draft entries
 - [Phase 11-01]: Chart of accounts seeding uses adminDb (service role) — called during org onboarding before JWT context established
+- [Phase 11]: Use adminDb for all Plaid access_token operations — never exposed to client via withRls
+- [Phase 11]: Plaid webhook always returns 200 to prevent retry loops; errors logged and alerted separately
 
 ### Pending Todos
 
