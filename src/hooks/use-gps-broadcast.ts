@@ -63,6 +63,8 @@ export function useGpsBroadcast(
   // Stored in a ref so GPS callbacks always have the latest state without
   // triggering re-renders (Dexie-derived state preference from MEMORY.md).
   const geofenceStatesRef = useRef<Map<string, GeofenceState>>(new Map())
+  // Track previous stops to only reset geofence states when stops actually change
+  const prevStopsRef = useRef<GeofenceStop[] | undefined>(undefined)
 
   useEffect(() => {
     if (!orgId || !techId || !active) return
@@ -72,8 +74,13 @@ export function useGpsBroadcast(
 
     let watchId: number | null = null
 
-    // Reset geofence states when the effect re-runs (new shift or stops changed)
-    geofenceStatesRef.current = new Map()
+    // Only reset geofence states when the stops list changes, NOT when activeShiftId changes.
+    // This prevents losing arrival progress when a tech clocks in mid-route.
+    const stopsChanged = stops !== prevStopsRef.current
+    if (stopsChanged) {
+      geofenceStatesRef.current = new Map()
+      prevStopsRef.current = stops
+    }
 
     channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return

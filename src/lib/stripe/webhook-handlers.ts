@@ -13,6 +13,7 @@
 
 import Stripe from "stripe"
 import { adminDb } from "@/lib/db"
+import { toLocalDateString } from "@/lib/date-utils"
 import {
   invoices,
   paymentRecords,
@@ -694,8 +695,8 @@ export async function handlePayoutPaid(payout: Stripe.Payout): Promise<void> {
   const payoutId = payout.id
   const netAmount = payout.amount / 100 // cents to dollars
   const arrivalDate = payout.arrival_date
-    ? new Date(payout.arrival_date * 1000).toISOString().split("T")[0]
-    : new Date().toISOString().split("T")[0]
+    ? toLocalDateString(new Date(payout.arrival_date * 1000))
+    : toLocalDateString()
 
   console.log(`[handlePayoutPaid] Payout ${payoutId}: $${netAmount.toFixed(2)} arriving ${arrivalDate}`)
 

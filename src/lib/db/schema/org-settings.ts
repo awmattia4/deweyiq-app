@@ -118,6 +118,11 @@ export const orgSettings = pgTable(
     accountant_mode_enabled: boolean("accountant_mode_enabled").notNull().default(false),
     // When accounting is enabled, sets the historical start date for financial records
     accounting_start_date: date("accounting_start_date"),
+    // Phase 11: Mileage tracking settings
+    // IRS standard mileage rate (per mile) — defaults to 2026 rate of $0.725
+    mileage_irs_rate: numeric("mileage_irs_rate", { precision: 6, scale: 4 }).default("0.7250"),
+    // Road distance factor — multiplier on straight-line distance to estimate actual road distance
+    mileage_road_factor: numeric("mileage_road_factor", { precision: 4, scale: 2 }).default("1.20"),
     // Phase 11 Plan 12: Sales tax rates per jurisdiction
     // Array of { jurisdiction: string; rate: number } — falls back to default_tax_rate when empty/null
     sales_tax_rates: jsonb("sales_tax_rates").$type<Array<{ jurisdiction: string; rate: number }>>(),

@@ -17,26 +17,41 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { adminDb, withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { mileageLogs, timeEntries, timeEntryStops, routeStops, profiles } from "@/lib/db/schema"
+import { mileageLogs, timeEntries, timeEntryStops, routeStops, profiles, orgSettings } from "@/lib/db/schema"
 import { and, asc, between, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { haversineDistance } from "@/lib/geo/geofence"
 import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants (defaults — overridden by org_settings when configured)
 // ---------------------------------------------------------------------------
 
-/** 2026 IRS standard mileage rate (per mile) */
-const IRS_RATE_2026 = 0.725
+const DEFAULT_IRS_RATE = 0.725
+const DEFAULT_ROAD_FACTOR = 1.2
+const METERS_PER_MILE = 1609.344
+
+// ---------------------------------------------------------------------------
+// Org mileage rate helper
+// ---------------------------------------------------------------------------
 
 /**
- * Road distance factor — multiply straight-line (haversine) distance by this
- * to estimate actual road distance. Research-validated 1.2x factor.
+ * Reads mileage_irs_rate and mileage_road_factor from org_settings.
+ * Falls back to defaults when null/unconfigured.
  */
-const ROAD_FACTOR = 1.2
-
-/** Meters per mile */
-const METERS_PER_MILE = 1609.344
+async function getOrgMileageRates(orgId: string): Promise<{ irsRate: number; roadFactor: number }> {
+  const [settings] = await adminDb
+    .select({
+      mileage_irs_rate: orgSettings.mileage_irs_rate,
+      mileage_road_factor: orgSettings.mileage_road_factor,
+    })
+    .from(orgSettings)
+    .where(eq(orgSettings.org_id, orgId))
+    .limit(1)
+  return {
+    irsRate: settings?.mileage_irs_rate ? parseFloat(settings.mileage_irs_rate) : DEFAULT_IRS_RATE,
+    roadFactor: settings?.mileage_road_factor ? parseFloat(settings.mileage_road_factor) : DEFAULT_ROAD_FACTOR,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -147,6 +162,9 @@ export async function calculateRouteMileage(
       return { success: true, miles: 0 }
     }
 
+    // Get org-specific mileage rates (or defaults)
+    const { irsRate, roadFactor } = await getOrgMileageRates(entry.org_id)
+
     // Calculate total route mileage using haversine + road factor
     let totalMeters = 0
     for (let i = 1; i < rows.length; i++) {
@@ -158,7 +176,7 @@ export async function calculateRouteMileage(
         curr.geocoded_lat,
         curr.geocoded_lng
       )
-      totalMeters += distMeters * ROAD_FACTOR
+      totalMeters += distMeters * roadFactor
     }
 
     const totalMiles = totalMeters / METERS_PER_MILE
@@ -179,7 +197,7 @@ export async function calculateRouteMileage(
         destination_address: "Route end",
         purpose: "Pool service route",
         miles: totalMiles.toFixed(2),
-        rate_per_mile: IRS_RATE_2026.toFixed(4),
+        rate_per_mile: irsRate.toFixed(4),
         is_auto_calculated: true,
         time_entry_id: timeEntryId,
       })
@@ -231,6 +249,9 @@ export async function addManualMileage(input: {
   const userId = token["sub"] as string
 
   try {
+    // Get org-specific IRS rate (or default)
+    const { irsRate } = await getOrgMileageRates(orgId)
+
     const inserted = await withRls(token, (db) =>
       db
         .insert(mileageLogs)
@@ -242,7 +263,7 @@ export async function addManualMileage(input: {
           destination_address: input.destinationAddress.trim() || null,
           purpose: input.purpose.trim(),
           miles: input.miles.toFixed(2),
-          rate_per_mile: IRS_RATE_2026.toFixed(4),
+          rate_per_mile: irsRate.toFixed(4),
           is_auto_calculated: false,
         })
         .returning({ id: mileageLogs.id })

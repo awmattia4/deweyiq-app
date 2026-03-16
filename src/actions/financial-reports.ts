@@ -504,7 +504,7 @@ export async function getCashFlowStatement(
     // Opening cash: balances as of day BEFORE startDate
     const startDateObj = new Date(startDate + "T00:00:00")
     startDateObj.setDate(startDateObj.getDate() - 1)
-    const priorDate = startDateObj.toISOString().split("T")[0]
+    const priorDate = toLocalDateString(startDateObj)
 
     const [priorBalances, periodBalances] = await Promise.all([
       getAccountBalances(token, orgId, { endDate: priorDate }),
@@ -549,11 +549,25 @@ export async function getCashFlowStatement(
       })
     }
 
+    // AP adjustment: expenses accrued via AP didn't use cash yet.
+    // AP increase (net credit = negative balance) → add back (cash NOT paid).
+    // AP decrease (net debit = positive balance) → subtract (cash WAS paid for prior accruals).
+    const apAccount = accounts.find((a) => a.account_number === "2000")
+    const apPeriodBalance = apAccount ? (periodBalances.get(apAccount.id) ?? 0) : 0
+    // AP credits = negative → increase in AP → cash not spent → positive adjustment
+    const apAdjustment = -apPeriodBalance
+
     const operatingItems: Array<{ description: string; amount: number }> = []
     if (Math.abs(cashFromCustomers) > 0.001) {
       operatingItems.push({ description: "Cash received from customers", amount: cashFromCustomers })
     }
     operatingItems.push(...expenseAccountLines)
+    if (Math.abs(apAdjustment) > 0.001) {
+      operatingItems.push({
+        description: apAdjustment > 0 ? "Increase in accounts payable" : "Decrease in accounts payable",
+        amount: apAdjustment,
+      })
+    }
 
     const operatingTotal = operatingItems.reduce((sum, i) => sum + i.amount, 0)
 

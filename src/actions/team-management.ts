@@ -41,6 +41,7 @@ import {
 } from "@/lib/db/schema"
 import { and, eq, or, lte, gte, asc, desc, inArray } from "drizzle-orm"
 import { sql } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -781,8 +782,8 @@ export async function checkExpiringDocuments(orgId?: string): Promise<void> {
     const thirtyDaysOut = new Date()
     thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30)
 
-    const todayStr = today.toISOString().split("T")[0]
-    const thirtyDaysStr = thirtyDaysOut.toISOString().split("T")[0]
+    const todayStr = toLocalDateString(today)
+    const thirtyDaysStr = toLocalDateString(thirtyDaysOut)
 
     // Build conditions — org filter is optional
     const conditions = orgId

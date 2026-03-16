@@ -662,39 +662,43 @@ export async function applyCustomerCredit(
 
   try {
     return await withRls(token, async (db) => {
-      // Fetch credit
-      const [credit] = await db
-        .select()
-        .from(customerCredits)
-        .where(eq(customerCredits.id, creditId))
-        .limit(1)
-
-      if (!credit) return { success: false, error: "Credit not found" }
-      if (credit.status !== "available") {
-        return { success: false, error: "Credit is not available (already applied or expired)" }
-      }
-
-      // Fetch invoice
-      const [invoice] = await db
-        .select({ id: invoices.id, total: invoices.total, customer_id: invoices.customer_id })
-        .from(invoices)
-        .where(eq(invoices.id, invoiceId))
-        .limit(1)
-
-      if (!invoice) return { success: false, error: "Invoice not found" }
-      if (invoice.customer_id !== credit.customer_id) {
-        return { success: false, error: "Credit does not belong to the same customer as the invoice" }
-      }
-
-      // Mark credit as applied
-      await db
+      // Atomic check-and-update: only apply if still available (prevents race condition)
+      const [updated] = await db
         .update(customerCredits)
         .set({
           status: "applied",
           applied_to_invoice_id: invoiceId,
           updated_at: new Date(),
         })
-        .where(eq(customerCredits.id, creditId))
+        .where(
+          and(
+            eq(customerCredits.id, creditId),
+            eq(customerCredits.status, "available")
+          )
+        )
+        .returning()
+
+      if (!updated) {
+        return { success: false, error: "Credit not found or already applied" }
+      }
+
+      // Verify invoice belongs to same customer
+      const [invoice] = await db
+        .select({ id: invoices.id, total: invoices.total, customer_id: invoices.customer_id })
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId))
+        .limit(1)
+
+      if (!invoice || invoice.customer_id !== updated.customer_id) {
+        // Rollback: restore credit to available
+        await db
+          .update(customerCredits)
+          .set({ status: "available", applied_to_invoice_id: null, updated_at: new Date() })
+          .where(eq(customerCredits.id, creditId))
+        return { success: false, error: "Invoice not found or belongs to a different customer" }
+      }
+
+      const credit = updated
 
       // Generate journal entry (fire-and-forget)
       const orgId = credit.org_id
@@ -885,7 +889,7 @@ export async function getCollectionsDashboard(): Promise<CollectionsDashboardRes
         if (!lastPaymentMap.has(lp.customerId) && lp.lastPaymentDate) {
           lastPaymentMap.set(
             lp.customerId,
-            lp.lastPaymentDate.toISOString().split("T")[0]
+            toLocalDateString(lp.lastPaymentDate)
           )
         }
       }
@@ -988,7 +992,9 @@ export async function getCollectionsDashboard(): Promise<CollectionsDashboardRes
         })
 
       const totalOverdue = result.reduce((sum, c) => sum + c.overdueAmount, 0)
-      const over30 = result.reduce((sum, c) => sum + c.overdueAmount, 0)
+      const over30 = result
+        .filter((c) => c.bucket === "30+")
+        .reduce((sum, c) => sum + c.overdueAmount, 0)
       const over60 = result
         .filter((c) => c.bucket === "60+" || c.bucket === "90+")
         .reduce((sum, c) => sum + c.overdueAmount, 0)

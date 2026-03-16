@@ -26,6 +26,7 @@ import {
   customers,
 } from "@/lib/db/schema"
 import { and, eq, gte, lte, lt, isNull, isNotNull, sum, count, sql, desc, asc } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Auth helper ───────────────────────────────────────────────────────────────
 
@@ -36,28 +37,22 @@ async function getRlsToken(): Promise<SupabaseToken | null> {
   return claimsData.claims as SupabaseToken
 }
 
-/** Returns today's date in YYYY-MM-DD format using local time (not UTC). */
-function toLocalDate(d: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-/** Returns the Monday of the current week as YYYY-MM-DD in local time. */
+/** Returns the Monday of the current week as YYYY-MM-DD using local time. */
 function getCurrentWeekMonday(from: Date = new Date()): string {
   const jsDay = from.getDay() // 0=Sun, 1=Mon, ...
   const daysFromMonday = jsDay === 0 ? -6 : 1 - jsDay
   const monday = new Date(from)
   monday.setDate(from.getDate() + daysFromMonday)
-  return toLocalDate(monday)
+  return toLocalDateString(monday)
 }
 
-/** Returns the Sunday of the current week (end of week) as YYYY-MM-DD in local time. */
+/** Returns the Sunday of the current week (end of week) as YYYY-MM-DD using local time. */
 function getCurrentWeekSunday(from: Date = new Date()): string {
   const jsDay = from.getDay()
   const daysToSunday = jsDay === 0 ? 0 : 7 - jsDay
   const sunday = new Date(from)
   sunday.setDate(from.getDate() + daysToSunday)
-  return toLocalDate(sunday)
+  return toLocalDateString(sunday)
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -201,13 +196,13 @@ export async function getTeamDashboard(): Promise<TeamDashboardResponse> {
   if (role !== "owner") return { success: false, error: "Owner access required" }
 
   try {
-    const today = toLocalDate()
+    const today = toLocalDateString()
     const weekMonday = getCurrentWeekMonday()
     const weekSunday = getCurrentWeekSunday()
     const now = new Date()
     const thirtyDaysFromNow = new Date(now)
     thirtyDaysFromNow.setDate(now.getDate() + 30)
-    const thirtyDaysStr = toLocalDate(thirtyDaysFromNow)
+    const thirtyDaysStr = toLocalDateString(thirtyDaysFromNow)
 
     // 1. Fetch all org members (non-customer)
     const allProfiles = await withRls(token, (db) =>
@@ -666,11 +661,11 @@ export async function getTeamAlerts(): Promise<TeamAlertsResponse> {
   if (role !== "owner") return { success: false, error: "Owner access required" }
 
   try {
-    const today = toLocalDate()
+    const today = toLocalDateString()
     const now = new Date()
     const thirtyDaysFromNow = new Date(now)
     thirtyDaysFromNow.setDate(now.getDate() + 30)
-    const thirtyDaysStr = toLocalDate(thirtyDaysFromNow)
+    const thirtyDaysStr = toLocalDateString(thirtyDaysFromNow)
 
     // Fetch all needed data in parallel
     const [expiringSoon, forgottenClockOuts, pendingPtoList, longShiftsToday] = await Promise.all([
@@ -753,7 +748,7 @@ export async function getTeamAlerts(): Promise<TeamAlertsResponse> {
                 // Last 7 days
                 const d = new Date()
                 d.setDate(d.getDate() - 7)
-                return toLocalDate(d)
+                return toLocalDateString(d)
               })()),
               sql`${timeEntries.total_minutes} > 360`,
               sql`COALESCE(${timeEntries.break_minutes}, 0) = 0`
@@ -891,6 +886,18 @@ export async function forceClockOut(
     )
 
     if (!entry) return { success: false, error: "Time entry not found" }
+
+    // Guard: don't overwrite already-completed entries
+    const [fullEntry] = await withRls(token, (db) =>
+      db
+        .select({ clocked_out_at: timeEntries.clocked_out_at })
+        .from(timeEntries)
+        .where(eq(timeEntries.id, timeEntryId))
+        .limit(1)
+    )
+    if (fullEntry?.clocked_out_at) {
+      return { success: false, error: "Entry is already clocked out" }
+    }
 
     const elapsedMs = now.getTime() - entry.clocked_in_at.getTime()
     const elapsedMinutes = Math.floor(elapsedMs / 60000)

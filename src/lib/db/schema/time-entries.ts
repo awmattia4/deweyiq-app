@@ -1,4 +1,4 @@
-import { boolean, doublePrecision, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { boolean, doublePrecision, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -68,6 +68,10 @@ export const timeEntries = pgTable(
     index("time_entries_org_date_idx").on(table.org_id, table.work_date),
     // Fast "tech's entries by date" query (most common — tech views own timesheet)
     index("time_entries_tech_date_idx").on(table.tech_id, table.work_date),
+    // Prevent double clock-in: only one open (not-clocked-out) entry per tech per org
+    uniqueIndex("time_entries_one_open_shift_idx")
+      .on(table.tech_id, table.org_id)
+      .where(sql`clocked_out_at IS NULL`),
 
     // RLS: tech reads/writes own entries; owner/office reads/writes all in org
     pgPolicy("time_entries_select_policy", {

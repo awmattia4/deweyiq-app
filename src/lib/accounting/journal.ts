@@ -32,6 +32,7 @@ import {
 } from "@/lib/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { seedChartOfAccounts } from "@/lib/accounting/chart-of-accounts"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ============================================================
 // Types
@@ -421,8 +422,8 @@ export async function createInvoiceJournalEntry(invoiceId: string): Promise<void
 
   const orgId = invoice.org_id
   const entryDate = invoice.issued_at
-    ? invoice.issued_at.toISOString().split("T")[0]
-    : invoice.created_at.toISOString().split("T")[0]
+    ? toLocalDateString(invoice.issued_at)
+    : toLocalDateString(invoice.created_at)
 
   // Check accounting start date
   if (await shouldSkipEntry(orgId, entryDate)) {
@@ -557,8 +558,8 @@ export async function createPaymentJournalEntry(
   }
 
   const entryDate = payment.settled_at
-    ? payment.settled_at.toISOString().split("T")[0]
-    : payment.created_at.toISOString().split("T")[0]
+    ? toLocalDateString(payment.settled_at)
+    : toLocalDateString(payment.created_at)
 
   // Check accounting start date
   if (await shouldSkipEntry(orgId, entryDate)) {
@@ -702,7 +703,7 @@ export async function createExpenseJournalEntry(expenseId: string): Promise<void
     return
   }
 
-  const entryDate = expense.date ?? new Date().toISOString().split("T")[0]
+  const entryDate = expense.date ?? toLocalDateString()
 
   // Check accounting start date
   if (await shouldSkipEntry(orgId, entryDate)) {
@@ -826,8 +827,8 @@ export async function createRefundJournalEntry(
   }
 
   const entryDate = payment.settled_at
-    ? payment.settled_at.toISOString().split("T")[0]
-    : payment.created_at.toISOString().split("T")[0]
+    ? toLocalDateString(payment.settled_at)
+    : toLocalDateString(payment.created_at)
 
   // Check accounting start date
   if (await shouldSkipEntry(orgId, entryDate)) {

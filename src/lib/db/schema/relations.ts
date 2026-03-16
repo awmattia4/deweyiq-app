@@ -49,6 +49,7 @@ import {
   mileageLogs,
   vendors,
 } from "./team-management"
+import { vendorBills } from "./vendor-bills"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -458,6 +459,15 @@ export const mileageLogsRelations = relations(mileageLogs, ({ one }) => ({
   }),
 }))
 
-export const vendorsRelations = relations(vendors, ({ one }) => ({
+export const vendorsRelations = relations(vendors, ({ one, many }) => ({
   org: one(orgs, { fields: [vendors.org_id], references: [orgs.id] }),
+  bills: many(vendorBills),
+}))
+
+export const vendorBillsRelations = relations(vendorBills, ({ one }) => ({
+  org: one(orgs, { fields: [vendorBills.org_id], references: [orgs.id] }),
+  vendor: one(vendors, { fields: [vendorBills.vendor_id], references: [vendors.id] }),
+  categoryAccount: one(chartOfAccounts, { fields: [vendorBills.category_account_id], references: [chartOfAccounts.id] }),
+  paidBy: one(profiles, { fields: [vendorBills.paid_by], references: [profiles.id], relationName: "vendorBillPaidBy" }),
+  createdBy: one(profiles, { fields: [vendorBills.created_by], references: [profiles.id], relationName: "vendorBillCreatedBy" }),
 }))

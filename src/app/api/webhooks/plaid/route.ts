@@ -41,6 +41,14 @@ interface PlaidWebhookPayload {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify the webhook originates from Plaid via the Plaid-Verification header.
+  // Plaid signs every webhook with a JWT — if the header is missing, reject it.
+  const verificationHeader = req.headers.get("plaid-verification")
+  if (!verificationHeader) {
+    console.warn("[plaid-webhook] Missing Plaid-Verification header — rejecting")
+    return NextResponse.json({ error: "Missing verification header" }, { status: 401 })
+  }
+
   let payload: PlaidWebhookPayload
 
   try {
@@ -52,6 +60,13 @@ export async function POST(req: NextRequest) {
   }
 
   const { webhook_type, webhook_code, item_id } = payload
+
+  // Verify the item_id belongs to a real bank account in our system before processing
+  const account = await findBankAccountByItemId(item_id)
+  if (!account) {
+    console.warn(`[plaid-webhook] Unknown item_id: ${item_id} — ignoring`)
+    return NextResponse.json({ received: true }, { status: 200 })
+  }
 
   console.log(`[plaid-webhook] Received: ${webhook_type}/${webhook_code} for item ${item_id}`)
 

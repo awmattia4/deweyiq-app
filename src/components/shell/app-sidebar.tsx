@@ -266,7 +266,7 @@ export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl, orgId }:
               </svg>
             </div>
             <span className="text-[10px] font-medium tracking-wide uppercase text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
-              PoolCo
+              DeweyIQ
             </span>
           </div>
 
