@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
-Plan: 1/17 complete (01 done)
-Status: Phase 10 Plan 01 complete — Open-Meteo weather client + OLS regression + smart dosing modifiers
-Last activity: 2026-03-16 — Phase 10 Plan 01 committed
+Plan: 5/17 complete (01, 02, 03, 04, 05 done)
+Status: Phase 10 Plan 05 complete — contextual smart suggestions in add-customer and add-pool dialogs
+Last activity: 2026-03-16 — Phase 10 Plan 05 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -82,6 +82,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 09-reporting-team-analytics P05 | 8 | 2 tasks | 9 files |
 | Phase 09-reporting-team-analytics P06 | 3 | 2 tasks | 3 files |
 | Phase 10-smart-features-ai P01 | 4 | 2 tasks | 4 files |
+| Phase 10-smart-features-ai P05 | 10 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -314,6 +315,8 @@ Recent decisions affecting current work:
 - [Phase 10-01]: OLS x-axis = visit index (not timestamp) — evenly-spaced visits; avoids date arithmetic; adequate for pool chemistry trend detection
 - [Phase 10-01]: Modifiers stack additively on dosing doses (not multiplicatively) — avoids compounding; 15%+10%=25% not 26.5%
 - [Phase 10-01]: History modifier requires R²>=0.4 threshold — filters noisy trends; prevents random fluctuations from triggering preemptive dose changes
+- [Phase 10-smart-features-ai]: ExistingPool type minimal — only type/volume_gallons/sanitizer_type needed; pool-list already has these so no API changes required
+- [Phase 10-smart-features-ai]: Suggestions rebuild as pure function on each render — no stale derived state; suggestion engine is a cheap O(1) pure function
 
 ### Pending Todos
 
