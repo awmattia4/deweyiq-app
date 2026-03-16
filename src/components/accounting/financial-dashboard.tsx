@@ -37,6 +37,9 @@ import { Badge } from "@/components/ui/badge"
 import { JournalEntryList } from "./journal-entry-list"
 import { ChartOfAccountsEditor } from "./chart-of-accounts-editor"
 import { BankFeed } from "./bank-feed"
+import { SalesTaxManager } from "./sales-tax-manager"
+import { PeriodClose } from "./period-close"
+import { AuditTrail } from "./audit-trail"
 import {
   getProfitAndLoss,
   getBalanceSheet,
@@ -431,10 +434,16 @@ export function FinancialDashboard({
           {isOwner && (
             <TabsTrigger value="bank-feed">Bank Feed</TabsTrigger>
           )}
+          {/* Sales Tax — visible to all owners (applies to billing, not just accountant mode) */}
+          {isOwner && (
+            <TabsTrigger value="sales-tax">Sales Tax</TabsTrigger>
+          )}
           {accountantTabsVisible && (
             <>
               <TabsTrigger value="journal">Journal Entries</TabsTrigger>
               <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
+              <TabsTrigger value="periods">Period Close</TabsTrigger>
+              <TabsTrigger value="audit">Audit Trail</TabsTrigger>
             </>
           )}
         </TabsList>
@@ -871,6 +880,27 @@ export function FinancialDashboard({
                 }}
               />
             )}
+          </TabsContent>
+        )}
+
+        {/* ── Sales Tax tab (owner, both modes) ─────────────────────────── */}
+        {isOwner && (
+          <TabsContent value="sales-tax" className="mt-6">
+            <SalesTaxManager />
+          </TabsContent>
+        )}
+
+        {/* ── Period Close tab (accountant mode) ────────────────────────── */}
+        {accountantTabsVisible && (
+          <TabsContent value="periods" className="mt-6">
+            <PeriodClose />
+          </TabsContent>
+        )}
+
+        {/* ── Audit Trail tab (accountant mode) ─────────────────────────── */}
+        {accountantTabsVisible && (
+          <TabsContent value="audit" className="mt-6">
+            <AuditTrail />
           </TabsContent>
         )}
       </Tabs>
