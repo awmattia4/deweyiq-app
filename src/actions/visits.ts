@@ -54,6 +54,8 @@ export interface StopContext {
   }>
   /** Service type name (checklist template name) */
   serviceTypeName: string | null
+  /** Phase 9 gap closure: route_stops.id for marking started_at */
+  routeStopId: string | null
   /** Work order details (only present for WO stops) */
   workOrder: {
     title: string
@@ -211,6 +213,7 @@ export async function getStopContext(
       const today = toLocalDateString()
       const routeStopRows = await db
         .select({
+          id: routeStops.id,
           checklistTemplateId: routeStops.checklist_template_id,
           workOrderId: routeStops.work_order_id,
         })
@@ -403,6 +406,7 @@ export async function getStopContext(
         chemicalProducts: products,
         checklistTasks: mergedTasks,
         serviceTypeName,
+        routeStopId: currentStop?.id ?? null,
         workOrder: workOrderContext,
       } satisfies StopContext
     })

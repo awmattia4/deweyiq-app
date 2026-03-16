@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback, useEffect } from "react"
+import { useMemo, useState, useCallback, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -14,6 +14,8 @@ import {
   SkipForwardIcon,
   AlertTriangleIcon,
   FlagIcon,
+  WrenchIcon,
+  PackageIcon,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -27,7 +29,7 @@ import { Button } from "@/components/ui/button"
 import { ChemistryGrid } from "@/components/field/chemistry-grid"
 import { ChemistryDosing } from "@/components/field/chemistry-dosing"
 import { Checklist } from "@/components/field/checklist"
-import { PhotoCapture } from "@/components/field/photo-capture"
+import { PhotoCapture, processPhotoQueue } from "@/components/field/photo-capture"
 import { NotesField } from "@/components/field/notes-field"
 import { CompletionModal, SkipStopDialog, OverrideWarningSheet } from "@/components/field/completion-modal"
 import { FlagIssueSheet } from "@/components/work-orders/flag-issue-sheet"
@@ -35,7 +37,7 @@ import { useVisitDraft } from "@/hooks/use-visit-draft"
 import { useLiveQuery } from "dexie-react-hooks"
 import { offlineDb } from "@/lib/offline/db"
 import { enqueueWrite } from "@/lib/offline/sync"
-import { completeStop, skipStop } from "@/actions/visits"
+import { completeStop, skipStop, markStopStarted } from "@/actions/visits"
 import type { StopContext, CompleteStopWarnings } from "@/actions/visits"
 import type { FullChemistryReadings } from "@/lib/chemistry/dosing"
 import { cn } from "@/lib/utils"
@@ -127,6 +129,13 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
     }
   }, [isEditMode])
 
+  // ── Mark stop as started (Phase 9: captures started_at for duration metrics) ──
+  useEffect(() => {
+    if (isCompleted || !context.routeStopId) return
+    // Fire-and-forget — failure is non-fatal per markStopStarted's design
+    markStopStarted(context.routeStopId).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Discard edits — revert draft to completed and navigate to intended destination
   const handleDiscardEdits = useCallback(async () => {
     await completeDraft() // sets status back to "completed"
@@ -165,6 +174,16 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
       phosphates: c["phosphates"] ?? null,
     }
   }, [draft?.chemistry])
+
+  // ── Dosing amounts ref — captures latest recs from ChemistryDosing ───────
+  // Using a ref instead of state avoids re-renders every time dosing changes.
+  // Reading from the ref in executeComplete is synchronous with no stale closure risk.
+
+  const dosingAmountsRef = useRef<Array<{ chemical: string; productId: string; amount: number; unit: string }>>([])
+
+  const handleDosingChange = useCallback((amounts: Array<{ chemical: string; productId: string; amount: number; unit: string }>) => {
+    dosingAmountsRef.current = amounts
+  }, [])
 
   // ── Minimum data check for enabling Complete button ─────────────────────
 
@@ -211,6 +230,12 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
       setIsSubmitting(true)
 
       try {
+        // Flush any pending photo uploads before reading paths —
+        // without this, photos still uploading at completion time get silently dropped.
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          await processPhotoQueue(visitId, context.orgId)
+        }
+
         const photoStoragePaths = await getUploadedPhotoPaths()
 
         // Use draft.id (original visitId) so re-completion updates the same
@@ -225,6 +250,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           notes: draft.notes,
           photoStoragePaths,
           overrideWarnings,
+          dosingAmounts: dosingAmountsRef.current.length > 0 ? dosingAmountsRef.current : undefined,
         }
 
         if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -377,6 +403,9 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             </h1>
             <p className="text-sm text-muted-foreground truncate">
               {context.poolName}
+              {context.serviceTypeName && (
+                <span className="ml-1 opacity-70">· {context.serviceTypeName}</span>
+              )}
             </p>
           </div>
         </div>
@@ -388,6 +417,57 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             <span className="text-sm font-medium text-green-400">
               Stop completed
             </span>
+          </div>
+        )}
+
+        {/* ── Work order instructions banner ─────────────────────────────── */}
+        {context.workOrder && (
+          <div className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <WrenchIcon className="h-4 w-4 text-amber-400 shrink-0" />
+              <span className="text-sm font-semibold text-amber-300 truncate">
+                {context.workOrder.title}
+              </span>
+              <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-300 leading-none capitalize">
+                {context.workOrder.category}
+              </span>
+              {context.workOrder.priority !== "normal" && (
+                <span className={cn(
+                  "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none capitalize",
+                  context.workOrder.priority === "urgent"
+                    ? "bg-red-500/15 border border-red-500/30 text-red-300"
+                    : "bg-blue-500/15 border border-blue-500/30 text-blue-300"
+                )}>
+                  {context.workOrder.priority}
+                </span>
+              )}
+            </div>
+            {context.workOrder.description && (
+              <p className="text-sm text-amber-200/80 leading-relaxed whitespace-pre-line">
+                {context.workOrder.description}
+              </p>
+            )}
+            {context.workOrder.lineItems.length > 0 && (
+              <div className="space-y-1 pt-1">
+                <p className="text-[11px] font-medium text-amber-300/70 uppercase tracking-wider flex items-center gap-1">
+                  <PackageIcon className="h-3 w-3" />
+                  Parts &amp; Materials
+                </p>
+                <ul className="space-y-0.5">
+                  {context.workOrder.lineItems.map((item, i) => (
+                    <li key={i} className="text-xs text-amber-200/70 flex items-baseline gap-1.5">
+                      <span className="text-amber-400/50">·</span>
+                      <span>{item.description}</span>
+                      {(item.quantity !== "1" || item.unit !== "ea") && (
+                        <span className="text-amber-300/50">
+                          ({item.quantity} {item.unit})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -446,6 +526,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
                 sanitizerType: context.sanitizerType,
               }}
               products={context.chemicalProducts}
+              onDosingChange={handleDosingChange}
             />
           </TabsContent>
 
@@ -477,7 +558,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             value="photos"
             className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150"
           >
-            <PhotoCapture visitId={visitId} orgId={context.orgId} />
+            <PhotoCapture visitId={visitId} orgId={context.orgId} readOnly={isCompleted} />
           </TabsContent>
 
           {/* ── Notes tab ─────────────────────────────────────────────────── */}
