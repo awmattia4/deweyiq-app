@@ -446,6 +446,13 @@ Plans:
   - Customer list needs sorting options — sort by recently serviced, alphabetical, route assignment, account status, etc.
   - Schedule page only shows Monday–Friday — no way to schedule or view Saturday/Sunday routes
   - Photo requirement enforcement gap: `requires_photo` flag exists on checklist tasks (schema + settings UI + customer overrides all wired) but `completeStop` server action doesn't validate it — techs can complete stops without photos even when `requires_photo: true`. Fix: add photo validation to the warn-but-allow enforcement block in `completeStop` (same pattern as chemistry/checklist enforcement)
+  - Route page progress tracker lumps route stops and work orders together — should show them separately
+  - Drive time on maps shows raw minutes ("90 mins") instead of human-friendly format ("1hr 30 mins")
+  - Route page doesn't group co-located stops (pool + spa at same address) — shows them as separate cards
+  - Stop card doesn't prominently show service type below customer name
+  - No overdue/balance indicator visible in the field app — tech/owner can't see if customer owes money while on-site
+  - Owner can't create/send estimates from the field app — must go back to office to use quote builder
+  - Chemistry color indicators jump straight from green to red at range boundaries — no yellow warning zone at 7.2/7.8 pH or 60-80/120-140 alkalinity
 **Success Criteria** (what must be TRUE):
 
   *Interactive States:*
@@ -539,6 +546,21 @@ Plans:
 
   *Calendar Schedule View:*
   49. All roles (owner, office, tech) have a calendar view of their route/schedule — monthly calendar showing stop counts per day, color-coded by status (scheduled, complete, skipped), with click-to-drill into any day's full route list. Owner/office see all techs' schedules overlaid or filterable by tech. Techs see only their own stops. Provides a big-picture view of workload density, coverage gaps, and schedule patterns that the current day-by-day list view doesn't surface
+
+  *Route Page Enhancements:*
+  51. Route progress tracker shows separate counts — "X route stops, X work order(s)" (plural when >1) plus a total — instead of lumping everything into "X of Y stops"
+  52. Drive time on ALL maps (schedule, dispatch, route) formats as human-friendly durations — "1hr 30 mins" instead of "90 mins", "2hr 15 mins" instead of "135 mins"; under 60 minutes stays as "45 mins"
+  53. When multiple services exist at the same stop address (pool + spa, or pool + work order), the route page groups them into a single stop card with a multi-service indicator showing each service as a swipeable page/tab (e.g. "Main Pool", "Spa", "WO: Replace pump") — tech can complete each service independently within the grouped card, and the stop workflow shows sub-pages for each service with its own chemistry/checklist/photos
+  54. Stop card shows the service type prominently below the customer name — e.g. "Complete Care" for routine service or "Install new pump motor" for work orders — not buried in small text on a metadata line
+
+  *Field App Overdue Visibility:*
+  55. Owner/office see customer account balance and overdue status on the stop card in the field app (badge: "Overdue $X") — useful for knowing a customer hasn't paid while on-site. Techs see a simple "Account overdue" indicator without dollar amounts (role-appropriate: owner sees financials, tech sees status only)
+
+  *Field Estimate/Quote Creation:*
+  56. Owner can create and send a quote/estimate directly from the field app while at a job — tap "Create Estimate" from the stop detail or customer profile, add line items (parts + labor), generate PDF, and send via email/SMS to the customer on the spot. Uses the existing quote infrastructure (Phase 6) with a mobile-optimized creation UI
+
+  *Chemistry Range Refinements:*
+  57. Chemistry color indicators use a 3-zone system (green/yellow/red) with yellow warning zones at range boundaries — pH shows yellow at 7.2 and 7.8 (not jumping straight to red), alkalinity shows yellow at 60-80 and 120-140 (approaching out-of-range). Configurable via org_settings custom_chemistry_targets. Default ranges refined based on real pool tech feedback
 **Plans**: TBD
 
 Plans:
@@ -591,6 +613,7 @@ Plans:
   32. If a card expires and auto-renewal fails, the owner gets an in-app banner + email notification with a direct link to update their payment method — before the grace period even starts
   33. Subscription status is always accurate in the app — webhook-synced, not stale; covers edge cases: partial refunds, disputed charges, Stripe-initiated cancellations, payment method removed externally via Stripe dashboard
   34. Only the owner role can access the Billing tab and manage the subscription — techs and office users see the trial/expiry banner but cannot change billing
+  35. Subscription invoices are branded with the DeweyIQ logo and available as downloadable PDFs from the Settings → Billing invoice history — Stripe invoice branding configured with DeweyIQ logo, colors, and company info so invoices look professional whether viewed in-app or forwarded to an accountant
 **Plans**: 14 plans
 
 Plans:
