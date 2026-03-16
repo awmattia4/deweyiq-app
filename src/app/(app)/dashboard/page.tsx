@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { getCurrentUser } from "@/actions/auth"
-import { getAlertCountByType } from "@/actions/alerts"
+import { getAlertCountByType, getPredictiveAlerts } from "@/actions/alerts"
 import { withRls } from "@/lib/db"
 import { profiles, orgs, routeStops } from "@/lib/db/schema"
 import { eq, count, and } from "drizzle-orm"
@@ -21,9 +21,10 @@ import {
   MapIcon,
   PlusIcon,
   CalendarDaysIcon,
-  ActivityIcon,
   BellIcon,
   CheckCircle2Icon,
+  TrendingDownIcon,
+  TrendingUpIcon,
 } from "lucide-react"
 
 export const metadata: Metadata = {
@@ -104,13 +105,18 @@ export default async function DashboardPage() {
     console.error("[DashboardPage] Failed to fetch org data:", err)
   }
 
-  // Fetch alert counts for dashboard summary card (non-fatal)
-  const alertCounts = await getAlertCountByType().catch(() => ({
-    total: 0,
-    missed_stop: 0,
-    declining_chemistry: 0,
-    incomplete_data: 0,
-  }))
+  // Fetch alert counts and predictive alerts for dashboard summary (non-fatal)
+  const [alertCounts, predictiveAlerts] = await Promise.all([
+    getAlertCountByType().catch(() => ({
+      total: 0,
+      missed_stop: 0,
+      declining_chemistry: 0,
+      incomplete_data: 0,
+      unprofitable_pool: 0,
+      predictive_chemistry: 0,
+    })),
+    getPredictiveAlerts().catch(() => []),
+  ])
 
   const firstName = user.full_name?.split(" ")[0] || "there"
   const today = new Date().toLocaleDateString("en-US", {
@@ -225,6 +231,58 @@ export default async function DashboardPage() {
           </Card>
         </Link>
       </div>
+
+      {/* ── Predictive chemistry trends (only when alerts exist) ────────── */}
+      {predictiveAlerts.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Predictive Chemistry Trends
+            </h2>
+            <Link
+              href="/alerts?filter=predictive_chemistry"
+              className="text-xs text-primary hover:underline cursor-pointer"
+            >
+              View all {predictiveAlerts.length}
+            </Link>
+          </div>
+          <div className="flex flex-col gap-2">
+            {predictiveAlerts.slice(0, 3).map((alert) => {
+              const meta = alert.metadata as {
+                parameter: string
+                direction: "low" | "high"
+                projectedNext: number
+                unit: string
+                isEarlyPrediction: boolean
+                customerId: string
+              } | null
+
+              if (!meta) return null
+              const TrendIcon = meta.direction === "low" ? TrendingDownIcon : TrendingUpIcon
+              const trendColor = meta.direction === "low" ? "text-blue-400" : "text-orange-400"
+
+              return (
+                <Link
+                  key={alert.id}
+                  href={`/customers/${meta.customerId}`}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 hover:border-border/80 hover:bg-card/80 transition-colors cursor-pointer"
+                >
+                  <TrendIcon className={`h-4 w-4 shrink-0 ${trendColor}`} aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{alert.title}</p>
+                    <p className={`text-xs mt-0.5 ${trendColor}`}>
+                      Projected: {meta.projectedNext.toFixed(1)}{meta.unit ? ` ${meta.unit}` : ""}
+                      {meta.isEarlyPrediction && (
+                        <span className="ml-2 text-muted-foreground/60">(early prediction)</span>
+                      )}
+                    </p>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <div>

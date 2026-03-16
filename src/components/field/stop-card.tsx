@@ -2,12 +2,34 @@
 
 import type { CSSProperties } from "react"
 import Link from "next/link"
-import { MapPinIcon, GripVerticalIcon, WavesIcon, FlameIcon, SparklesIcon } from "lucide-react"
+import { MapPinIcon, GripVerticalIcon, WavesIcon, FlameIcon, SparklesIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { RouteStop } from "@/actions/routes"
 import type { WeatherType } from "@/lib/weather/open-meteo"
 import { WeatherBadge } from "@/components/weather/weather-badge"
 import type { DraggableSyntheticListeners, DraggableAttributes } from "@dnd-kit/core"
+
+// ─── Predictive alert badge ────────────────────────────────────────────────────
+
+export interface StopPredictiveAlert {
+  parameter: string
+  direction: "low" | "high"
+  projectedNext: number
+  unit: string
+  isEarlyPrediction: boolean
+}
+
+function _formatParamLabel(param: string): string {
+  switch (param) {
+    case "freeChlorine": return "Free Chlorine"
+    case "pH": return "pH"
+    case "totalAlkalinity": return "Total Alkalinity"
+    case "salt": return "Salt"
+    case "cya": return "CYA"
+    case "calciumHardness": return "Calcium Hardness"
+    default: return param
+  }
+}
 
 // ─── Map navigation ───────────────────────────────────────────────────────────
 
@@ -113,6 +135,12 @@ interface StopCardProps {
    * Null when clear — no badge is rendered on the card.
    */
   weather?: { type: WeatherType; label: string } | null
+  /**
+   * Predictive chemistry alert for this pool, if any.
+   * Shown as a compact amber badge on the stop card — heads-up before arrival.
+   * Per locked decision: "tech gets heads-up before arriving at a trending pool."
+   */
+  predictiveAlert?: StopPredictiveAlert | null
 }
 
 /**
@@ -134,6 +162,7 @@ export function StopCard({
   dragAttributes,
   className,
   weather,
+  predictiveAlert,
 }: StopCardProps) {
   const lastServiceLabel = stop.lastServiceDate
     ? new Date(stop.lastServiceDate).toLocaleDateString("en-US", {
@@ -237,6 +266,23 @@ export function StopCard({
           <div className="mt-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-1">
             <p className="text-[11px] text-amber-300/90 leading-snug line-clamp-2">
               {notesText}
+            </p>
+          </div>
+        )}
+
+        {/* Row 5: Predictive chemistry alert badge — heads-up before arrival */}
+        {predictiveAlert && (
+          <div className="mt-0.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-400/30 px-2 py-1">
+            {predictiveAlert.direction === "low" ? (
+              <TrendingDownIcon className="h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+            ) : (
+              <TrendingUpIcon className="h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+            )}
+            <p className="text-[11px] text-amber-300/90 leading-snug">
+              {_formatParamLabel(predictiveAlert.parameter)} trending {predictiveAlert.direction}
+              {predictiveAlert.isEarlyPrediction && (
+                <span className="text-amber-400/60 ml-1">(early)</span>
+              )}
             </p>
           </div>
         )}

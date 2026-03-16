@@ -3,9 +3,11 @@ import { redirect } from "next/navigation"
 import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
 import { getTodayStops, getRouteStartedStatus, getRouteAreaCoordinates } from "@/actions/routes"
+import { getPredictiveAlertsForPools } from "@/actions/alerts"
 import { fetchWeatherForecast, classifyWeatherDay } from "@/lib/weather/open-meteo"
 import type { WeatherType } from "@/lib/weather/open-meteo"
 import { StopList } from "@/components/field/stop-list"
+import type { StopPredictiveAlert } from "@/components/field/stop-card"
 import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
 import { StartRouteButton } from "@/components/field/start-route-button"
@@ -75,6 +77,21 @@ export default async function RoutesPage() {
     }
   }
 
+  // ── Predictive chemistry alerts (Phase 10-02) ─────────────────────────────
+  // Fetch predictive chemistry alerts for the pools on today's route.
+  // Uses adminDb server-side so techs can see alerts without office-level RLS access.
+  // Returns Record<poolId, alert> for efficient lookup by stop card.
+  let predictiveAlerts: Record<string, StopPredictiveAlert> = {}
+
+  if (stops.length > 0) {
+    const poolIds = stops.map((s) => s.poolId).filter(Boolean)
+    const alertsMap = await getPredictiveAlertsForPools(user.org_id, poolIds).catch(() => new Map())
+    // Convert Map to plain Record for client component serialization
+    for (const [poolId, alert] of alertsMap) {
+      predictiveAlerts[poolId] = alert
+    }
+  }
+
   // Calculate completed stops for the progress bar
   const completedStops = stops.filter(
     (s) => s.stopStatus === "complete" || s.stopStatus === "skipped"
@@ -121,7 +138,7 @@ export default async function RoutesPage() {
       )}
 
       {/* ── Stop list ────────────────────────────────────────────────────── */}
-      <StopList initialStops={stops} weather={todayWeather} />
+      <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} />
 
       {/* ── Tech context footer ──────────────────────────────────────────── */}
       {user.role === "tech" && (

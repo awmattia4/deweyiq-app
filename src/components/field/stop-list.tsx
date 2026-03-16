@@ -24,6 +24,7 @@ import { offlineDb } from "@/lib/offline/db"
 import type { RouteStop } from "@/actions/routes"
 import type { WeatherType } from "@/lib/weather/open-meteo"
 import { StopCard } from "./stop-card"
+import type { StopPredictiveAlert } from "./stop-card"
 import { cn } from "@/lib/utils"
 
 // ─── SortableStopCard wrapper ─────────────────────────────────────────────────
@@ -32,6 +33,7 @@ interface SortableStopCardProps {
   stop: RouteStop
   showDragHandle: boolean
   weather: { type: WeatherType; label: string } | null
+  predictiveAlerts: Record<string, StopPredictiveAlert>
 }
 
 /**
@@ -41,7 +43,7 @@ interface SortableStopCardProps {
  * Drag handle receives listeners/attributes from useSortable for touch/mouse
  * activation.
  */
-function SortableStopCard({ stop, showDragHandle, weather }: SortableStopCardProps) {
+function SortableStopCard({ stop, showDragHandle, weather, predictiveAlerts }: SortableStopCardProps) {
   const {
     attributes,
     listeners,
@@ -76,6 +78,7 @@ function SortableStopCard({ stop, showDragHandle, weather }: SortableStopCardPro
         dragListeners={listeners ?? undefined}
         dragAttributes={attributes}
         weather={weather}
+        predictiveAlert={predictiveAlerts[stop.poolId] ?? null}
       />
     </div>
   )
@@ -91,6 +94,12 @@ interface StopListProps {
    * Passed to each stop card. Null when clear (no badge shown).
    */
   weather: { type: WeatherType; label: string } | null
+  /**
+   * Predictive chemistry alerts keyed by pool_id.
+   * Passed through to each stop card for optional alert badge display.
+   * Phase 10-02: techs get a heads-up before arriving at a trending pool.
+   */
+  predictiveAlerts?: Record<string, StopPredictiveAlert>
 }
 
 /**
@@ -115,8 +124,9 @@ interface StopListProps {
  * Empty state: "No stops scheduled for today" with map pin icon.
  *
  * Phase 10-07: weather prop passed through to each stop card for weather badges.
+ * Phase 10-02: predictiveAlerts prop passed through to each stop card for alert badges.
  */
-export function StopList({ initialStops, weather }: StopListProps) {
+export function StopList({ initialStops, weather, predictiveAlerts = {} }: StopListProps) {
   const [stops, setStops] = useState<RouteStop[]>(initialStops)
 
   // Sensor configuration
@@ -217,6 +227,7 @@ export function StopList({ initialStops, weather }: StopListProps) {
               stop={stop}
               showDragHandle={showDragHandles}
               weather={weather}
+              predictiveAlerts={predictiveAlerts}
             />
           ))}
         </div>

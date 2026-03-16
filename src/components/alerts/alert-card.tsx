@@ -2,9 +2,20 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { XIcon, ClockIcon } from "lucide-react"
+import Link from "next/link"
+import { XIcon, ClockIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { dismissAlert, snoozeAlert } from "@/actions/alerts"
+import type { Alert } from "@/lib/alerts/constants"
+import { SNOOZE_OPTIONS } from "@/lib/alerts/constants"
 
 // ─── Relative time helper ─────────────────────────────────────────────────────
 
@@ -21,16 +32,59 @@ function formatRelativeTime(date: Date): string {
   if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { dismissAlert, snoozeAlert } from "@/actions/alerts"
-import type { Alert } from "@/lib/alerts/constants"
-import { SNOOZE_OPTIONS } from "@/lib/alerts/constants"
+
+// ─── Predictive chemistry detail ──────────────────────────────────────────────
+
+interface PredictiveMetadata {
+  parameter: string
+  slope: number
+  rSquared: number
+  projectedNext: number
+  visitCount: number
+  isEarlyPrediction: boolean
+  direction: "low" | "high"
+  customerId: string
+  poolName: string
+  customerName: string
+  targetMin: number | null
+  targetMax: number | null
+  unit: string
+}
+
+function PredictiveChemistryDetail({ metadata }: { metadata: PredictiveMetadata }) {
+  const TrendIcon = metadata.direction === "low" ? TrendingDownIcon : TrendingUpIcon
+  const trendColor = metadata.direction === "low" ? "text-blue-400" : "text-orange-400"
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {/* Trend icon + projected value */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <TrendIcon className={cn("h-3.5 w-3.5 shrink-0", trendColor)} aria-hidden="true" />
+        <span>
+          Projected next:{" "}
+          <span className={cn("font-medium", trendColor)}>
+            {metadata.projectedNext.toFixed(1)}
+            {metadata.unit ? ` ${metadata.unit}` : ""}
+          </span>
+          {(metadata.targetMin != null || metadata.targetMax != null) && (
+            <span className="text-muted-foreground/60 ml-1">
+              (target: {metadata.targetMin ?? ""}–{metadata.targetMax ?? ""}{metadata.unit ? ` ${metadata.unit}` : ""})
+            </span>
+          )}
+        </span>
+      </div>
+
+      {/* Early prediction disclaimer */}
+      {metadata.isEarlyPrediction && (
+        <div className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 w-fit">
+          <span className="text-[10px] text-blue-400 font-medium">
+            Early prediction — accuracy improves with more data ({metadata.visitCount} visits)
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Severity indicator ────────────────────────────────────────────────────────
 
@@ -56,6 +110,9 @@ function AlertTypeLabel({ alertType }: { alertType: Alert["alert_type"] }) {
     declining_chemistry: { label: "Declining Chemistry", className: "text-amber-400" },
     incomplete_data: { label: "Incomplete Data", className: "text-blue-400" },
     work_order_flagged: { label: "Issue Flagged", className: "text-amber-400" },
+    unprofitable_pool: { label: "Unprofitable Pool", className: "text-orange-400" },
+    equipment_degradation: { label: "Equipment", className: "text-amber-400" },
+    predictive_chemistry: { label: "Predictive Trend", className: "text-violet-400" },
   }
   const { label, className } = config[alertType] ?? { label: alertType, className: "text-muted-foreground" }
 
@@ -117,14 +174,19 @@ export function AlertCard({ alert }: AlertCardProps) {
 
   const isActing = isDismissing || isSnoozingOption !== null
 
-  return (
-    <div
-      className={cn(
-        "group flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3",
-        "transition-colors hover:border-border/80 hover:bg-card/80",
-        isActing && "pointer-events-none opacity-60"
-      )}
-    >
+  // Extract predictive metadata for enhanced rendering
+  const isPredictive = alert.alert_type === "predictive_chemistry"
+  const predictiveMeta = isPredictive
+    ? (alert.metadata as PredictiveMetadata | null)
+    : null
+
+  // Customer link for predictive alerts (navigate to customer profile)
+  const customerHref = predictiveMeta?.customerId
+    ? `/customers/${predictiveMeta.customerId}`
+    : null
+
+  const cardContent = (
+    <>
       {/* Severity dot */}
       <SeverityDot severity={alert.severity} />
 
@@ -136,11 +198,14 @@ export function AlertCard({ alert }: AlertCardProps) {
             <p className="mt-0.5 text-sm font-medium text-foreground leading-snug">
               {alert.title}
             </p>
-            {alert.description && (
+            {/* Predictive chemistry: show structured detail instead of plain description */}
+            {isPredictive && predictiveMeta ? (
+              <PredictiveChemistryDetail metadata={predictiveMeta} />
+            ) : alert.description ? (
               <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
                 {alert.description}
               </p>
-            )}
+            ) : null}
           </div>
 
           {/* Actions */}
@@ -196,6 +261,34 @@ export function AlertCard({ alert }: AlertCardProps) {
         {/* Timestamp */}
         <p className="mt-1.5 text-xs text-muted-foreground/70">{relativeTime}</p>
       </div>
+    </>
+  )
+
+  // Predictive alerts are wrapped in a link to the customer profile
+  if (customerHref) {
+    return (
+      <Link
+        href={customerHref}
+        className={cn(
+          "group flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3",
+          "transition-colors hover:border-border/80 hover:bg-card/80 cursor-pointer",
+          isActing && "pointer-events-none opacity-60"
+        )}
+      >
+        {cardContent}
+      </Link>
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        "group flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3",
+        "transition-colors hover:border-border/80 hover:bg-card/80",
+        isActing && "pointer-events-none opacity-60"
+      )}
+    >
+      {cardContent}
     </div>
   )
 }
