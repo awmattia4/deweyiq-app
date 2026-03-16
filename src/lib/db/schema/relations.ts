@@ -37,6 +37,18 @@ import { userNotifications } from "./user-notifications"
 import { pushSubscriptions } from "./push-subscriptions"
 import { notificationPreferences } from "./notification-prefs"
 import { weatherRescheduleProposals } from "./weather-proposals"
+import { timeEntries, breakEvents, timeEntryStops } from "./time-entries"
+import { chartOfAccounts, journalEntries, journalEntryLines, accountingPeriods } from "./accounting"
+import { bankAccounts, bankTransactions } from "./bank-accounts"
+import {
+  ptoBalances,
+  ptoRequests,
+  employeeAvailability,
+  employeeBlockedDates,
+  employeeDocuments,
+  mileageLogs,
+  vendors,
+} from "./team-management"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -301,3 +313,151 @@ export const weatherRescheduleProposalsRelations = relations(
     }),
   })
 )
+
+// Phase 11 relations
+
+export const timeEntriesRelations = relations(timeEntries, ({ one, many }) => ({
+  org: one(orgs, { fields: [timeEntries.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [timeEntries.tech_id], references: [profiles.id] }),
+  breakEvents: many(breakEvents),
+  timeEntryStops: many(timeEntryStops),
+  mileageLogs: many(mileageLogs),
+}))
+
+export const breakEventsRelations = relations(breakEvents, ({ one }) => ({
+  org: one(orgs, { fields: [breakEvents.org_id], references: [orgs.id] }),
+  timeEntry: one(timeEntries, {
+    fields: [breakEvents.time_entry_id],
+    references: [timeEntries.id],
+  }),
+}))
+
+export const timeEntryStopsRelations = relations(timeEntryStops, ({ one }) => ({
+  org: one(orgs, { fields: [timeEntryStops.org_id], references: [orgs.id] }),
+  timeEntry: one(timeEntries, {
+    fields: [timeEntryStops.time_entry_id],
+    references: [timeEntries.id],
+  }),
+  routeStop: one(routeStops, {
+    fields: [timeEntryStops.route_stop_id],
+    references: [routeStops.id],
+  }),
+}))
+
+export const chartOfAccountsRelations = relations(chartOfAccounts, ({ one, many }) => ({
+  org: one(orgs, { fields: [chartOfAccounts.org_id], references: [orgs.id] }),
+  // Self-referencing parent account
+  parent: one(chartOfAccounts, {
+    fields: [chartOfAccounts.parent_id],
+    references: [chartOfAccounts.id],
+    relationName: "account_parent",
+  }),
+  children: many(chartOfAccounts, { relationName: "account_parent" }),
+  journalEntryLines: many(journalEntryLines),
+  bankAccounts: many(bankAccounts),
+}))
+
+export const journalEntriesRelations = relations(journalEntries, ({ one, many }) => ({
+  org: one(orgs, { fields: [journalEntries.org_id], references: [orgs.id] }),
+  createdBy: one(profiles, {
+    fields: [journalEntries.created_by],
+    references: [profiles.id],
+  }),
+  lines: many(journalEntryLines),
+  // Self-referencing reversal
+  reversalOf: one(journalEntries, {
+    fields: [journalEntries.reversal_of],
+    references: [journalEntries.id],
+    relationName: "entry_reversal",
+  }),
+  reversals: many(journalEntries, { relationName: "entry_reversal" }),
+  bankTransactions: many(bankTransactions),
+}))
+
+export const journalEntryLinesRelations = relations(journalEntryLines, ({ one }) => ({
+  org: one(orgs, { fields: [journalEntryLines.org_id], references: [orgs.id] }),
+  journalEntry: one(journalEntries, {
+    fields: [journalEntryLines.journal_entry_id],
+    references: [journalEntries.id],
+  }),
+  account: one(chartOfAccounts, {
+    fields: [journalEntryLines.account_id],
+    references: [chartOfAccounts.id],
+  }),
+}))
+
+export const accountingPeriodsRelations = relations(accountingPeriods, ({ one }) => ({
+  org: one(orgs, { fields: [accountingPeriods.org_id], references: [orgs.id] }),
+  closedBy: one(profiles, {
+    fields: [accountingPeriods.closed_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const bankAccountsRelations = relations(bankAccounts, ({ one, many }) => ({
+  org: one(orgs, { fields: [bankAccounts.org_id], references: [orgs.id] }),
+  chartOfAccount: one(chartOfAccounts, {
+    fields: [bankAccounts.chart_of_accounts_id],
+    references: [chartOfAccounts.id],
+  }),
+  transactions: many(bankTransactions),
+}))
+
+export const bankTransactionsRelations = relations(bankTransactions, ({ one }) => ({
+  org: one(orgs, { fields: [bankTransactions.org_id], references: [orgs.id] }),
+  bankAccount: one(bankAccounts, {
+    fields: [bankTransactions.bank_account_id],
+    references: [bankAccounts.id],
+  }),
+  matchedEntry: one(journalEntries, {
+    fields: [bankTransactions.matched_entry_id],
+    references: [journalEntries.id],
+  }),
+}))
+
+export const ptoBalancesRelations = relations(ptoBalances, ({ one }) => ({
+  org: one(orgs, { fields: [ptoBalances.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [ptoBalances.tech_id], references: [profiles.id] }),
+}))
+
+export const ptoRequestsRelations = relations(ptoRequests, ({ one }) => ({
+  org: one(orgs, { fields: [ptoRequests.org_id], references: [orgs.id] }),
+  tech: one(profiles, {
+    fields: [ptoRequests.tech_id],
+    references: [profiles.id],
+    relationName: "ptoRequest_tech",
+  }),
+  reviewedBy: one(profiles, {
+    fields: [ptoRequests.reviewed_by],
+    references: [profiles.id],
+    relationName: "ptoRequest_reviewedBy",
+  }),
+}))
+
+export const employeeAvailabilityRelations = relations(employeeAvailability, ({ one }) => ({
+  org: one(orgs, { fields: [employeeAvailability.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [employeeAvailability.tech_id], references: [profiles.id] }),
+}))
+
+export const employeeBlockedDatesRelations = relations(employeeBlockedDates, ({ one }) => ({
+  org: one(orgs, { fields: [employeeBlockedDates.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [employeeBlockedDates.tech_id], references: [profiles.id] }),
+}))
+
+export const employeeDocumentsRelations = relations(employeeDocuments, ({ one }) => ({
+  org: one(orgs, { fields: [employeeDocuments.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [employeeDocuments.tech_id], references: [profiles.id] }),
+}))
+
+export const mileageLogsRelations = relations(mileageLogs, ({ one }) => ({
+  org: one(orgs, { fields: [mileageLogs.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [mileageLogs.tech_id], references: [profiles.id] }),
+  timeEntry: one(timeEntries, {
+    fields: [mileageLogs.time_entry_id],
+    references: [timeEntries.id],
+  }),
+}))
+
+export const vendorsRelations = relations(vendors, ({ one }) => ({
+  org: one(orgs, { fields: [vendors.org_id], references: [orgs.id] }),
+}))

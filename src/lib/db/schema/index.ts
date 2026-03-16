@@ -51,6 +51,12 @@ export * from "./push-subscriptions"
 export * from "./notification-prefs"
 export * from "./weather-proposals"
 
+// Phase 11 tables
+export * from "./time-entries"
+export * from "./accounting"
+export * from "./bank-accounts"
+export * from "./team-management"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

@@ -30,6 +30,10 @@ export const profiles = pgTable(
     pay_type: text("pay_type").default("per_stop"),
     // Phase 9: Dollar amount per stop (if pay_type='per_stop') or per hour (if pay_type='hourly')
     pay_rate: numeric("pay_rate", { precision: 10, scale: 2 }),
+    // Phase 11: QuickBooks Online employee entity ID.
+    // When QBO time push is enabled, time entries are pushed to this QBO Employee ID.
+    // Null = not yet linked to a QBO employee (fallback to CSV export).
+    qbo_employee_id: text("qbo_employee_id"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

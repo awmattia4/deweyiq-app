@@ -1,4 +1,4 @@
-import { boolean, doublePrecision, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core"
+import { boolean, date, doublePrecision, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -102,6 +102,23 @@ export const orgSettings = pgTable(
     safety_escalation_chain: jsonb("safety_escalation_chain")
       .$type<Array<{ role: string; delay_minutes: number }>>()
       .default(sql`'[{"role":"owner","delay_minutes":0}]'::jsonb`),
+    // Phase 11: Time tracking settings
+    // Org-level toggle — if false, clock-in/out UI is hidden from tech app
+    time_tracking_enabled: boolean("time_tracking_enabled").notNull().default(false),
+    // Radius (meters) around a stop location within which clock-in is allowed
+    geofence_radius_meters: integer("geofence_radius_meters").notNull().default(100),
+    // Minutes of inactivity before system auto-detects a break
+    break_auto_detect_minutes: integer("break_auto_detect_minutes").notNull().default(30),
+    // Pay period cadence: 'weekly' | 'bi_weekly' | 'semi_monthly'
+    pay_period_type: text("pay_period_type").notNull().default("bi_weekly"),
+    // Weekly hours threshold before overtime pay applies
+    overtime_threshold_hours: integer("overtime_threshold_hours").notNull().default(40),
+    // Phase 11: Accounting settings
+    // Enables double-entry bookkeeping features (chart of accounts, journal entries, P&L)
+    accountant_mode_enabled: boolean("accountant_mode_enabled").notNull().default(false),
+    // When accounting is enabled, sets the historical start date for financial records
+    accounting_start_date: date("accounting_start_date"),
+
     // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
     // No complex queries needed on broadcast history; JSONB avoids a separate table.
     broadcast_history: jsonb("broadcast_history")
