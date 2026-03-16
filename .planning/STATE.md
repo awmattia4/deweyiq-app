@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 9 of 17 (Reporting & Team Analytics) — COMPLETE
-Plan: 5/5 complete (01, 02, 03, 04, 05 done)
-Status: Phase 9 Plan 05 complete — Profitability Dashboard, chemical cost settings, unprofitable pool alerts
-Last activity: 2026-03-15 — Phase 9 Plan 05 committed
+Plan: 6/6 complete (01, 02, 03, 04, 05, 06 done)
+Status: Phase 9 Plan 06 complete — started_at and dosing_amounts capture wired in field stop workflow
+Last activity: 2026-03-16 — Phase 9 Plan 06 committed
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -80,6 +80,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 09-reporting-team-analytics P03 | 3 | 2 tasks | 3 files |
 | Phase 09-reporting-team-analytics P04 | 8 | 2 tasks | 8 files |
 | Phase 09-reporting-team-analytics P05 | 8 | 2 tasks | 9 files |
+| Phase 09-reporting-team-analytics P06 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -306,6 +307,9 @@ Recent decisions affecting current work:
 - [Phase 09-05]: Revenue distributed evenly across customer pools — simpler than proportional, avoids per-pool revenue tracking
 - [Phase 09-05]: Profitability tab owner-only — chemical cost per pool is sensitive, not shown to office
 - [Phase 09-05]: Historical visits without dosing_amounts use generateDosingRecommendations() estimation — marked Est. in UI
+- [Phase 09-06]: routeStopId in StopContext: route_stop id fetched in getStopContext and exposed so client can call markStopStarted without a second query
+- [Phase 09-06]: useRef for dosingAmountsRef: avoids re-renders on chemistry input and stale closure risk in executeComplete — ref read is always synchronous and current
+- [Phase 09-06]: onDosingChange is optional prop on ChemistryDosing: backward-compatible, existing usages outside stop-workflow unaffected
 
 ### Pending Todos
 
@@ -331,7 +335,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-03-16
+Stopped at: Completed 09-06-PLAN.md
 Resume file: Phase 9 complete — Ready for Phase 10
 Resume file: Ready for Phase 9 Plan 05 (Profitability Dashboard)
