@@ -7,10 +7,12 @@ import { customers, pools, profiles } from "@/lib/db/schema"
 import { createClient } from "@/lib/supabase/server"
 import { eq, asc } from "drizzle-orm"
 import type { SupabaseToken } from "@/lib/db"
+import { toLocalDateString } from "@/lib/date-utils"
 import { ScheduleRuleDialog } from "@/components/schedule/schedule-rule-dialog"
 import { HolidayCalendar } from "@/components/schedule/holiday-calendar"
 import { RouteBuilder } from "@/components/schedule/route-builder"
 import { ScheduleTabs } from "@/components/schedule/schedule-tabs"
+import { WorkloadBalancerTrigger } from "@/components/schedule/workload-balancer-trigger"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CalendarDaysIcon, UserIcon, RefreshCwIcon } from "lucide-react"
@@ -163,6 +165,15 @@ export default async function SchedulePage() {
     }
   }
 
+  // Compute Monday of the current ISO week for workload balancer
+  const todayForWeek = new Date()
+  const jsDay = todayForWeek.getDay()
+  const daysFromMonday = jsDay === 0 ? -6 : 1 - jsDay
+  const mondayForWeek = new Date(todayForWeek)
+  mondayForWeek.setDate(todayForWeek.getDate() + daysFromMonday)
+  mondayForWeek.setHours(0, 0, 0, 0)
+  const weekStartDate = toLocalDateString(mondayForWeek)
+
   // Fetch schedule rules and holidays for Rules + Holidays tabs
   const [scheduleRules, holidays] = await Promise.all([
     getScheduleRules(),
@@ -310,11 +321,14 @@ export default async function SchedulePage() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Schedule</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Build routes, manage recurring rules, and set company holidays
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Schedule</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Build routes, manage recurring rules, and set company holidays
+          </p>
+        </div>
+        <WorkloadBalancerTrigger weekStartDate={weekStartDate} />
       </div>
 
       {/* ── Tabbed content ────────────────────────────────────────────────── */}
