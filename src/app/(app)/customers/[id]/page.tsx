@@ -95,6 +95,7 @@ export default async function CustomerProfilePage({
 
   // Flatten service visits from all pools into a single list for the timeline.
   // Each visit gets the pool context attached so the timeline can show pool name.
+  // Phase 10: include internal_notes and internal_flags for office/owner visibility.
   const allVisits = customer.pools.flatMap((pool) =>
     (pool.serviceVisits ?? []).map((sv) => ({
       id: sv.id,
@@ -104,6 +105,8 @@ export default async function CustomerProfilePage({
         : String(sv.visited_at),
       notes: sv.notes,
       chemistry_readings: sv.chemistry_readings as Record<string, number | null> | null,
+      internal_notes: (sv as { internal_notes?: string | null }).internal_notes ?? null,
+      internal_flags: (sv as { internal_flags?: string[] | null }).internal_flags ?? null,
       pool: { id: pool.id, name: pool.name },
       tech: null as { id: string; full_name: string | null } | null,
     }))
@@ -158,7 +161,7 @@ export default async function CustomerProfilePage({
 
         {/* History — vertical timeline of service visits (Phase 3 populates with real data) */}
         <TabsContent value="history" className="mt-6">
-          <ServiceHistoryTimeline visits={allVisits} />
+          <ServiceHistoryTimeline visits={allVisits} userRole={user.role} />
         </TabsContent>
 
         {/* Messages — office-to-customer thread for this customer */}
