@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 5/17 complete (01, 02, 03, 04, 05 done)
-Status: Phase 10 Plan 05 complete — contextual smart suggestions in add-customer and add-pool dialogs
-Last activity: 2026-03-16 — Phase 10 Plan 05 committed
+Status: Phase 10 Plan 03 re-executed — auto-schedule engine and workload balancer UI complete
+Last activity: 2026-03-16 — Phase 10 Plan 03 committed (auto-schedule engine + workload balancer)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -325,6 +325,9 @@ Recent decisions affecting current work:
 - [Phase 10-09]: VAPID lazy config: avoids build errors in dev without keys; graceful skip on missing config
 - [Phase 10-smart-features-ai]: Heuristic 25 min/stop in getWorkloadBalance avoids ORS call; fast enough for imbalance detection
 - [Phase 10-smart-features-ai]: autoScheduleWeek preview-before-persist: returns proposal without writing; applyAutoSchedule persists after office approval
+- [Phase 10-04]: Historical duration query uses adminDb (not withRls) for cross-session ML aggregate queries; explicit org_id filter enforces data isolation
+- [Phase 10-04]: VROOM job.service field set to per-pool historical median service duration in seconds; falls back to org-wide median then 25-min default
+- [Phase 10-04]: AI-Optimized badge requires >= 50% historical coverage; Standard Optimization shown otherwise
 
 ### Pending Todos
 
