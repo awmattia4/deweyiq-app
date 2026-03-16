@@ -16,7 +16,7 @@ Complete QuickBooks replacement for pool service companies — payroll data flow
 ### Payroll Approach
 - Payroll runs through QuickBooks Online — leverage existing Phase 7 QBO bidirectional sync, NOT a separate embedded payroll API. DeweyIQ tracks time/hours/pay rates and pushes payroll data to QBO where the owner actually runs payroll. This avoids duplicating payroll infrastructure and keeps the owner's accountant workflow intact.
 - Support both W-2 employees AND 1099 contractors — pool companies commonly use both
-- Tech self-service for pay stubs, YTD earnings, and direct deposit setup — accessible from the tech's app, reducing owner admin burden. Tax documents (W-2/1099) come from QBO/payroll provider, not DeweyIQ.
+- Tech self-service for viewing their logged hours, pay rates, and timesheet history — accessible from the tech's app. Actual pay stubs, direct deposit setup, tax documents (W-2/1099) come from the owner's existing payroll provider (Gusto, ADP, Paychex, etc.), not DeweyIQ.
 
 ### Time Tracking Experience
 - Time clock is an **org-level toggle** in Settings — optional, not forced on every company. When disabled, no clock-in/out UI appears and time tracking features are hidden entirely.
