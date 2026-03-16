@@ -13,6 +13,7 @@ import { HolidayCalendar } from "@/components/schedule/holiday-calendar"
 import { RouteBuilder } from "@/components/schedule/route-builder"
 import { ScheduleTabs } from "@/components/schedule/schedule-tabs"
 import { WorkloadBalancerTrigger } from "@/components/schedule/workload-balancer-trigger"
+import { WeatherCheckTrigger } from "@/components/schedule/weather-check-trigger"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CalendarDaysIcon, UserIcon, RefreshCwIcon } from "lucide-react"
@@ -328,7 +329,10 @@ export default async function SchedulePage() {
             Build routes, manage recurring rules, and set company holidays
           </p>
         </div>
-        <WorkloadBalancerTrigger weekStartDate={weekStartDate} />
+        <div className="flex items-center gap-2">
+          <WeatherCheckTrigger weekStartDate={weekStartDate} />
+          <WorkloadBalancerTrigger weekStartDate={weekStartDate} />
+        </div>
       </div>
 
       {/* ── Tabbed content ────────────────────────────────────────────────── */}
