@@ -28,6 +28,7 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-table": "^8.21.3",
+    "@types/web-push": "^3.6.4",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -50,6 +51,7 @@
     "sonner": "^2.0.7",
     "stripe": "^20.4.1",
     "tailwind-merge": "^3.5.0",
+    "web-push": "^3.6.7",
     "yet-another-react-lightbox": "^3.29.1",
     "zod": "^4.3.6"
   },
