@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 10 — Smart Features & AI
+**Current focus:** Phase 11 — Payroll, Team Management & Full Accounting
 
 ## Current Position
 
-Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
-Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
-Status: Phase 10 Plan 15 complete — internal tech-to-office notes with flag chips, handoff context, and office-editable timeline annotations
-Last activity: 2026-03-16 — Phase 10 Plan 15 committed (internal service notes)
+Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
+Plan: 1/14 complete (01 done)
+Status: Phase 11 Plan 01 complete — 15 new DB tables (time tracking, accounting, bank feeds, team management), org_settings+profiles extended, CoA seed data
+Last activity: 2026-03-16 — Phase 11 Plan 01 committed (database schema foundation)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -96,6 +96,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P02 | 11 | 2 tasks | 9 files |
 | Phase 10-smart-features-ai P10 | 90 | 2 tasks | 10 files |
 | Phase 10 P08 | 4 | 1 tasks | 2 files |
+| Phase 11-payroll-team-management-full-accounting P01 | 9 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -370,6 +371,9 @@ Recent decisions affecting current work:
 - [Phase 10-15]: InternalNotes collapsible in stop workflow — tech opens when needed, reducing friction on routine stops; previous tech notes nested inside for handoff context
 - [Phase 10-15]: Role gate at prop level for internal notes — userRole passed from server page to ServiceHistoryTimeline; internal notes section absent from DOM for tech/customer roles
 - [Phase 10-15]: FlagBadge exported from internal-notes.tsx for reuse in timeline and handoff sections without circular dependency
+- [Phase 11-01]: bank_accounts owner-only RLS for ALL operations — plaid_access_token must never reach client
+- [Phase 11-01]: Journal entry immutability enforced at app layer (not RLS) — allows owner/office writes on draft entries
+- [Phase 11-01]: Chart of accounts seeding uses adminDb (service role) — called during org onboarding before JWT context established
 
 ### Pending Todos
 
