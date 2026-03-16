@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
-Status: Phase 10 Plan 16 complete — owner broadcast messaging to customer segments with email/SMS delivery, history tracking, and settings compose UI
-Last activity: 2026-03-16 — Phase 10 Plan 16 committed (broadcast messaging)
+Status: Phase 10 Plan 02 complete — OLS predictive chemistry alerts with R-squared confidence gate, visible on Alerts page, Dashboard, and tech stop cards
+Last activity: 2026-03-16 — Phase 10 Plan 02 committed (predictive chemistry alerts)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -93,6 +93,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P14 | 8 | 2 tasks | 7 files |
 | Phase 10 P12 | 13 | 2 tasks | 10 files |
 | Phase 10-smart-features-ai P16 | 8 | 2 tasks | 5 files |
+| Phase 10-smart-features-ai P02 | 11 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -356,6 +357,8 @@ Recent decisions affecting current work:
 - [Phase 10-smart-features-ai]: Broadcast history stored in org_settings JSONB (last 10) — avoids dedicated table since no complex queries on history
 - [Phase 10-smart-features-ai]: SMS broadcast via existing send-invoice-sms Edge Function with customText — reuses deployed Twilio infrastructure
 - [Phase 10]: eta_sms_count smallint on route_stops: 2-update cap tracked per stop row — avoids extra table, max value 2
+- [Phase 10-smart-features-ai]: adminDb for tech predictive alerts: techs lack SELECT on alerts table (owner+office RLS); server component uses adminDb with org_id filter for equivalent security
+- [Phase 10-smart-features-ai]: Record not Map for client boundary: Map is not JSON-serializable across server→client props; convert to Record<poolId, alert> before StopList
 
 ### Pending Todos
 
@@ -382,5 +385,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Completed 10-11-PLAN.md
-Resume file: Phase 10 Plan 11 complete — notification bell, panel, and per-user preferences
+Stopped at: Completed 10-02-PLAN.md
+Resume file: Phase 10 Plan 02 complete — predictive chemistry alerts with OLS regression, visible on Alerts page, Dashboard, and tech stop cards
