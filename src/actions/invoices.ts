@@ -40,6 +40,7 @@ import { signPayToken } from "@/lib/pay-token"
 import { Resend } from "resend"
 import { syncInvoiceToQbo } from "@/actions/qbo-sync"
 import { getResolvedTemplate } from "@/actions/notification-templates"
+import { createInvoiceJournalEntry, createRefundJournalEntry } from "@/lib/accounting/journal"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1000,6 +1001,11 @@ export async function finalizeInvoice(
       console.error("[finalizeInvoice] QBO sync error:", err)
     )
 
+    // Fire-and-forget double-entry journal entry -- never blocks finalization
+    createInvoiceJournalEntry(invoiceId).catch((err) =>
+      console.error("[finalizeInvoice] Journal entry error:", err)
+    )
+
     revalidatePath("/work-orders")
 
     return { success: true, invoiceNumber }
@@ -1771,6 +1777,14 @@ export async function createCreditNote(
     if (!creditNoteId) {
       return { success: false, error: "Failed to create credit note" }
     }
+
+    // Fire-and-forget journal entry for the credit note (refund pattern)
+    // The credit note itself is an invoice with negative total, so we generate
+    // an invoice journal entry that will produce Dr Revenue (positive), Cr AR (negative)
+    // effectively reversing the original invoice's revenue recognition.
+    createInvoiceJournalEntry(creditNoteId).catch((err) =>
+      console.error("[createCreditNote] Journal entry error:", err)
+    )
 
     revalidatePath("/work-orders")
     return { success: true, creditNoteId }

@@ -23,6 +23,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 import { syncPaymentToQbo } from "@/actions/qbo-sync"
+import { createPaymentJournalEntry, createRefundJournalEntry } from "@/lib/accounting/journal"
 import { createElement } from "react"
 import { render as renderEmail } from "@react-email/render"
 import { ReceiptEmail } from "@/lib/emails/receipt-email"
@@ -153,6 +154,26 @@ export async function handlePaymentSucceeded(
   if (settledRecords[0]?.id) {
     syncPaymentToQbo(settledRecords[0].id).catch((err) =>
       console.error("[handlePaymentSucceeded] QBO sync error:", err)
+    )
+
+    // Fire-and-forget double-entry journal entry for the payment
+    // Extract Stripe fee from the charge if available
+    let stripeFeeAmountCents: number | undefined
+    if (
+      paymentIntent.latest_charge &&
+      typeof paymentIntent.latest_charge === "object"
+    ) {
+      const charge = paymentIntent.latest_charge as import("stripe").default.Charge
+      // Stripe fee is stored in balance_transaction — we approximate from application_fee_amount
+      // For split-fee captures, use balance_transaction.fee when available
+      const balanceTx = (charge as { balance_transaction?: { fee?: number } }).balance_transaction
+      if (balanceTx && typeof balanceTx === "object" && typeof balanceTx.fee === "number") {
+        stripeFeeAmountCents = balanceTx.fee
+      }
+    }
+
+    createPaymentJournalEntry(settledRecords[0].id, stripeFeeAmountCents).catch((err) =>
+      console.error("[handlePaymentSucceeded] Journal entry error:", err)
     )
   }
 
@@ -600,7 +621,7 @@ export async function handleChargeRefunded(
 
   // Create refund record with negative amount.
   // Store charge.id in failure_reason for idempotency checks.
-  await adminDb.insert(paymentRecords).values({
+  const [insertedRefund] = await adminDb.insert(paymentRecords).values({
     org_id: originalRecord.org_id,
     invoice_id: originalRecord.invoice_id,
     amount: `-${refundedAmount}`,
@@ -609,7 +630,7 @@ export async function handleChargeRefunded(
     stripe_payment_intent_id: paymentIntentId,
     failure_reason: charge.id,
     settled_at: new Date(),
-  })
+  }).returning({ id: paymentRecords.id })
 
   // Check if fully refunded
   const originalAmountCents = charge.amount ?? 0
@@ -624,6 +645,13 @@ export async function handleChargeRefunded(
         updated_at: new Date(),
       })
       .where(eq(invoices.id, originalRecord.invoice_id))
+  }
+
+  // Fire-and-forget double-entry journal entry for the refund
+  if (insertedRefund?.id) {
+    createRefundJournalEntry(insertedRefund.id, refundedAmount).catch((err) =>
+      console.error("[handleChargeRefunded] Journal entry error:", err)
+    )
   }
 
   console.log(
