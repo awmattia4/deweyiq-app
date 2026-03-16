@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
 import { getTodayStops, getRouteStartedStatus, getRouteAreaCoordinates } from "@/actions/routes"
+import { getTimeTrackingEnabled } from "@/actions/time-tracking"
 import { getPredictiveAlertsForPools } from "@/actions/alerts"
 import { fetchWeatherForecast, classifyWeatherDay } from "@/lib/weather/open-meteo"
 import type { WeatherType } from "@/lib/weather/open-meteo"
@@ -11,6 +12,7 @@ import type { StopPredictiveAlert } from "@/components/field/stop-card"
 import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
 import { StartRouteButton } from "@/components/field/start-route-button"
+import { ClockInBanner } from "@/components/field/clock-in-banner"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -35,6 +37,10 @@ export const metadata: Metadata = {
  *              Clear days show no badge (no clutter). Rain/storm/heat/wind show
  *              a small pill badge on each card.
  *
+ * Phase 11-02: Clock-in banner — persistent clock-in/out strip above the route
+ *              list for tech/owner when time tracking is enabled for the org.
+ *              Visually distinct from Start Route button (different color, purpose).
+ *
  * Role guard: customers are redirected to /portal.
  */
 export default async function RoutesPage() {
@@ -50,11 +56,17 @@ export default async function RoutesPage() {
     day: "numeric",
   })
 
+  // Determine if time tracking banner should be shown
+  // Only for tech and owner roles — office doesn't do field work
+  const isFieldUser = user.role === "tech" || user.role === "owner"
+
   // Fetch today's stops server-side for instant render (no loading flicker)
   // Also check if route was already started for the Start Route button initial state
-  const [stops, routeAlreadyStarted] = await Promise.all([
+  // Also fetch time tracking enabled flag (conditionally for field users only)
+  const [stops, routeAlreadyStarted, timeTrackingEnabled] = await Promise.all([
     getTodayStops(),
     user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
+    isFieldUser ? getTimeTrackingEnabled() : Promise.resolve(false),
   ])
 
   // ── Weather fetch (Phase 10-07) ──────────────────────────────────────────
@@ -123,6 +135,12 @@ export default async function RoutesPage() {
           </button>
         )}
       </div>
+
+      {/* ── Clock-in banner — tech/owner, shown when time tracking is enabled ── */}
+      {/* Persistently visible above route list. Visually distinct from Start Route. */}
+      {isFieldUser && timeTrackingEnabled && (
+        <ClockInBanner />
+      )}
 
       {/* ── Start Route button — tech-only, shown when there are stops ──── */}
       {user.role === "tech" && stops.length > 0 && (
