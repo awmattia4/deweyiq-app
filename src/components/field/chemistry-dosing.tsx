@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useEffect } from "react"
 import { CheckCircle2Icon, FlaskConicalIcon, TriangleAlertIcon } from "lucide-react"
 import { calculateCSI, interpretCSI } from "@/lib/chemistry/lsi"
 import { generateDosingRecommendations } from "@/lib/chemistry/dosing"
@@ -15,6 +15,8 @@ interface ChemistryDosingProps {
   readings: FullChemistryReadings
   pool: PoolInfo
   products: ChemicalProduct[]
+  /** Phase 9 gap closure: surface calculated recommendations to parent for persistence */
+  onDosingChange?: (amounts: Array<{ chemical: string; productId: string; amount: number; unit: string }>) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +69,7 @@ function getCsiColors(color: "red" | "yellow" | "green") {
  * - Product-aware: doses adjust based on actual product concentration
  * - Zero network dependency — works completely offline
  */
-export function ChemistryDosing({ readings, pool, products }: ChemistryDosingProps) {
+export function ChemistryDosing({ readings, pool, products, onDosingChange }: ChemistryDosingProps) {
   // Calculate CSI (pure function — instant, no network)
   const csi = useMemo(() => calculateCSI(readings), [readings])
   const csiInterpretation = useMemo(
@@ -90,6 +92,18 @@ export function ChemistryDosing({ readings, pool, products }: ChemistryDosingPro
   const hasAnyReading = useMemo(() => {
     return Object.values(readings).some((v) => v !== null && v !== undefined)
   }, [readings])
+
+  // Surface recommendations to parent for persistence (Phase 9 gap closure)
+  useEffect(() => {
+    if (!onDosingChange) return
+    const amounts = recommendations.map((rec) => ({
+      chemical: rec.chemical,
+      productId: rec.product.id,
+      amount: rec.amount,
+      unit: rec.unit,
+    }))
+    onDosingChange(amounts)
+  }, [recommendations, onDosingChange])
 
   // Check if we have enough readings for CSI
   const hasRequiredForCsi =
