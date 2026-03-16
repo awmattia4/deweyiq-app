@@ -1,6 +1,6 @@
 "use client"
 
-import { LockIcon, AlertTriangleIcon, CheckCircle2Icon, Loader2Icon } from "lucide-react"
+import { LockIcon, AlertTriangleIcon, CheckCircle2Icon, Loader2Icon, WrenchIcon, SparklesIcon, ClockIcon } from "lucide-react"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -26,6 +26,17 @@ interface OptimizePreviewProps {
   onApplied: () => void
   isApplying: boolean
   onApplyingChange: (applying: boolean) => void
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Format seconds to a concise human-readable duration string, e.g. "25 min" or "1 hr 5 min" */
+function formatDurationSeconds(seconds: number): string {
+  const totalMinutes = Math.round(seconds / 60)
+  if (totalMinutes < 60) return `${totalMinutes} min`
+  const hours = Math.floor(totalMinutes / 60)
+  const mins = totalMinutes % 60
+  return mins > 0 ? `${hours} hr ${mins} min` : `${hours} hr`
 }
 
 // ─── StopRow — a single stop in the before/after column ───────────────────────
@@ -59,19 +70,45 @@ function StopRow({
         {stop.sortIndex}
       </span>
 
-      {/* Stop name and address */}
+      {/* Stop name, address, and service duration */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className={cn("truncate font-medium", hasMoved && "text-foreground")}>
             {stop.customerName}
           </p>
+          {stop.workOrderId && (
+            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0 text-[9px] font-medium text-amber-300 leading-relaxed">
+              <WrenchIcon className="h-2.5 w-2.5" />
+              WO
+            </span>
+          )}
           {stop.locked && (
             <LockIcon className="h-3 w-3 shrink-0 text-amber-400" aria-label="locked" />
           )}
         </div>
+        {stop.workOrderTitle && (
+          <p className="text-xs font-medium text-amber-300/70 truncate leading-snug">
+            {stop.workOrderTitle}
+          </p>
+        )}
         {stop.address && (
           <p className="truncate text-xs text-muted-foreground">{stop.address}</p>
         )}
+        {/* Per-stop service duration — historical in normal text, estimated in muted italic */}
+        <div className="flex items-center gap-1 mt-0.5">
+          <ClockIcon className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />
+          <span
+            className={cn(
+              "text-[10px] leading-none",
+              stop.hasHistoricalDuration
+                ? "text-muted-foreground"
+                : "text-muted-foreground/50 italic"
+            )}
+          >
+            {formatDurationSeconds(stop.serviceDurationSeconds)}
+            {!stop.hasHistoricalDuration && " est."}
+          </span>
+        </div>
         {stop.locked && (
           <p className="text-[10px] text-amber-400/80 font-medium">locked</p>
         )}
@@ -80,30 +117,45 @@ function StopRow({
   )
 }
 
-// ─── DriveTimeDisplay — drive time stat for a column ─────────────────────────
+// ─── RouteTimeDisplay — drive + total time stats for a column ─────────────────
 
-function DriveTimeDisplay({
-  minutes,
-  label,
+function RouteTimeDisplay({
+  driveMinutes,
+  totalMinutes,
   highlight,
 }: {
-  minutes: number
-  label: string
+  driveMinutes: number
+  totalMinutes: number
   highlight?: "good" | "neutral"
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium",
-        highlight === "good"
-          ? "bg-emerald-500/10 text-emerald-400"
-          : "bg-muted/50 text-muted-foreground"
-      )}
-    >
-      <span>{label}:</span>
-      <span className={highlight === "good" ? "text-emerald-400 font-bold" : "font-bold text-foreground"}>
-        {minutes} min
-      </span>
+    <div className="flex flex-col gap-0.5 mt-1.5">
+      <div
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium",
+          highlight === "good"
+            ? "bg-emerald-500/10 text-emerald-400"
+            : "bg-muted/50 text-muted-foreground"
+        )}
+      >
+        <span>Drive:</span>
+        <span className={cn("font-bold", highlight === "good" ? "text-emerald-400" : "text-foreground")}>
+          {driveMinutes} min
+        </span>
+      </div>
+      <div
+        className={cn(
+          "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium",
+          highlight === "good"
+            ? "bg-emerald-500/10 text-emerald-400"
+            : "bg-muted/40 text-muted-foreground"
+        )}
+      >
+        <span>Total route:</span>
+        <span className={cn("font-bold", highlight === "good" ? "text-emerald-400" : "text-foreground")}>
+          {totalMinutes} min
+        </span>
+      </div>
     </div>
   )
 }
@@ -114,8 +166,13 @@ function DriveTimeDisplay({
  * OptimizePreview — before/after route optimization comparison modal.
  *
  * Shows current stop order vs. ORS-optimized order side-by-side,
- * with estimated drive time saved. Office can click "Apply Changes"
+ * with drive time + total route time saved. Office can click "Apply Changes"
  * to persist the optimized order or "Cancel" to reject it.
+ *
+ * The "AI-Optimized" badge appears when historical service durations were
+ * available for >= 50% of stops (real data, not just defaults).
+ * Per-stop service duration is shown next to each stop — historical in normal
+ * text, estimated (default) in muted italic with "est." suffix.
  *
  * Locked stops display with a lock icon in both columns and are not
  * highlighted as moved (they stay in position by design).
@@ -140,8 +197,8 @@ export function OptimizePreview({
     (stop, idx) => currentIndexById.get(stop.id) !== idx
   )
 
-  // Drive time reduction percentage
-  const reductionPercent =
+  // Drive time reduction percentage for the percentage badge
+  const driveReductionPercent =
     result.currentDriveTimeMinutes > 0
       ? Math.round((result.timeSavedMinutes / result.currentDriveTimeMinutes) * 100)
       : 0
@@ -155,7 +212,7 @@ export function OptimizePreview({
       if (applyResult.success) {
         const savedText =
           result.timeSavedMinutes > 0
-            ? ` Saved ${result.timeSavedMinutes} min.`
+            ? ` Saved ${result.timeSavedMinutes} min of driving.`
             : ""
         toast.success(`Route optimized!${savedText}`)
         onOpenChange(false)
@@ -174,7 +231,27 @@ export function OptimizePreview({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-          <DialogTitle className="text-base">Route Optimization Preview</DialogTitle>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="text-base">Route Optimization Preview</DialogTitle>
+            {/* AI-Optimized / Standard Optimization badge */}
+            {result.usedHistoricalDurations ? (
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/15 border border-primary/25 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                <SparklesIcon className="h-3 w-3" />
+                AI-Optimized
+              </span>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                Standard Optimization
+              </span>
+            )}
+          </div>
+          {/* Historical coverage note when using AI */}
+          {result.usedHistoricalDurations && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Service durations based on historical visit data for{" "}
+              {Math.round(result.historicalCoverage * 100)}% of stops.
+            </p>
+          )}
         </DialogHeader>
 
         {/* ── Missing coordinates warning ──────────────────────────────── */}
@@ -206,9 +283,9 @@ export function OptimizePreview({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Current Order
               </p>
-              <DriveTimeDisplay
-                minutes={result.currentDriveTimeMinutes}
-                label="Est. drive"
+              <RouteTimeDisplay
+                driveMinutes={result.currentDriveTimeMinutes}
+                totalMinutes={result.currentTotalTimeMinutes}
                 highlight="neutral"
               />
             </div>
@@ -225,9 +302,9 @@ export function OptimizePreview({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Optimized Order
               </p>
-              <DriveTimeDisplay
-                minutes={result.optimizedDriveTimeMinutes}
-                label="Est. drive"
+              <RouteTimeDisplay
+                driveMinutes={result.optimizedDriveTimeMinutes}
+                totalMinutes={result.optimizedTotalTimeMinutes}
                 highlight={result.timeSavedMinutes > 0 ? "good" : "neutral"}
               />
             </div>
@@ -247,11 +324,11 @@ export function OptimizePreview({
         {result.timeSavedMinutes > 0 && (
           <div className="border-t border-border bg-emerald-500/10 px-6 py-3 text-center">
             <p className="text-sm font-semibold text-emerald-400">
-              Time saved: {result.timeSavedMinutes} minute
-              {result.timeSavedMinutes !== 1 ? "s" : ""}
-              {reductionPercent > 0 && (
-                <span className="font-normal text-emerald-300/80">
-                  {" "}({reductionPercent}% reduction)
+              {result.timeSavedMinutes} minute
+              {result.timeSavedMinutes !== 1 ? "s" : ""} saved on driving
+              {driveReductionPercent > 0 && (
+                <span className="ml-1.5 inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-300">
+                  {driveReductionPercent}% faster route
                 </span>
               )}
             </p>
