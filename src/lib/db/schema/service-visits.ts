@@ -50,6 +50,12 @@ export const serviceVisits = pgTable(
     email_sent_at: timestamp("email_sent_at", { withTimezone: true }),
     // Phase 9: What the tech actually applied — Array<{ chemical: string; productId: string; amount: number; unit: string }>
     dosing_amounts: jsonb("dosing_amounts"),
+
+    // Phase 10: Internal tech-to-office notes (NOT customer-facing)
+    // Free-text note left by tech for office/owner visibility only
+    internal_notes: text("internal_notes"),
+    // Array of flag strings: "needs_follow_up" | "needs_parts" | "safety_concern" | "handoff_note"
+    internal_flags: jsonb("internal_flags").$type<string[]>(),
   },
   (table) => [
     index("service_visits_org_id_idx").on(table.org_id),

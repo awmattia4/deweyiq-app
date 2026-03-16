@@ -86,6 +86,16 @@ export interface CompleteStopInput {
    * Future: stop-workflow.tsx will pass calculated dosing amounts at completion time.
    */
   dosingAmounts?: Array<{ chemical: string; productId: string; amount: number; unit: string }>
+  /**
+   * Phase 10: Internal tech-to-office note.
+   * NOT customer-facing — only visible to owner and office roles.
+   */
+  internalNotes?: string
+  /**
+   * Phase 10: Internal flags for flagging issues.
+   * Valid values: "needs_follow_up" | "needs_parts" | "safety_concern" | "handoff_note"
+   */
+  internalFlags?: string[]
 }
 
 export interface CompleteStopWarnings {
@@ -620,6 +630,8 @@ export async function completeStop(
           photo_urls: input.photoStoragePaths,
           report_html: reportHtml,
           dosing_amounts: (input.dosingAmounts ?? null) as unknown as Record<string, unknown> | null,
+          internal_notes: input.internalNotes || null,
+          internal_flags: (input.internalFlags && input.internalFlags.length > 0 ? input.internalFlags : null) as unknown as string[] | null,
         })
         .onConflictDoUpdate({
           target: serviceVisits.id,
@@ -635,6 +647,8 @@ export async function completeStop(
             photo_urls: input.photoStoragePaths,
             report_html: reportHtml,
             dosing_amounts: (input.dosingAmounts ?? null) as unknown as Record<string, unknown> | null,
+            internal_notes: input.internalNotes || null,
+            internal_flags: (input.internalFlags && input.internalFlags.length > 0 ? input.internalFlags : null) as unknown as string[] | null,
           },
         })
     })
@@ -793,6 +807,50 @@ export async function skipStop(
     return { success: true }
   } catch (err) {
     console.error("[skipStop] Error:", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateInternalNotes
+// ---------------------------------------------------------------------------
+
+/**
+ * updateInternalNotes — allows office/owner to add or edit internal notes on
+ * a service visit after the fact.
+ *
+ * Phase 10: Separate from completeStop so office can annotate historic visits.
+ * Tech can also update their own visit notes via this action.
+ *
+ * @param visitId - UUID of the service_visit row
+ * @param notes   - Updated notes text (empty string clears the note)
+ * @param flags   - Updated flag list (empty array clears all flags)
+ */
+export async function updateInternalNotes(
+  visitId: string,
+  notes: string,
+  flags: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      await db
+        .update(serviceVisits)
+        .set({
+          internal_notes: notes.trim() || null,
+          internal_flags: (flags.length > 0 ? flags : null) as unknown as string[] | null,
+        })
+        .where(eq(serviceVisits.id, visitId))
+    })
+
+    return { success: true }
+  } catch (err) {
+    console.error("[updateInternalNotes] Error:", err)
     return {
       success: false,
       error: err instanceof Error ? err.message : "Unknown error",
