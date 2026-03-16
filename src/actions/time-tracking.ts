@@ -301,8 +301,12 @@ export async function clockOut(
         .where(eq(timeEntries.id, activeShift.entryId))
     })
 
-    // TODO (Plan 04): pushTimeEntryToQbo(activeShift.entryId) — fire and forget
-    // void pushTimeEntryToQbo(activeShift.entryId).catch(console.error)
+    // Plan 04: Push to QBO on clock-out (fire-and-forget)
+    void import("@/lib/qbo/time-sync").then(({ pushTimeEntryToQbo }) => {
+      pushTimeEntryToQbo(activeShift.entryId).catch((err) => {
+        console.error("[clockOut] QBO time push failed:", err)
+      })
+    })
 
     revalidatePath("/routes")
 

@@ -750,6 +750,76 @@ export async function getPredictiveAlerts(): Promise<Alert[]> {
 }
 
 /**
+ * getPredictiveAlertsForPools — Returns predictive chemistry alerts for a specific set of pool IDs.
+ *
+ * Used by the routes page to surface predictive chemistry badges on stop cards.
+ * Returns a Map of poolId -> StopPredictiveAlert for efficient stop-card lookup.
+ * Uses adminDb so techs can see alerts without requiring office-level RLS access.
+ *
+ * @param orgId - The org to scope the lookup to
+ * @param poolIds - Pool IDs on today's route
+ */
+export async function getPredictiveAlertsForPools(
+  orgId: string,
+  poolIds: string[]
+): Promise<Map<string, { parameter: string; direction: "low" | "high"; projectedNext: number; unit: string; isEarlyPrediction: boolean }>> {
+  const result = new Map<string, { parameter: string; direction: "low" | "high"; projectedNext: number; unit: string; isEarlyPrediction: boolean }>()
+
+  if (!poolIds || poolIds.length === 0) return result
+
+  const now = new Date()
+
+  try {
+    const rows = await adminDb
+      .select({
+        reference_id: alerts.reference_id,
+        metadata: alerts.metadata,
+      })
+      .from(alerts)
+      .where(
+        and(
+          eq(alerts.org_id, orgId),
+          eq(alerts.alert_type, "predictive_chemistry"),
+          inArray(alerts.reference_id, poolIds),
+          isNull(alerts.dismissed_at),
+          or(
+            isNull(alerts.snoozed_until),
+            lt(alerts.snoozed_until, now)
+          )
+        )
+      )
+      .orderBy(desc(alerts.generated_at))
+
+    for (const row of rows) {
+      if (!row.reference_id || !row.metadata) continue
+      // One alert per pool — first result wins (most recent)
+      if (result.has(row.reference_id)) continue
+
+      const meta = row.metadata as Record<string, unknown>
+      const parameter = meta.parameter as string | undefined
+      const direction = meta.direction as "low" | "high" | undefined
+      const projectedNext = meta.projectedNext as number | undefined
+      const unit = meta.unit as string | undefined
+      const isEarlyPrediction = meta.isEarlyPrediction as boolean | undefined
+
+      if (!parameter || !direction || projectedNext === undefined || !unit) continue
+
+      result.set(row.reference_id, {
+        parameter,
+        direction,
+        projectedNext,
+        unit,
+        isEarlyPrediction: isEarlyPrediction ?? false,
+      })
+    }
+  } catch {
+    // Non-blocking — stop cards just won't show predictive badges
+  }
+
+  return result
+}
+
+/**
  * getAlertCount — Returns count of active alerts (for sidebar badge).
  * Only meaningful for owner/office — tech users don't see alerts.
  */
