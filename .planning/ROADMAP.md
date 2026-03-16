@@ -244,25 +244,28 @@ Plans:
   14. Techs can leave internal service notes (visible only to office/owner, NOT the customer) for flagging issues, requesting follow-up, or leaving messages for the next tech on the route
   15. The owner can send a broadcast email or SMS to all customers, a filtered subset (by route, status, service type), or individual customers — for seasonal announcements, holiday schedule changes, promotions, or emergency notices
   16. Office staff can assign and schedule a work order directly from the WO detail page — the system recommends an optimal day and tech based on the WO address proximity to existing route stops, tech workload, and travel time; office can accept the recommendation or override with manual selection
-**Plans**: TBD
+  17. If the user hasn't added the app to their home screen, a smart install prompt appears — non-intrusive bottom banner or modal explaining the benefits ("Faster access, works offline, push notifications"), with a one-tap "Add to Home Screen" button that triggers the browser's native PWA install prompt (beforeinstallprompt API). Dismissible with "Not now" and doesn't re-appear for 7 days. On iOS (no beforeinstallprompt), shows step-by-step instructions with screenshots (Share → Add to Home Screen). Shown to all roles (tech, owner, office) since everyone benefits from the installed app experience
+  18. On first login (or after app install), the app prompts the user to enable push notifications with a clear explanation of what they'll receive — "Get notified when stops are completed, new work orders come in, customers message you, payments arrive, and more." Uses the Web Push API (VAPID keys + service worker `push` event) to deliver real-time native-style push notifications to the device even when the app is closed. If the user declines, a persistent but non-intrusive banner in Settings reminds them they can enable notifications anytime. Push notifications fire for EVERY event that also sends email/SMS — stop complete/skip, route started, chemistry alerts, WO assigned/completed, quote approved/declined, invoice paid/overdue, payment received/failed, portal messages, service requests, weather delays, safety alerts, ETA updates — so the app feels like a real native app, not a website
+**Plans**: 17 plans
 
 Plans:
-- [ ] 10-01: Enhanced smart dosing — OpenWeatherMap API integration (current + forecast), per-pool history weighting, sanitizer-type-specific model
-- [ ] 10-02: Predictive chemistry alerts — linear regression on per-pool reading history, alert threshold validation, CPO-reviewed thresholds
-- [ ] 10-03: Automated workload balancing — auto-schedule engine based on service level rules, tech availability, and geography
-- [ ] 10-04: ML route optimization — algorithm selection (OSRM vs. Google ROA), Upstash QStash async job, before/after comparison UI
-- [ ] 10-05: Smart customer creation — intelligent suggestions when adding pools/equipment (pool+spa auto-notes, service frequency recommendations, common equipment combos, gate code reminders)
-- [ ] 10-06: Weather-aware scheduling — OpenWeatherMap forecast integration, auto-reschedule engine for rain/storm days, office approval workflow, optimal reschedule slot finder
-- [ ] 10-07: Tech weather alerts — per-stop weather badges on route view (rain, extreme heat, lightning risk), daily weather summary on route start
-- [ ] 10-08: Weather delay customer notifications — automatic SMS/email when a stop is rescheduled due to weather, with new expected date and re-notification if it shifts again
-- [ ] 10-09: Comprehensive company notifications — in-app push + email for all platform events (stop complete/skip, route start/end, chemistry out-of-range, WO lifecycle, quote responses, payments, portal messages/requests, overdue invoices, system events)
-- [ ] 10-10: Comprehensive customer notifications — email + SMS for every customer touchpoint (pre-arrival, service report, invoice, payment receipt/failure, quote, weather delay, WO status, portal replies)
-- [ ] 10-11: Notification engine and template system — toggleable per-type, customizable templates with merge tags, SMS provider integration (Twilio/etc.), unified notification dispatch service
-- [ ] 10-12: Dynamic ETA engine — real-time ETA calculation (tech GPS + remaining stops + historical avg stop duration + live drive time from routing API), ETA delivery via SMS/email at configurable triggers (route start, N stops away, on-demand), auto-updating ETA when tech runs ahead/behind, customer portal live ETA countdown, dispatch view per-stop ETA overlay for all active routes
-- [ ] 10-13: Equipment performance monitoring — track per-pool equipment metrics over time (salt cell output efficiency by season, pump pressure trends, filter PSI differential, heater temp delta), seasonal baseline comparison, degradation alerts when performance drops below threshold (e.g., "salt cell output down 30% vs. last summer"), equipment health badges on tech stop view, equipment performance dashboard for office, integration with predictive maintenance recommendations
-- [ ] 10-14: Safety alerts — unresponsive tech detection (no stop completion or GPS movement in 30+ min during active route), owner/office ping via push notification + SMS, configurable timeout threshold, false-positive handling (tech can dismiss/snooze), emergency contact escalation
-- [ ] 10-15: Internal service notes — tech-to-office notes on stops (not customer-facing), visible on office stop detail + customer timeline, flagging system (needs follow-up, needs parts, safety concern), next-tech handoff notes
-- [ ] 10-16: Broadcast messaging — owner sends bulk email/SMS to all customers or filtered segments (by route, service type, status, custom tags), template support with merge tags, schedule for future send, delivery tracking (sent/delivered/failed), unsubscribe compliance
+- [ ] 10-01-PLAN.md — Enhanced smart dosing with weather and history modifiers
+- [ ] 10-02-PLAN.md — Predictive chemistry alerts using OLS regression
+- [ ] 10-03-PLAN.md — Automated workload balancing and auto-schedule engine
+- [ ] 10-04-PLAN.md — ML route optimization with historical service durations
+- [ ] 10-05-PLAN.md — Smart customer creation with intelligent suggestions
+- [ ] 10-06-PLAN.md — Weather-aware scheduling with auto-reschedule engine
+- [ ] 10-07-PLAN.md — Tech weather alerts with per-stop badges
+- [ ] 10-08-PLAN.md — Weather delay customer notifications
+- [ ] 10-09-PLAN.md — Notification infrastructure (tables, push, dispatch)
+- [ ] 10-10-PLAN.md — Comprehensive customer notifications (email + SMS)
+- [ ] 10-11-PLAN.md — In-app notification center and user preferences
+- [ ] 10-12-PLAN.md — Dynamic ETA engine with portal countdown
+- [ ] 10-13-PLAN.md — Equipment performance monitoring and degradation alerts
+- [ ] 10-14-PLAN.md — Safety alerts with configurable escalation chain
+- [ ] 10-15-PLAN.md — Internal service notes and flagging system
+- [ ] 10-16-PLAN.md — Broadcast messaging to customer segments
+- [ ] 10-17-PLAN.md — PWA install prompt and Web Push notifications
 
 ### Phase 11: Payroll, Team Management & Full Accounting
 **Goal**: The platform is a complete QuickBooks replacement for pool companies — owner runs native payroll with direct deposit, check printing, and automatic tax filing; tracks employee time, PTO, certifications, and break compliance; manages full double-entry accounting with bank reconciliation via Plaid; and gets payment reconciliation from whichever payment path (Stripe Connect or QBO) they chose in Phase 7
@@ -561,6 +564,12 @@ Plans:
 
   *Chemistry Range Refinements:*
   57. Chemistry color indicators use a 3-zone system (green/yellow/red) with yellow warning zones at range boundaries — pH shows yellow at 7.2 and 7.8 (not jumping straight to red), alkalinity shows yellow at 60-80 and 120-140 (approaching out-of-range). Configurable via org_settings custom_chemistry_targets. Default ranges refined based on real pool tech feedback
+
+  *Branding: PoolCo → DeweyIQ:*
+  58. Replace every instance of "PoolCo" with "DeweyIQ" across the entire codebase — app name in manifest, page titles, login/auth pages, sidebar, header fallback, PWA metadata, portal shell, email from-names, PDF headers, QBO integration labels, Stripe descriptions, offline DB name, CSS comments, error messages — 97 occurrences across 37 source files. The product name is DeweyIQ, not PoolCo
+  59. DeweyIQ logo (from `/Users/aaronmattia/Documents/DeweyIQ/Logos/Main Logo (req dark bg).png`) is displayed everywhere the brand appears — login page, sidebar header, app header, PWA splash screen, manifest icons, favicon, portal shell, auth pages, marketing site, loading screens. Logo requires dark background (matches dark-first design system)
+  60. All customer-facing emails (service reports, invoices, quotes, receipts, dunning, pre-arrival, portal messages, AutoPay confirmations) show the pool company's own logo at the top (from org_settings company_logo), and include a "Powered by DeweyIQ" footer with the DeweyIQ logo at the bottom of every email — establishes the platform brand while letting each pool company own their customer relationship
+  61. All PDF documents (quotes, invoices, service reports, proposals) follow the same pattern — pool company logo/branding at the top, "Powered by DeweyIQ" with small logo in the footer
 **Plans**: TBD
 
 Plans:
