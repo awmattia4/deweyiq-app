@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
-Status: Phase 10 Plan 10 complete — notifyOrgRole/notifyUser wired into all server actions, 20 NOTIF event types covered, customer dual-channel SMS for service/payment/WO/portal events
-Last activity: 2026-03-16 — Phase 10 Plan 10 committed (comprehensive notifications wiring)
+Status: Phase 10 Plan 15 complete — internal tech-to-office notes with flag chips, handoff context, and office-editable timeline annotations
+Last activity: 2026-03-16 — Phase 10 Plan 15 committed (internal service notes)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -95,6 +95,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 10-smart-features-ai P16 | 8 | 2 tasks | 5 files |
 | Phase 10-smart-features-ai P02 | 11 | 2 tasks | 9 files |
 | Phase 10-smart-features-ai P10 | 90 | 2 tasks | 10 files |
+| Phase 10 P08 | 4 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -364,6 +365,8 @@ Recent decisions affecting current work:
 - [Phase 10-10]: NOTIF-21 in bulkAssignStops sends single notification for all stops added (not per-stop) — avoids notification spam on bulk assignments
 - [Phase 10-10]: work-orders.ts NOTIF-31 uses service role createSupabaseAdmin() helper for Edge Function invocations from adminDb chain — no user session in post-transaction .then() context
 - [Phase 10-10]: Company name for WO SMS fetched from orgs table (not org_settings) — org_settings.company_name column does not exist; orgs.name is correct source
+- [Phase 10]: weather_delay_email/sms template types reused (not new weather_reschedule_* names) — types already existed in template system
+- [Phase 10]: Fire-and-forget void+.then() pattern for notification dispatch in approveProposal — failure logged but never blocks reschedule
 
 ### Pending Todos
 
