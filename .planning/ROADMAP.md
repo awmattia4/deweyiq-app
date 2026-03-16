@@ -213,7 +213,7 @@ Plans:
   3. The owner can view each tech's pay and commission for any pay period, with a payroll export ready for ADP or Gusto
   4. The owner can see technician scorecards showing stops per day, average stop time, chemical cost per pool, and completion rate — and compare techs side by side
   5. The owner can see which pools are unprofitable based on chemical spend vs. recurring service revenue, with unprofitable pools flagged automatically
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
 - [ ] 09-01-PLAN.md — Schema migrations + Recharts install + shared report infrastructure + reports page tab restructure
@@ -221,6 +221,7 @@ Plans:
 - [ ] 09-03-PLAN.md — Operations Dashboard tab: route completion rates, missed stops, on-time %, per-tech breakdown chart
 - [ ] 09-04-PLAN.md — Team Dashboard tab: tech scorecards (leaderboard + comparison), payroll prep CSV, tech self-view, pay settings
 - [ ] 09-05-PLAN.md — Profitability Dashboard tab: chemical cost per pool, margin flagging, unprofitable pool alerts, per-tech dosing costs
+- [ ] 09-06-PLAN.md — Gap closure: wire started_at capture (markStopStarted) and dosing_amounts capture (onDosingChange callback) in stop workflow
 
 ### Phase 10: Smart Features & AI
 **Goal**: The platform uses accumulated operational data to optimize routes with ML, predict chemistry problems before they happen, and automatically balance technician workloads — making the system actively smarter the longer it runs
@@ -239,6 +240,10 @@ Plans:
   10. All notification types are independently toggleable and use customizable templates with merge tags
   11. A customer receives a dynamic ETA for their upcoming service — calculated from the tech's current GPS, remaining stops, historical stop durations, and live drive time — delivered via SMS/email at configurable triggers, auto-updating when tech runs ahead/behind, and visible as a live countdown in the customer portal
   12. The system tracks equipment performance trends per pool — salt system output efficiency, pump pressure, filter PSI, heater temperature delta — surfaces degradation alerts when performance deviates from seasonal baselines, visible on the pool equipment profile and tech stop view
+  13. If a tech hasn't completed any stop or moved in 30+ minutes during an active route, the system pings the owner/office with an "unresponsive tech" alert — safety feature for lone workers in the field
+  14. Techs can leave internal service notes (visible only to office/owner, NOT the customer) for flagging issues, requesting follow-up, or leaving messages for the next tech on the route
+  15. The owner can send a broadcast email or SMS to all customers, a filtered subset (by route, status, service type), or individual customers — for seasonal announcements, holiday schedule changes, promotions, or emergency notices
+  16. Office staff can assign and schedule a work order directly from the WO detail page — the system recommends an optimal day and tech based on the WO address proximity to existing route stops, tech workload, and travel time; office can accept the recommendation or override with manual selection
 **Plans**: TBD
 
 Plans:
@@ -255,6 +260,9 @@ Plans:
 - [ ] 10-11: Notification engine and template system — toggleable per-type, customizable templates with merge tags, SMS provider integration (Twilio/etc.), unified notification dispatch service
 - [ ] 10-12: Dynamic ETA engine — real-time ETA calculation (tech GPS + remaining stops + historical avg stop duration + live drive time from routing API), ETA delivery via SMS/email at configurable triggers (route start, N stops away, on-demand), auto-updating ETA when tech runs ahead/behind, customer portal live ETA countdown, dispatch view per-stop ETA overlay for all active routes
 - [ ] 10-13: Equipment performance monitoring — track per-pool equipment metrics over time (salt cell output efficiency by season, pump pressure trends, filter PSI differential, heater temp delta), seasonal baseline comparison, degradation alerts when performance drops below threshold (e.g., "salt cell output down 30% vs. last summer"), equipment health badges on tech stop view, equipment performance dashboard for office, integration with predictive maintenance recommendations
+- [ ] 10-14: Safety alerts — unresponsive tech detection (no stop completion or GPS movement in 30+ min during active route), owner/office ping via push notification + SMS, configurable timeout threshold, false-positive handling (tech can dismiss/snooze), emergency contact escalation
+- [ ] 10-15: Internal service notes — tech-to-office notes on stops (not customer-facing), visible on office stop detail + customer timeline, flagging system (needs follow-up, needs parts, safety concern), next-tech handoff notes
+- [ ] 10-16: Broadcast messaging — owner sends bulk email/SMS to all customers or filtered segments (by route, service type, status, custom tags), template support with merge tags, schedule for future send, delivery tracking (sent/delivered/failed), unsubscribe compliance
 
 ### Phase 11: Payroll, Team Management & Full Accounting
 **Goal**: The platform is a complete QuickBooks replacement for pool companies — owner runs native payroll with direct deposit, check printing, and automatic tax filing; tracks employee time, PTO, certifications, and break compliance; manages full double-entry accounting with bank reconciliation via Plaid; and gets payment reconciliation from whichever payment path (Stripe Connect or QBO) they chose in Phase 7
@@ -412,6 +420,8 @@ Plans:
   5. The generate-invoices flow gains a preview step — before creating drafts, office sees a table of every customer with: stop count, calculated total, applied fees, and any anomaly warnings — with the ability to adjust or exclude individual customers before confirming
   6. Automatic recurring invoice generation — owner configures a billing schedule (e.g., "every Monday" or "1st of each month") and the system auto-generates invoices for all customers with billing models, auto-charges AutoPay customers, and sends a summary email to the owner — no manual "Generate Invoices" click required for routine weekly/monthly billing cycles
   7. Each customer's profile shows their next auto-invoice date, billing frequency, and last invoice summary — making recurring billing status visible at a glance
+  8. Office staff can record cash and check payments against any invoice (WO, recurring service, or project) — with payment method selection, check number tracking, receipt date, and optional receipt photo; the customer payment page also offers a "Paying by Cash or Check" option that notifies the office to expect manual payment instead of processing online
+  9. Full QBO bidirectional sync covers ALL entity types — customers, invoices, payments, parts/items catalog, expenses, and chart of accounts — not just the basic three; parts imported from QBO populate the existing CatalogItem table
 **Plans**: TBD
 
 Plans:
@@ -433,6 +443,9 @@ Plans:
   - Work Orders list page has emoji icons — remove them (user aesthetic preference: no codey icons)
   - Any other emoji/decorative icons found during audit should be removed app-wide
   - Billing invoice detail line items UI is basic — needs to match the work order line item quality (taxable indicator "T", better layout, inline editing feel)
+  - Customer list needs sorting options — sort by recently serviced, alphabetical, route assignment, account status, etc.
+  - Schedule page only shows Monday–Friday — no way to schedule or view Saturday/Sunday routes
+  - Photo requirement enforcement gap: `requires_photo` flag exists on checklist tasks (schema + settings UI + customer overrides all wired) but `completeStop` server action doesn't validate it — techs can complete stops without photos even when `requires_photo: true`. Fix: add photo validation to the warn-but-allow enforcement block in `completeStop` (same pattern as chemistry/checklist enforcement)
 **Success Criteria** (what must be TRUE):
 
   *Interactive States:*
@@ -484,6 +497,7 @@ Plans:
   *Schedule Page Fixes:*
   29. The "Today" button always navigates to the actual current date — regardless of which day/week is currently selected
   30. Completed stops are locked on the Schedule page — cannot be dragged, reordered, or edited for that day once marked complete (read-only visual treatment)
+  50. Schedule page shows all 7 days of the week (Monday–Sunday) — not just weekdays. Many pool companies run Saturday routes and some run Sunday emergency/catch-up routes. Weekend days are fully functional: drag-and-drop assignment, route building, recurring schedule rules, and optimization all work on Saturday and Sunday
 
   *Dispatch Page Fixes:*
   31. Each tech's route on the dispatch map uses a unique, distinguishable color — not all blue — with a matching color legend showing which color belongs to which tech
@@ -499,11 +513,32 @@ Plans:
   *Billing Page Polish:*
   36. Invoice detail line items match the work order line item UI quality — taxable indicator ("T" badge), consistent column layout (description, qty, rate, tax, total), inline edit feel, same component patterns as WO line items
 
+  *Email & SMS Polish:*
+  37. Every outbound email (service reports, invoices, quotes, receipts, dunning reminders, AutoPay confirmations, pre-arrival, portal messages) is visually polished — consistent branding (company logo, brand color), clean layout, proper spacing, readable on mobile, no broken images or unstyled fallbacks
+  38. All emails render correctly across Gmail, Outlook, and Apple Mail — tested with real sends, no clipped content or missing styles
+  39. Email subject lines are clear and contextual — not generic ("Invoice from PoolCo") but specific ("Invoice #1042 for March Pool Service — Blue Wave Pools")
+  40. SMS messages are concise, professional, and include the company name — no raw URLs without context, no truncated messages
+
   *Performance & Polish:*
-  37. No Cumulative Layout Shift on any page — elements don't jump around as content loads
-  38. Page transitions are smooth — no flash of unstyled content, no jarring route changes
-  39. All toast notifications use consistent positioning, duration, and styling
-  40. Sidebar, header, and navigation look and behave identically across all pages and roles
+  41. No Cumulative Layout Shift on any page — elements don't jump around as content loads
+  42. Page transitions are smooth — no flash of unstyled content, no jarring route changes
+  43. All toast notifications use consistent positioning, duration, and styling
+  44. Sidebar, header, and navigation look and behave identically across all pages and roles
+
+  *Customer List Polish:*
+  45. Customer list supports sorting — by recently serviced (most recent first), alphabetical, route assignment, account status, and date added — with sort state persisted across navigation
+
+  *Integrations Hub:*
+  46. Settings page includes an "Integrations" tab showing all connected services (Stripe, QBO, Twilio) with connection status, last sync time, and connect/disconnect actions — single place to manage all third-party integrations
+
+  *Tech Dashboard:*
+  47. Tech landing page (dashboard) shows a focused daily summary — today's stop count, clock-in status, current route progress, next stop details, and relevant alerts — not the owner's analytics dashboard
+
+  *Work Order Enhancements:*
+  48. Work orders support file attachments (blueprints, plans, specs, manuals, diagrams) uploaded to Supabase Storage — techs see these attachments on their stop view so they know exactly what to do for specialized work (plumbing, equipment installs, etc.)
+
+  *Calendar Schedule View:*
+  49. All roles (owner, office, tech) have a calendar view of their route/schedule — monthly calendar showing stop counts per day, color-coded by status (scheduled, complete, skipped), with click-to-drill into any day's full route list. Owner/office see all techs' schedules overlaid or filterable by tech. Techs see only their own stops. Provides a big-picture view of workload density, coverage gaps, and schedule patterns that the current day-by-day list view doesn't surface
 **Plans**: TBD
 
 Plans:
@@ -545,15 +580,21 @@ Plans:
 
   *Subscription Billing:*
   23. An owner can select a plan — Starter ($99/mo, 1-79 pools), Pro ($199/mo, 80-200 pools), or Enterprise ($349/mo, 200+ pools), monthly or annual (2 months free) — and complete checkout via Stripe; subscription activates immediately
-  24. An owner can view their current plan, pool usage, invoice history, and manage payment methods from the subscription billing page
-  25. An owner can cancel their subscription (takes effect at period end) and reactivate before period end
-  26. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
-  27. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
-  28. Successful payment after restriction lifts all restrictions automatically
+  24. An owner can view their current plan, pool usage, invoice history, and manage payment methods from the Settings → Billing tab
+  25. Payment method management is fully in-app using Stripe Elements (PaymentElement + SetupIntent) — no redirect to Stripe-hosted portal; owner can add/remove cards, add bank accounts (ACH), update expired cards, and complete 3DS re-verification all within the Settings → Billing tab; styled to match the app's design system; never handles raw card data (Stripe.js handles PCI compliance)
+  26. An owner can cancel their subscription (takes effect at period end) and reactivate before period end — cancel shows clear "active until [date]" messaging, not instant cutoff
+  27. An owner can upgrade (immediate, prorated) or downgrade (takes effect next billing cycle) their tier
+  28. Switching from monthly to annual (or vice versa) is seamless — prorated credit applied, no double-charge, clear confirmation of what changes and when
+  29. Pool creation is soft-blocked when the tier's pool limit is exceeded (7-day grace period, then blocked with upgrade prompt)
+  30. Failed payments trigger a 7-day grace period, after which the account enters read-only mode with a full-screen overlay guiding the owner to fix billing
+  31. Successful payment after restriction lifts all restrictions automatically — no manual intervention, no support ticket needed
+  32. If a card expires and auto-renewal fails, the owner gets an in-app banner + email notification with a direct link to update their payment method — before the grace period even starts
+  33. Subscription status is always accurate in the app — webhook-synced, not stale; covers edge cases: partial refunds, disputed charges, Stripe-initiated cancellations, payment method removed externally via Stripe dashboard
+  34. Only the owner role can access the Billing tab and manage the subscription — techs and office users see the trial/expiry banner but cannot change billing
 **Plans**: 14 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — Marketing site foundation: public route group layout, shared marketing components (navigation, footer with legal links, CTA buttons), dark-first design system tokens for marketing pages, responsive grid system, Framer Motion setup, SEO infrastructure (meta tags, OG images, structured data, sitemap.xml, robots.txt), legal pages (Terms of Service, Privacy Policy, DPA, Cookie Policy, Acceptable Use, SLA, Billing Terms)
+- [ ] 17-01-PLAN.md — Marketing site foundation: subdomain routing middleware (deweyiq.com → marketing pages, app.deweyiq.com → app behind auth, portal subdomain routing preserved), public route group layout under src/app/(marketing)/, shared marketing components (navigation, footer with legal links, CTA buttons), dark-first design system tokens for marketing pages, responsive grid system, Framer Motion setup, SEO infrastructure (meta tags, OG images, structured data, sitemap.xml, robots.txt), legal pages (Terms of Service, Privacy Policy, DPA, Cookie Policy, Acceptable Use, SLA, Billing Terms)
 - [ ] 17-02-PLAN.md — Hero section & navigation: full-viewport cinematic hero with gradient mesh background, animated phone + desktop mockups showing real app screens, auto-rotating feature highlights with smooth transitions, bold headline + subhead + CTA, sticky navigation with smooth scroll to sections, mobile hamburger menu
 - [ ] 17-03-PLAN.md — Feature deep-dive sections: 6 feature areas (Field Tech App, Scheduling & Routes, Real-Time Dispatch, Billing & Payments, Customer Portal, Work Orders & Quoting) — each with phone/desktop mockup, 3 benefit bullets, visual workflow demonstration, scroll-triggered entrance animations, tabbed feature switching within each section
 - [ ] 17-04-PLAN.md — Interactive app demo: sandboxed read-only demo environment showing route view, chemistry logging, dispatch map, billing dashboard — visitors can click through real UI without signing up, guided tour overlay with hotspots, "Try it yourself" CTA at each feature section
@@ -561,10 +602,10 @@ Plans:
 - [ ] 17-06-PLAN.md — Pricing & ROI calculator: interactive pricing section with pool count slider, 3 flat tiers (Starter $99/mo 1-79 pools, Pro $199/mo 80-200 pools, Enterprise $349/mo 200+ pools), annual toggle showing 2 months free ($990/$1,990/$3,490 per year), all-features-included emphasis, "unlimited SMS included" callout (vs Skimmer $0.029/msg), "unlimited techs & office users" callout (vs Pool Brain $55/tech), no per-pool or per-tech fees, competitor price comparison examples, FAQ accordion; ROI calculator (input: pools, techs, admin hours → output: time saved, money saved, payback period)
 - [ ] 17-07-PLAN.md — Social proof & trust: testimonial cards with photos/company names, company logo bar, live platform stats with counter animations (pools managed, stops completed, invoices sent), case study preview cards, trust badges (SSL, Stripe, SOC2-ready), press mentions section
 - [ ] 17-08-PLAN.md — Sign-up flow & onboarding wizard: multi-step wizard (account creation → company profile with logo upload → service details/pool count → invite team → first customer or CSV import → guided dashboard tour), progress bar, field validation, Google OAuth, step-level progress persistence, Skimmer migration path with CSV field mapping
-- [ ] 17-09-PLAN.md — Schema + Stripe setup: subscriptions table with enums (status, tier, billing_interval), src/lib/stripe.ts client singleton, tier config constants (Starter 1-79 pools $99/$990, Pro 80-200 pools $199/$1990, Enterprise 200+ pools $349/$3490), webhook signature verification utility
+- [ ] 17-09-PLAN.md — Schema + Stripe setup: subscriptions table with enums (status, tier, billing_interval), src/lib/stripe.ts client singleton, shared `src/lib/pricing-config.ts` single source of truth for tier definitions (name, pool limits, display prices, Stripe Price IDs — Starter 1-79 pools $99/$990, Pro 80-200 pools $199/$1990, Enterprise 200+ pools $349/$3490) imported by BOTH marketing pricing page AND checkout logic so prices stay in sync, webhook signature verification utility
 - [ ] 17-10-PLAN.md — Checkout & trial: createCheckoutSession action with card + ACH bank transfer payment methods enabled, trial creation on signup (14-day, no card), Stripe Checkout redirect, success/cancel pages, trial banner component visible to all roles, "Save ~3% with bank transfer" nudge on annual plans
 - [ ] 17-11-PLAN.md — Stripe webhook handler: /api/webhooks/stripe route handling checkout.session.completed, customer.subscription.created/updated/deleted, invoice.payment_succeeded/failed, customer.subscription.trial_will_end — with idempotent event processing
-- [ ] 17-12-PLAN.md — Subscription management UI: owner-only "Billing" tab in /settings with current plan card, pool usage bar with tier limit, invoice history from Stripe API, cancel/reactivate flows, upgrade/downgrade with proration, payment method management via Stripe Customer Portal
+- [ ] 17-12-PLAN.md — Subscription management UI: owner-only "Billing" tab in /settings with current plan card, pool usage bar with tier limit, invoice history from Stripe API, cancel/reactivate flows, upgrade/downgrade with proration, in-app payment method management via Stripe Elements (PaymentElement + SetupIntent, styled to match app design system)
 - [ ] 17-13-PLAN.md — Usage enforcement & failed payments: pool count tracking with real-time limit checking, 7-day grace period for over-limit, upgrade prompt dialog, failed payment grace period, account restriction (read-only mode with full-screen blocker), payment recovery flow, automatic restriction lift on successful payment
 - [ ] 17-14-PLAN.md — End-to-end verification: marketing site Lighthouse audit (90+ all categories), sign-up flow end-to-end test, subscription lifecycle with Stripe test mode (trial → checkout → active → cancel → reactivate → failed payment → recovery), mobile responsiveness audit, competitor comparison accuracy review
 
