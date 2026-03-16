@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 10 of 17 (Smart Features & AI) — IN PROGRESS
 Plan: 17/17 complete (01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17 done)
-Status: Phase 10 Plan 17 complete — VAPID push handler in service worker, PWA install banner, push permission prompt wired into AppShell
-Last activity: 2026-03-16 — Phase 10 Plan 12 committed (ETA engine, portal tracker, dispatch overlay)
+Status: Phase 10 Plan 16 complete — owner broadcast messaging to customer segments with email/SMS delivery, history tracking, and settings compose UI
+Last activity: 2026-03-16 — Phase 10 Plan 16 committed (broadcast messaging)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
