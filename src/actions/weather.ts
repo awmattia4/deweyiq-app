@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 import { adminDb, withRls } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
@@ -20,6 +21,8 @@ import {
   type OpenMeteoForecast,
 } from "@/lib/weather/open-meteo"
 import { findRescheduleSlots, type AffectedStop } from "@/lib/weather/reschedule-engine"
+import { getResolvedTemplate } from "@/actions/notification-templates"
+import { Resend } from "resend"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -378,6 +381,184 @@ export async function getPendingProposals(): Promise<WeatherProposal[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Notification dispatch helper (fire-and-forget)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dispatches weather reschedule notifications to affected customers.
+ *
+ * Called after approveProposal applies reschedules. Uses Promise.allSettled so
+ * notification failure never rolls back the reschedule. Fire-and-forget only —
+ * the caller must not await this.
+ *
+ * @param orgId - The org UUID (for template resolution)
+ * @param customerIds - Customer IDs to notify (already filtered for exclusions)
+ * @param weatherLabel - Human-readable weather reason (e.g. "Thunderstorm (95% chance)")
+ * @param originalDate - The original service date (YYYY-MM-DD)
+ * @param proposedReschedules - Map of customerId -> newDate (the stop's new date)
+ */
+async function dispatchWeatherRescheduleNotifications(
+  orgId: string,
+  customerIds: string[],
+  weatherLabel: string,
+  originalDate: string,
+  proposedReschedules: Map<string, string>
+): Promise<{ notified: number }> {
+  if (customerIds.length === 0) return { notified: 0 }
+
+  try {
+    // Fetch customer contact info
+    const customerRows = await adminDb
+      .select({
+        id: customers.id,
+        full_name: customers.full_name,
+        email: customers.email,
+        phone: customers.phone,
+      })
+      .from(customers)
+      .where(and(eq(customers.org_id, orgId), inArray(customers.id, customerIds)))
+
+    if (customerRows.length === 0) return { notified: 0 }
+
+    // Format dates for display
+    const formatDate = (dateStr: string) => {
+      try {
+        const [year, month, day] = dateStr.split("-").map(Number)
+        return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })
+      } catch {
+        return dateStr
+      }
+    }
+
+    const originalDateFormatted = formatDate(originalDate)
+
+    // Build notification tasks per customer
+    const notificationTasks = customerRows.map(async (customer) => {
+      const newDate = proposedReschedules.get(customer.id)
+      const newDateFormatted = newDate ? formatDate(newDate) : "a future date"
+
+      const mergeContext = {
+        customer_name: customer.full_name,
+        weather_reason: weatherLabel,
+        original_date: originalDateFormatted,
+        new_date: newDateFormatted,
+      }
+
+      // Resolve email template
+      const emailTemplate = customer.email
+        ? await getResolvedTemplate(orgId, "weather_delay_email", mergeContext)
+        : null
+
+      // Resolve SMS template
+      const smsTemplate = customer.phone
+        ? await getResolvedTemplate(orgId, "weather_delay_sms", mergeContext)
+        : null
+
+      const tasks: Promise<unknown>[] = []
+
+      // Email send via Resend
+      if (emailTemplate && customer.email) {
+        const resendApiKey = process.env.RESEND_API_KEY
+        const isDev = process.env.NODE_ENV === "development"
+
+        if (!resendApiKey) {
+          if (isDev) {
+            console.log(
+              `[weather-notify] [DEV] Would send email to ${customer.email}: ${emailTemplate.subject}`
+            )
+          }
+        } else {
+          const resend = new Resend(resendApiKey)
+          // Fetch org name for from address
+          const orgRow = await adminDb
+            .select({ name: orgs.name })
+            .from(orgs)
+            .where(eq(orgs.id, orgId))
+            .limit(1)
+          const orgName = orgRow[0]?.name ?? "Your Pool Company"
+
+          tasks.push(
+            resend.emails
+              .send({
+                from: isDev
+                  ? "PoolCo Dev <onboarding@resend.dev>"
+                  : `${orgName} <notifications@poolco.app>`,
+                to: isDev ? ["delivered@resend.dev"] : [customer.email],
+                subject: emailTemplate.subject ?? `Schedule Update from ${orgName}`,
+                html: (emailTemplate.body_html ?? "").replace(/\n/g, "<br>"),
+              })
+              .then((result) => {
+                if ("error" in result && result.error) {
+                  console.error(
+                    `[weather-notify] Resend error for ${customer.email}:`,
+                    result.error
+                  )
+                } else {
+                  console.log(`[weather-notify] Email sent to ${customer.email}`)
+                }
+              })
+              .catch((err) => {
+                console.error(`[weather-notify] Email exception for ${customer.email}:`, err)
+              })
+          )
+        }
+      }
+
+      // SMS send via send-invoice-sms edge function (supports customText)
+      if (smsTemplate && customer.phone) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+        if (supabaseUrl && serviceRoleKey) {
+          const adminSupabase = createSupabaseAdmin(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+          tasks.push(
+            adminSupabase.functions
+              .invoke("send-invoice-sms", {
+                body: {
+                  phone: customer.phone,
+                  companyName: "",  // not needed when customText provided
+                  type: "invoice",  // required field, value unused when customText provided
+                  customText: smsTemplate.sms_text ?? undefined,
+                },
+              })
+              .then(({ error }) => {
+                if (error) {
+                  console.error(
+                    `[weather-notify] SMS error for ${customer.phone}:`,
+                    error
+                  )
+                } else {
+                  console.log(`[weather-notify] SMS sent to ${customer.phone}`)
+                }
+              })
+              .catch((err) => {
+                console.error(`[weather-notify] SMS exception for ${customer.phone}:`, err)
+              })
+          )
+        }
+      }
+
+      return Promise.allSettled(tasks)
+    })
+
+    const results = await Promise.allSettled(notificationTasks)
+    const notified = results.filter((r) => r.status === "fulfilled").length
+    console.log(
+      `[weather-notify] Dispatched notifications: ${notified}/${customerIds.length} customers processed`
+    )
+    return { notified }
+  } catch (err) {
+    console.error("[weather-notify] dispatchWeatherRescheduleNotifications failed:", err)
+    return { notified: 0 }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Approve a proposal
 // ---------------------------------------------------------------------------
 
@@ -388,8 +569,8 @@ export async function getPendingProposals(): Promise<WeatherProposal[]> {
  * and tech_id. Sets the original stop's status to 'rescheduled_weather' so the
  * date change is auditable.
  *
- * Returns the list of affected customer IDs for downstream notification
- * (Plan 10-08 will wire the actual notification send).
+ * After reschedules are applied, dispatches customer notifications (fire-and-forget)
+ * for all non-excluded customers with email or phone.
  */
 export async function approveProposal(proposalId: string): Promise<{
   success: boolean
@@ -489,6 +670,35 @@ export async function approveProposal(proposalId: string): Promise<{
           ),
         ]
       : []
+
+    // Build a map of customerId -> newDate for notification merge tags
+    // (use the first proposed reschedule per customer since each customer may
+    // have multiple pools, we want the earliest new date for display)
+    const customerNewDateMap = new Map<string, string>()
+    for (const stop of affectedStops) {
+      const reschedule = proposedReschedules.find((r) => r.stopId === stop.stopId)
+      if (reschedule && !customerNewDateMap.has(stop.customerId)) {
+        customerNewDateMap.set(stop.customerId, reschedule.newDate)
+      }
+    }
+
+    // Fire-and-forget: dispatch customer notifications
+    // Notification failure MUST NOT affect the reschedule approval result
+    const originalDate = proposal.affected_date
+    const weatherLabel = proposal.weather_label ?? "severe weather"
+
+    void dispatchWeatherRescheduleNotifications(
+      token.org_id,
+      notifyCustomerIds,
+      weatherLabel,
+      originalDate,
+      customerNewDateMap
+    ).then(({ notified }) => {
+      // Log notification count for observability
+      console.log(
+        `[weather] Proposal ${proposalId}: notified ${notified}/${notifyCustomerIds.length} customers`
+      )
+    })
 
     revalidatePath("/alerts")
     revalidatePath("/schedule")

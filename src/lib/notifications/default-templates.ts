@@ -254,10 +254,10 @@ View your conversation: {{portal_link}}
   },
 
   weather_delay_email: {
-    subject: "Service Reschedule Notice from {{company_name}}",
+    subject: "Schedule Update -- {{company_name}}",
     body_html: `Hi {{customer_name}},
 
-Your scheduled service on {{original_date}} has been moved to {{new_date}} due to {{weather_reason}}.
+Due to {{weather_reason}} forecasted for {{original_date}}, we've rescheduled your pool service to {{new_date}}. We'll notify you when your tech is on the way. Thank you for your understanding.
 
 If you have any questions, please contact us.
 
@@ -265,6 +265,6 @@ If you have any questions, please contact us.
   },
 
   weather_delay_sms: {
-    sms_text: `{{company_name}}: Your {{original_date}} service has been moved to {{new_date}} due to {{weather_reason}}. {{sms_signature}}`,
+    sms_text: `{{company_name}}: Your {{original_date}} pool service has been rescheduled to {{new_date}} due to {{weather_reason}}. Reply STOP to unsubscribe. {{sms_signature}}`,
   },
 }
