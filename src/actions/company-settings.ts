@@ -70,6 +70,12 @@ export interface OrgSettings {
   // Phase 10-14: Safety — unresponsive tech detection
   safety_timeout_minutes: number
   safety_escalation_chain: Array<{ role: string; delay_minutes: number }> | null
+  // Phase 11: Time tracking settings
+  time_tracking_enabled: boolean
+  geofence_radius_meters: number
+  break_auto_detect_minutes: number
+  pay_period_type: string
+  overtime_threshold_hours: number
   created_at: Date
   updated_at: Date
 }
@@ -143,6 +149,12 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   // Phase 10-14 defaults
   safety_timeout_minutes: 30,
   safety_escalation_chain: [{ role: "owner", delay_minutes: 0 }],
+  // Phase 11 defaults
+  time_tracking_enabled: false,
+  geofence_radius_meters: 100,
+  break_auto_detect_minutes: 30,
+  pay_period_type: "bi_weekly",
+  overtime_threshold_hours: 40,
 }
 
 // ---------------------------------------------------------------------------

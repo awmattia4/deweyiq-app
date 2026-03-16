@@ -18,6 +18,9 @@ import { routeStops } from "./route-stops"
  * qbo_time_activity_id is populated when the entry is pushed to QuickBooks Online
  * via the time push integration (Phase 11).
  *
+ * approved_at / approved_by are set when the owner approves a week's timesheet
+ * via the timesheet review UI (Phase 11-04).
+ *
  * RLS:
  * - SELECT/INSERT/UPDATE/DELETE: tech can access own entries only; owner/office can access all in org
  */
@@ -52,6 +55,9 @@ export const timeEntries = pgTable(
     // QBO integration — populated when pushed to QuickBooks Online
     qbo_time_activity_id: text("qbo_time_activity_id"),
     qbo_synced_at: timestamp("qbo_synced_at", { withTimezone: true }),
+    // Phase 11-04: Owner approval — set when owner approves this entry's week
+    approved_at: timestamp("approved_at", { withTimezone: true }),
+    approved_by: uuid("approved_by").references(() => profiles.id, { onDelete: "set null" }),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

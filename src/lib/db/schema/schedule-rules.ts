@@ -6,6 +6,7 @@ import { orgs } from "./orgs"
 import { profiles } from "./profiles"
 import { customers } from "./customers"
 import { pools } from "./pools"
+import { checklistTemplates } from "./checklists"
 
 /**
  * Schedule rules — recurring service schedule configuration per customer/pool.
@@ -42,6 +43,11 @@ export const scheduleRules = pgTable(
     anchor_date: text("anchor_date").notNull(),
     // 0=Sun, 1=Mon, ..., 6=Sat — used for monthly scheduling and day-of-week snapping
     preferred_day_of_week: integer("preferred_day_of_week"),
+    // Optional checklist template override for this customer/pool (overrides the org default)
+    checklist_template_id: uuid("checklist_template_id").references(
+      () => checklistTemplates.id,
+      { onDelete: "set null" }
+    ),
     active: boolean("active").notNull().default(true),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

@@ -34,6 +34,10 @@ export interface VisitDraft {
   chemistry: Record<string, number | null>  // all reading values keyed by param name
   checklist: Array<{ taskId: string; completed: boolean; notes: string }>
   notes: string
+  // Internal notes — visible only to office/owner, not on customer report
+  internalNotes?: string
+  // Internal flags — e.g. ["needs_follow_up", "escalate"] for office review
+  internalFlags?: string[]
   status: "draft" | "completed" | "editing"
   updatedAt: number             // Date.now()
 }

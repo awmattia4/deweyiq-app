@@ -261,6 +261,9 @@ export interface QuoteDocumentProps {
   grandTotal: number
   termsAndConditions: string | null
   flaggedByTechName?: string | null
+  laborHours?: number | null
+  laborRate?: number | null
+  laborCost?: number | null
 }
 
 // ---------------------------------------------------------------------------

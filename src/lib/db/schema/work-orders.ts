@@ -91,6 +91,11 @@ export const workOrders = pgTable(
     discount_reason: text("discount_reason"),
     // WO template used to seed line items on creation
     template_id: uuid("template_id"),
+    // Labor — hours and rate captured at WO creation/scheduling (used for quote/invoice line items)
+    labor_hours: numeric("labor_hours", { precision: 6, scale: 2 }),
+    labor_rate: numeric("labor_rate", { precision: 10, scale: 2 }),
+    // Actual hours worked — updated by tech when completing the WO
+    labor_actual_hours: numeric("labor_actual_hours", { precision: 6, scale: 2 }),
     // Audit trail — JSONB array of { type, at, by_id, note } events
     activity_log: jsonb("activity_log").$type<
       Array<{ type: string; at: string; by_id: string; note: string | null }>

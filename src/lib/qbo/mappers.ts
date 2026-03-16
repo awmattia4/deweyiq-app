@@ -1,11 +1,13 @@
 /**
- * QBO Entity Mappers — transforms between PoolCo and QuickBooks Online data shapes.
+ * QBO Entity Mappers — transforms between DeweyIQ and QuickBooks Online data shapes.
  *
  * Exported mappers:
- * - mapCustomerToQbo: PoolCo customer -> QBO Customer
- * - mapInvoiceToQbo: PoolCo invoice + line items -> QBO Invoice
- * - mapPaymentToQbo: PoolCo payment -> QBO Payment
- * - mapQboPaymentToPoolCo: QBO payment -> partial PoolCo payment record
+ * - mapCustomerToQbo: DeweyIQ customer -> QBO Customer
+ * - mapInvoiceToQbo: DeweyIQ invoice + line items -> QBO Invoice
+ * - mapPaymentToQbo: DeweyIQ payment -> QBO Payment
+ * - mapQboPaymentToPoolCo: QBO payment -> partial DeweyIQ payment record
+ * - mapTimeEntryToQboTimeActivity: DeweyIQ time_entry -> QBO TimeActivity (Phase 11-04)
+ * - mapProfileToQboEmployee: DeweyIQ profile -> QBO Employee (Phase 11-04)
  */
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,23 @@ export interface PoolCoPayment {
   method: string
   settled_at: Date | null
   qbo_payment_id: string | null
+}
+
+// Phase 11-04: Time entry + employee shapes
+
+export interface PoolCoTimeEntry {
+  id: string
+  /** YYYY-MM-DD local date */
+  work_date: string
+  /** Net minutes (gross minus breaks) — QBO receives net work time */
+  total_minutes: number
+}
+
+export interface PoolCoProfile {
+  id: string
+  full_name: string
+  email: string | null
+  qbo_employee_id: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +147,7 @@ export function mapInvoiceToQbo(
 // ---------------------------------------------------------------------------
 
 /**
- * Maps a PoolCo payment record to a QBO Payment object.
+ * Maps a DeweyIQ payment record to a QBO Payment object.
  *
  * Payment method mapping:
  * - card -> Credit Card
@@ -164,7 +183,7 @@ export function mapPaymentToQbo(
     qboPayment.TxnDate = payment.settled_at.toISOString().split("T")[0]
   }
 
-  // Map PoolCo payment method to QBO PaymentMethodRef
+  // Map DeweyIQ payment method to QBO PaymentMethodRef
   const methodMap: Record<string, string> = {
     card: "Credit Card",
     ach: "Check",
@@ -182,7 +201,7 @@ export function mapPaymentToQbo(
 // ---------------------------------------------------------------------------
 
 /**
- * Maps a QBO Payment object to a partial PoolCo payment record shape.
+ * Maps a QBO Payment object to a partial DeweyIQ payment record shape.
  * Used for inbound webhook processing.
  */
 export function mapQboPaymentToPoolCo(qboPayment: any): {
@@ -230,4 +249,80 @@ export function mapQboPaymentToPoolCo(qboPayment: any): {
     linkedInvoiceId,
     txnDate,
   }
+}
+
+// ---------------------------------------------------------------------------
+// mapTimeEntryToQboTimeActivity — Phase 11-04
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a DeweyIQ time_entry to a QBO TimeActivity payload.
+ *
+ * QBO TimeActivity fields:
+ * - TxnDate: the work date (YYYY-MM-DD)
+ * - NameOf: "Employee" (identifies the entity type)
+ * - EmployeeRef: { value: qboEmployeeId }
+ * - Hours: whole hours portion of net work time
+ * - Minutes: remaining minutes (0-59)
+ * - Description: short narrative for the payroll record
+ * - BillableStatus: "NotBillable" (internal time — not billed to customers)
+ *
+ * @param entry          - minimal time_entry row shape (net minutes, not gross)
+ * @param qboEmployeeRef - QBO Employee.Id for the tech
+ */
+export function mapTimeEntryToQboTimeActivity(
+  entry: PoolCoTimeEntry,
+  qboEmployeeRef: string
+): Record<string, any> {
+  const hours = Math.floor(entry.total_minutes / 60)
+  const minutes = entry.total_minutes % 60
+
+  return {
+    TxnDate: entry.work_date,
+    NameOf: "Employee",
+    EmployeeRef: { value: qboEmployeeRef },
+    Hours: hours,
+    Minutes: minutes,
+    Description: `Field route - ${entry.work_date}`,
+    BillableStatus: "NotBillable",
+  }
+}
+
+// ---------------------------------------------------------------------------
+// mapProfileToQboEmployee — Phase 11-04
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a DeweyIQ profiles row to a QBO Employee create payload.
+ *
+ * QBO Employee fields:
+ * - DisplayName: required — shown in QBO payroll UI
+ * - GivenName / FamilyName: parsed from full_name (last-space split)
+ * - PrimaryEmailAddr: optional
+ *
+ * For updates, caller adds Id + SyncToken to the returned object.
+ *
+ * @param profile - minimal profile shape
+ */
+export function mapProfileToQboEmployee(
+  profile: PoolCoProfile
+): Record<string, any> {
+  const nameParts = profile.full_name.trim().split(/\s+/)
+  const familyName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ""
+  const givenName =
+    nameParts.length > 1
+      ? nameParts.slice(0, -1).join(" ")
+      : profile.full_name
+
+  const qboEmployee: Record<string, any> = {
+    DisplayName: profile.full_name,
+    GivenName: givenName,
+    FamilyName: familyName,
+  }
+
+  if (profile.email) {
+    qboEmployee.PrimaryEmailAddr = { Address: profile.email }
+  }
+
+  return qboEmployee
 }

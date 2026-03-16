@@ -68,6 +68,10 @@ export interface WorkOrderDetail extends WorkOrderSummary {
   discount_reason: string | null
   template_id: string | null
   activity_log: Array<{ type: string; at: string; by_id: string; note: string | null }> | null
+  // Labor fields (Phase 11-04)
+  labor_hours: string | null
+  labor_rate: string | null
+  labor_actual_hours: string | null
   // Joined
   createdByName: string | null
   flaggedByTechName: string | null
@@ -439,6 +443,9 @@ export async function getWorkOrder(id: string): Promise<WorkOrderDetail | null> 
           discount_reason: workOrders.discount_reason,
           template_id: workOrders.template_id,
           activity_log: workOrders.activity_log,
+          labor_hours: workOrders.labor_hours,
+          labor_rate: workOrders.labor_rate,
+          labor_actual_hours: workOrders.labor_actual_hours,
           created_at: workOrders.created_at,
           updated_at: workOrders.updated_at,
           customerName: customers.full_name,
@@ -521,6 +528,9 @@ export async function getWorkOrder(id: string): Promise<WorkOrderDetail | null> 
         techName: wo.assigned_tech_id ? (profileMap[wo.assigned_tech_id] ?? null) : null,
         createdByName: wo.created_by_id ? (profileMap[wo.created_by_id] ?? null) : null,
         flaggedByTechName: wo.flagged_by_tech_id ? (profileMap[wo.flagged_by_tech_id] ?? null) : null,
+        labor_hours: wo.labor_hours ?? null,
+        labor_rate: wo.labor_rate ?? null,
+        labor_actual_hours: wo.labor_actual_hours ?? null,
         lineItems: lineItemRows.map((li) => ({
           ...li,
           quantity: li.quantity ?? "1",
@@ -795,6 +805,48 @@ export async function updateWorkOrder(
   } catch (err) {
     console.error("[updateWorkOrder] Error:", err)
     return { success: false, error: err instanceof Error ? err.message : "Unknown error" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateWorkOrderLabor
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates the labor hours, rate, and actual hours on a work order.
+ * Used by WoLaborSection to persist labor cost estimates and actuals.
+ *
+ * - labor_hours: estimated hours (set at scheduling time)
+ * - labor_rate: hourly rate in dollars (set at scheduling time)
+ * - labor_actual_hours: actual hours recorded by tech on completion
+ */
+export async function updateWorkOrderLabor(
+  workOrderId: string,
+  data: {
+    laborHours?: string | null
+    laborRate?: string | null
+    laborActualHours?: string | null
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    await withRls(token, async (db) => {
+      const updates: Record<string, any> = { updated_at: new Date() }
+      if (data.laborHours !== undefined) updates.labor_hours = data.laborHours
+      if (data.laborRate !== undefined) updates.labor_rate = data.laborRate
+      if (data.laborActualHours !== undefined) updates.labor_actual_hours = data.laborActualHours
+
+      await db
+        .update(workOrders)
+        .set(updates)
+        .where(eq(workOrders.id, workOrderId))
+    })
+    return { success: true }
+  } catch (err) {
+    console.error("[updateWorkOrderLabor] Error:", err)
+    return { success: false, error: "Failed to update labor fields" }
   }
 }
 

@@ -145,6 +145,22 @@ export function useVisitDraft(
     [draft]
   )
 
+  /** Update internal notes (office-only, not shown on customer report). */
+  const updateInternalNotesDraft = useCallback(
+    async (notes: string, flags?: string[]) => {
+      if (!draft) return
+      const update: Partial<VisitDraft> = {
+        internalNotes: notes,
+        updatedAt: Date.now(),
+      }
+      if (flags !== undefined) {
+        update.internalFlags = flags
+      }
+      await offlineDb.visitDrafts.update(draft.id, update)
+    },
+    [draft]
+  )
+
   /** Mark draft as completed. */
   const completeDraft = useCallback(async () => {
     if (!draft) return
@@ -170,6 +186,7 @@ export function useVisitDraft(
     updateChecklist,
     markAllChecklistComplete,
     updateNotes,
+    updateInternalNotesDraft,
     completeDraft,
     reopenDraft,
   }

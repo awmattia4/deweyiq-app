@@ -39,6 +39,8 @@ const TAG_COLORS: Record<PhotoTag, string> = {
 interface PhotoCaptureProps {
   visitId: string
   orgId: string
+  /** When true, hides capture controls — shows photos only (read-only view) */
+  readOnly?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +53,7 @@ interface PhotoCaptureProps {
  * Called on mount and when connectivity returns. Separate from the text
  * enqueueWrite queue because blobs cannot be JSON-serialized.
  */
-async function processPhotoQueue(
+export async function processPhotoQueue(
   visitId: string,
   orgId: string
 ): Promise<void> {
@@ -119,7 +121,7 @@ async function processPhotoQueue(
  * 5. If online: upload to Supabase Storage, mark "uploaded"
  * 6. If offline: stays "pending", syncs when connectivity returns
  */
-export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
+export function PhotoCapture({ visitId, orgId, readOnly = false }: PhotoCaptureProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isOnline = useOnlineStatus()
 
@@ -297,8 +299,8 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Camera button ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
+      {/* ── Camera button (hidden in readOnly mode) ─────────────────────────── */}
+      {!readOnly && <div className="flex flex-col gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -339,7 +341,7 @@ export function PhotoCapture({ visitId, orgId }: PhotoCaptureProps) {
             Offline — photos will upload when connectivity returns
           </p>
         )}
-      </div>
+      </div>}
 
       {/* ── 10+ photo warning ──────────────────────────────────────────────── */}
       {showWarning && (

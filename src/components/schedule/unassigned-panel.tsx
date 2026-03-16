@@ -3,18 +3,22 @@
 import { useState, useMemo } from "react"
 import { SearchIcon, UserIcon, DropletIcon, CheckSquareIcon, SquareIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { UnassignedCustomer } from "@/actions/schedule"
+import type { UnassignedCustomer, UnassignedWorkOrder } from "@/actions/schedule"
 
 // ─── UnassignedPanel ──────────────────────────────────────────────────────────
 
 interface UnassignedPanelProps {
   /** Customers without a route_stop for this tech+day */
   customers: UnassignedCustomer[]
+  /** Approved work orders not yet on this tech+day route */
+  workOrders?: UnassignedWorkOrder[]
   /** Currently multi-selected customer IDs */
   selectedIds: Set<string>
   onToggleSelect: (customerId: string) => void
   /** Called to assign one or more customers — receives array of {customerId, poolId} pairs */
   onAssign: (pairs: Array<{ customerId: string; poolId: string }>) => void
+  /** Called to assign a work order stop — receives the work order id */
+  onAssignWorkOrder?: (workOrderId: string) => void
   /** Whether a drag is hovering over this panel (for visual feedback) */
   isOver?: boolean
   isAssigning?: boolean
@@ -36,9 +40,11 @@ interface UnassignedPanelProps {
  */
 export function UnassignedPanel({
   customers,
+  workOrders = [],
   selectedIds,
   onToggleSelect,
   onAssign,
+  onAssignWorkOrder,
   isOver = false,
   isAssigning = false,
 }: UnassignedPanelProps) {

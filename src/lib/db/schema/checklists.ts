@@ -16,6 +16,8 @@ import { customers } from "./customers"
  * The `service_type` column matches service_visits.visit_type values:
  * "routine" | "opening" | "closing" | "green_pool" | null (generic/all visits)
  *
+ * is_default: only one template per org should be marked default (the "all visits" template).
+ *
  * RLS: all org members can view; only owner+office can manage templates.
  */
 export const checklistTemplates = pgTable(
@@ -28,6 +30,8 @@ export const checklistTemplates = pgTable(
     name: text("name").notNull(),
     // Matches service_visits.visit_type: "routine" | "opening" | "closing" | "green_pool" | null
     service_type: text("service_type"),
+    // True for the "global" template applied to all service types
+    is_default: boolean("is_default").notNull().default(false),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -80,8 +84,12 @@ export const checklistTemplates = pgTable(
  *   1. template_id set, customer_id null → template-level task (inherited by all customers)
  *   2. template_id set (or null), customer_id set → customer-specific override or addition
  *
- * When customer_id is non-null and is_deleted is true, the task is suppressed for that
- * customer (soft-delete pattern for removing inherited template tasks per customer).
+ * Suppression model:
+ *   When a customer doesn't need a specific template task, a customer-specific row is
+ *   created with is_deleted=true and suppresses_task_id pointing to the template task ID.
+ *   The visit builder omits suppressed tasks for that customer.
+ *
+ * requires_photo: when true, tech must attach a photo to mark this task complete.
  *
  * The org_id column is duplicated here to allow RLS without a JOIN to checklist_templates.
  *
@@ -100,9 +108,13 @@ export const checklistTasks = pgTable(
     customer_id: uuid("customer_id").references(() => customers.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     is_required: boolean("is_required").notNull().default(true),
+    // When true, tech must attach a photo to mark this task complete
+    requires_photo: boolean("requires_photo").notNull().default(false),
     sort_order: integer("sort_order").notNull().default(0),
     // Soft delete: true = suppress this task for this customer (customer override removal)
     is_deleted: boolean("is_deleted").notNull().default(false),
+    // When is_deleted=true on a customer-level row, this points to the template task being suppressed
+    suppresses_task_id: uuid("suppresses_task_id"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

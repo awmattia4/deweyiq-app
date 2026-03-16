@@ -10,6 +10,8 @@ export const orgs = pgTable(
     name: text("name").notNull(),
     // slug used for customer portal URLs (e.g. /portal/my-pool-co)
     slug: text("slug").unique(),
+    // Supabase Storage path for the org's logo (constructed into signed URL at render time)
+    logo_url: text("logo_url"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

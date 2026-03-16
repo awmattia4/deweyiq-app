@@ -91,6 +91,8 @@ describe("generateDosingRecommendations", () => {
       tds: null,
       phosphates: null,
       salt: null,
+      borate: null,
+      temperatureF: null,
     },
     pool: {
       volumeGallons: 15000,
@@ -117,6 +119,8 @@ describe("generateDosingRecommendations", () => {
       tds: null,
       phosphates: null,
       salt: null,
+      borate: null,
+      temperatureF: null,
     },
     pool: {
       volumeGallons: 15000,
@@ -143,6 +147,8 @@ describe("generateDosingRecommendations", () => {
       tds: null,
       phosphates: null,
       salt: null,
+      borate: null,
+      temperatureF: null,
     },
     pool: {
       volumeGallons: 15000,

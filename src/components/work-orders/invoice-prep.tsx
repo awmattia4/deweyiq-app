@@ -74,6 +74,7 @@ const STATUS_COLORS: Record<string, string> = {
 interface InvoicePrepProps {
   invoice: InvoiceDetail
   workOrderId: string
+  backHref?: string
 }
 
 // ─── NumericInput — decimal-safe controlled input ─────────────────────────────

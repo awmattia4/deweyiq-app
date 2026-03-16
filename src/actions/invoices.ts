@@ -88,6 +88,19 @@ export interface InvoiceDetail {
   lineItems: InvoiceLineItemDetail[]
   // Work order references
   workOrderTitles: string[]
+  // Credit card surcharge (if applicable)
+  surcharge_amount?: string | null
+  due_date?: Date | null
+  billing_period_start?: Date | null
+  billing_period_end?: Date | null
+  autopay_id?: string | null
+  // Billing model for the invoice (per_stop | flat_rate | plus_chemicals | custom)
+  billing_model?: string | null
+  // Delivery timestamps
+  sent_at?: Date | null
+  sent_sms_at?: Date | null
+  // Payment details
+  payment_method?: string | null
 }
 
 export interface InvoiceSummary {
@@ -1581,6 +1594,10 @@ export async function getInvoice(id: string): Promise<InvoiceDetail | null> {
       taxExempt: customer?.tax_exempt ?? false,
       lineItems: lineItemRows as InvoiceLineItemDetail[],
       workOrderTitles,
+      billing_model: invoice.billing_model ?? null,
+      sent_at: invoice.sent_at ?? null,
+      sent_sms_at: invoice.sent_sms_at ?? null,
+      payment_method: invoice.payment_method ?? null,
     }
   } catch (err) {
     console.error("[getInvoice] Error:", err)

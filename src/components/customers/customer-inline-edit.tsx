@@ -48,6 +48,8 @@ interface CustomerInlineEditProps {
   techs: Array<{ id: string; full_name: string | null }>
   /** User role — overdue balance is only shown to office/owner, not tech */
   userRole?: string
+  /** Default per-stop rate from org settings — shown when billing_model=per_stop */
+  defaultPerStopRate?: string | null
 }
 
 type FormState = {

@@ -44,6 +44,8 @@ interface LineItemEditorProps {
   > | null
   editable: boolean
   onLineItemsChange?: (items: WorkOrderLineItem[]) => void
+  /** Optional labor cost from WoLaborSection — displayed in totals */
+  laborCost?: number
 }
 
 type ItemType = "part" | "labor" | "other"
@@ -674,6 +676,7 @@ export function LineItemEditor({
   orgSettings,
   editable,
   onLineItemsChange,
+  laborCost,
 }: LineItemEditorProps) {
   const [items, setItems] = useState<WorkOrderLineItem[]>(initialLineItems)
   const [dialogMode, setDialogMode] = useState<"add" | "edit" | null>(null)
