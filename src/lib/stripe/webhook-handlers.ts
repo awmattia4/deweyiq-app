@@ -28,6 +28,8 @@ import { render as renderEmail } from "@react-email/render"
 import { ReceiptEmail } from "@/lib/emails/receipt-email"
 import { Resend } from "resend"
 import { getResolvedTemplate } from "@/actions/notification-templates"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 
 // ---------------------------------------------------------------------------
 // handlePaymentSucceeded
@@ -258,6 +260,63 @@ export async function handlePaymentSucceeded(
     console.error("[handlePaymentSucceeded] Receipt email error (non-blocking):", receiptErr)
   }
 
+  // ── NOTIF-12: Notify owner+office of payment received (fire-and-forget) ────
+  try {
+    const [invoiceForNotif] = await adminDb
+      .select({ total: invoices.total, invoice_number: invoices.invoice_number, customer_id: invoices.customer_id, org_id: invoices.org_id })
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1)
+
+    if (invoiceForNotif) {
+      const totalFormatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(parseFloat(invoiceForNotif.total))
+      const customerRows = await adminDb
+        .select({ full_name: customers.full_name, phone: customers.phone })
+        .from(customers)
+        .where(eq(customers.id, invoiceForNotif.customer_id))
+        .limit(1)
+      const customerName = customerRows[0]?.full_name ?? "Customer"
+      const customerPhone = customerRows[0]?.phone ?? null
+
+      void notifyOrgRole(invoiceForNotif.org_id, "owner+office", {
+        type: "payment_received",
+        urgency: "informational",
+        title: "Payment received",
+        body: `${totalFormatted} from ${customerName}`,
+        link: `/billing`,
+      }).catch((err) =>
+        console.error("[handlePaymentSucceeded] NOTIF-12 dispatch failed (non-blocking):", err)
+      )
+
+      // ── NOTIF-27: Send payment_receipt_sms to customer (fire-and-forget) ────
+      if (customerPhone) {
+        try {
+          const smsTemplate = await getResolvedTemplate(invoiceForNotif.org_id, "payment_receipt_sms", {
+            customer_name: customerName,
+            invoice_number: invoiceForNotif.invoice_number ?? "N/A",
+            invoice_total: totalFormatted,
+          })
+          if (smsTemplate?.sms_text) {
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+            const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+            if (supabaseUrl && serviceRoleKey) {
+              const supabaseAdmin = createSupabaseAdmin(supabaseUrl, serviceRoleKey, {
+                auth: { autoRefreshToken: false, persistSession: false },
+              })
+              await supabaseAdmin.functions.invoke("send-sms", {
+                body: { to: customerPhone, text: smsTemplate.sms_text, orgId: invoiceForNotif.org_id },
+              })
+            }
+          }
+        } catch (smsErr) {
+          console.error("[handlePaymentSucceeded] NOTIF-27 SMS failed (non-blocking):", smsErr)
+        }
+      }
+    }
+  } catch (notifErr) {
+    console.error("[handlePaymentSucceeded] NOTIF-12/27 failed (non-blocking):", notifErr)
+  }
+
   console.log("[handlePaymentSucceeded] Invoice paid:", invoiceId, "via", paymentMethod)
 }
 
@@ -367,6 +426,68 @@ export async function handlePaymentFailed(
   } catch (alertErr) {
     // Non-fatal -- alert creation should never block payment processing
     console.error("[handlePaymentFailed] Failed to create alert:", alertErr)
+  }
+
+  // ── NOTIF-13: Notify owner+office of payment failure (fire-and-forget) ──────
+  // ── NOTIF-28: Send payment_failure_sms to customer (fire-and-forget) ────────
+  try {
+    if (invoice) {
+      const totalFormatted = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(parseFloat(invoice.total))
+      const customerRows = await adminDb
+        .select({ full_name: customers.full_name, phone: customers.phone })
+        .from(customers)
+        .where(eq(customers.id, invoice.customer_id))
+        .limit(1)
+      const customerName = customerRows[0]?.full_name ?? "Customer"
+      const customerPhone = customerRows[0]?.phone ?? null
+
+      void notifyOrgRole(orgId, "owner+office", {
+        type: "payment_failed",
+        urgency: "needs_action",
+        title: "Payment failed",
+        body: `${totalFormatted} failed for ${customerName}: ${failureMessage}`,
+        link: `/billing`,
+      }).catch((err) =>
+        console.error("[handlePaymentFailed] NOTIF-13 dispatch failed (non-blocking):", err)
+      )
+
+      // NOTIF-28: SMS to customer about failed payment
+      if (customerPhone) {
+        const [invoiceRow] = await adminDb
+          .select({ invoice_number: invoices.invoice_number, org_id: invoices.org_id })
+          .from(invoices)
+          .where(eq(invoices.id, invoiceId))
+          .limit(1)
+
+        if (invoiceRow) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+          try {
+            const smsTemplate = await getResolvedTemplate(invoiceRow.org_id, "payment_failure_sms", {
+              customer_name: customerName,
+              invoice_number: invoiceRow.invoice_number ?? "N/A",
+              invoice_total: totalFormatted,
+              portal_link: `${appUrl}/portal`,
+            })
+            if (smsTemplate?.sms_text) {
+              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+              const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+              if (supabaseUrl && serviceRoleKey) {
+                const supabaseAdmin = createSupabaseAdmin(supabaseUrl, serviceRoleKey, {
+                  auth: { autoRefreshToken: false, persistSession: false },
+                })
+                await supabaseAdmin.functions.invoke("send-sms", {
+                  body: { to: customerPhone, text: smsTemplate.sms_text, orgId: invoiceRow.org_id },
+                })
+              }
+            }
+          } catch (smsErr) {
+            console.error("[handlePaymentFailed] NOTIF-28 SMS failed (non-blocking):", smsErr)
+          }
+        }
+      }
+    }
+  } catch (notifErr) {
+    console.error("[handlePaymentFailed] NOTIF-13/28 failed (non-blocking):", notifErr)
   }
 
   console.log("[handlePaymentFailed] Invoice payment failed:", invoiceId)

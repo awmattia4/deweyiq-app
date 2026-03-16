@@ -13,6 +13,7 @@ import {
   workOrders,
 } from "@/lib/db/schema"
 import { eq, and, desc } from "drizzle-orm"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -230,6 +231,28 @@ export async function submitServiceRequest(
 
     revalidatePath("/requests")
     revalidatePath("/portal/requests")
+
+    // ── NOTIF-15: Notify owner+office of service request (fire-and-forget) ───
+    try {
+      const customerRow = await adminDb
+        .select({ full_name: customers.full_name })
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1)
+      const customerName = customerRow[0]?.full_name ?? "Customer"
+
+      void notifyOrgRole(orgId, "owner+office", {
+        type: "service_request",
+        urgency: "needs_action",
+        title: data.isUrgent ? "Urgent service request" : "New service request",
+        body: `${customerName}: ${data.category} — ${data.description.substring(0, 80)}`,
+        link: "/requests",
+      }).catch((err) =>
+        console.error("[service-requests] NOTIF-15 dispatch failed (non-blocking):", err)
+      )
+    } catch (notif15Err) {
+      console.error("[service-requests] NOTIF-15 failed (non-blocking):", notif15Err)
+    }
 
     return { id: newRequest.id, success: true }
   } catch (err) {

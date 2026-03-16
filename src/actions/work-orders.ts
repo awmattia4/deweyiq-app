@@ -14,6 +14,7 @@ import {
   woTemplates,
   alerts,
   orgSettings,
+  orgs,
 } from "@/lib/db/schema"
 import {
   eq,
@@ -22,6 +23,9 @@ import {
   inArray,
   sql,
 } from "drizzle-orm"
+import { notifyOrgRole, notifyUser } from "@/lib/notifications/dispatch"
+import { getResolvedTemplate } from "@/actions/notification-templates"
+import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -175,6 +179,13 @@ async function getRlsToken(): Promise<SupabaseToken | null> {
   const { data: claimsData } = await supabase.auth.getClaims()
   if (!claimsData?.claims) return null
   return claimsData.claims as SupabaseToken
+}
+
+// Service-role Supabase client for Edge Function invocations from admin context
+function getAdminSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createSupabaseAdmin(supabaseUrl, serviceKey)
 }
 
 // ---------------------------------------------------------------------------
@@ -637,6 +648,42 @@ export async function createWorkOrder(
       )
     }
 
+    // ── 4. NOTIF-10: Notify owner+office of new WO (fire-and-forget) ─────────
+    if (woId) {
+      // Fetch customer name for the notification body
+      void adminDb
+        .select({ full_name: customers.full_name })
+        .from(customers)
+        .where(eq(customers.id, data.customerId))
+        .limit(1)
+        .then((rows) => {
+          const customerName = rows[0]?.full_name ?? "Customer"
+          return notifyOrgRole(orgId, "owner+office", {
+            type: "wo_created",
+            urgency: "informational",
+            title: "Work order created",
+            body: `New WO: "${data.title}" for ${customerName}`,
+            link: `/work-orders/${woId}`,
+          })
+        })
+        .catch((err) =>
+          console.error("[createWorkOrder] NOTIF-10 dispatch failed (non-blocking):", err)
+        )
+    }
+
+    // ── 5. NOTIF-19: Notify assigned tech (fire-and-forget) ──────────────────
+    if (woId && data.flaggedByTechId) {
+      void notifyUser(data.flaggedByTechId, orgId, {
+        type: "tech_assigned",
+        urgency: "informational",
+        title: "New work order assigned",
+        body: `"${data.title}"`,
+        link: `/work-orders/${woId}`,
+      }).catch((err) =>
+        console.error("[createWorkOrder] NOTIF-19 dispatch failed (non-blocking):", err)
+      )
+    }
+
     return woId
   } catch (err) {
     console.error("[createWorkOrder] Error:", err)
@@ -856,6 +903,81 @@ export async function updateWorkOrderStatus(
     // Here we insert an info alert for office visibility of the completion.
     if (result.success && newStatus === "complete") {
       void _notifyOfficeWoCompleted(orgId, id, userId)
+    }
+
+    // ── NOTIF-10: Notify owner+office of WO status change (fire-and-forget) ──
+    if (result.success) {
+      void adminDb
+        .select({
+          title: workOrders.title,
+          customer_id: workOrders.customer_id,
+          assigned_tech_id: workOrders.assigned_tech_id,
+        })
+        .from(workOrders)
+        .where(eq(workOrders.id, id))
+        .limit(1)
+        .then(async (rows) => {
+          const wo = rows[0]
+          if (!wo) return
+
+          const customerRows = await adminDb
+            .select({ full_name: customers.full_name, phone: customers.phone })
+            .from(customers)
+            .where(eq(customers.id, wo.customer_id))
+            .limit(1)
+          const customerName = customerRows[0]?.full_name ?? "Customer"
+          const customerPhone = customerRows[0]?.phone ?? null
+
+          const notifType = newStatus === "complete" ? "wo_completed" : "wo_updated"
+          await notifyOrgRole(orgId, "owner+office", {
+            type: notifType,
+            urgency: "informational",
+            title: newStatus === "complete" ? "Work order completed" : "Work order updated",
+            body: `"${wo.title}" for ${customerName} — status: ${newStatus}`,
+            link: `/work-orders/${id}`,
+          })
+
+          // ── NOTIF-19: Notify assigned tech if status changed to 'scheduled' ──
+          if (newStatus === "scheduled" && extra?.assignedTechId) {
+            await notifyUser(extra.assignedTechId, orgId, {
+              type: "tech_assigned",
+              urgency: "informational",
+              title: "Work order scheduled",
+              body: `"${wo.title}" for ${customerName}`,
+              link: `/work-orders/${id}`,
+            })
+          }
+
+          // ── NOTIF-31: Send wo_status_sms to customer (fire-and-forget) ─────
+          if (customerPhone) {
+            try {
+              const orgRows = await adminDb
+                .select({ name: orgs.name })
+                .from(orgs)
+                .where(eq(orgs.id, orgId))
+                .limit(1)
+              const companyName = orgRows[0]?.name ?? "Your pool service"
+
+              const smsTemplate = await getResolvedTemplate(orgId, "wo_status_sms", {
+                customer_name: customerName,
+                company_name: companyName,
+                wo_title: wo.title,
+                status: newStatus,
+              })
+              if (smsTemplate?.sms_text) {
+                const adminSupabase = getAdminSupabaseClient()
+                await adminSupabase.functions.invoke("send-sms", {
+                  body: { to: customerPhone, text: smsTemplate.sms_text, orgId },
+                })
+              }
+            } catch (smsErr) {
+              console.error("[updateWorkOrderStatus] NOTIF-31 SMS failed (non-blocking):", smsErr)
+            }
+          }
+        })
+        .catch((err) =>
+          console.error("[updateWorkOrderStatus] NOTIF-10/19/31 dispatch failed (non-blocking):", err)
+        )
     }
 
     return result

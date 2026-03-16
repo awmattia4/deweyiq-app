@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/schema"
 import { and, eq, gt, gte, lte, inArray, isNull } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
+import { notifyUser } from "@/lib/notifications/dispatch"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -913,6 +914,17 @@ export async function assignStopToRoute(
         .returning({ id: routeStops.id })
     })
 
+    // ── NOTIF-21: Notify assigned tech of schedule change (fire-and-forget) ──
+    void notifyUser(techId, orgId, {
+      type: "schedule_change",
+      urgency: "informational",
+      title: "Stop added to your route",
+      body: `A stop has been added to your route on ${date}`,
+      link: "/routes",
+    }).catch((err) =>
+      console.error("[assignStopToRoute] NOTIF-21 dispatch failed (non-blocking):", err)
+    )
+
     return { success: true, stopId: result[0]?.id }
   } catch (error) {
     console.error("[assignStopToRoute] Error:", error)
@@ -1190,6 +1202,20 @@ export async function bulkAssignStops(
     })
 
     revalidatePath("/schedule")
+
+    // ── NOTIF-21: Notify assigned tech of schedule change (fire-and-forget) ──
+    if (insertedCount > 0) {
+      void notifyUser(techId, orgId, {
+        type: "schedule_change",
+        urgency: "informational",
+        title: "Stops added to your route",
+        body: `${insertedCount} stop${insertedCount !== 1 ? "s" : ""} added to your route on ${date}`,
+        link: "/routes",
+      }).catch((err) =>
+        console.error("[bulkAssignStops] NOTIF-21 dispatch failed (non-blocking):", err)
+      )
+    }
+
     return { success: true, count: insertedCount }
   } catch (error) {
     console.error("[bulkAssignStops] Error:", error)

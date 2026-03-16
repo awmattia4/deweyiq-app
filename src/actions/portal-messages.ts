@@ -26,6 +26,8 @@ import { Resend } from "resend"
 import { render as renderEmail } from "@react-email/render"
 import { createElement } from "react"
 import { PortalMessageEmail } from "@/lib/emails/portal-message-email"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,7 +96,7 @@ export async function sendMessage(params: {
   try {
     // Validate that the customer belongs to the org
     const [customer] = await adminDb
-      .select({ id: customers.id, email: customers.email, full_name: customers.full_name })
+      .select({ id: customers.id, email: customers.email, full_name: customers.full_name, phone: customers.phone })
       .from(customers)
       .where(and(eq(customers.id, customerId), eq(customers.org_id, orgId)))
       .limit(1)
@@ -167,6 +169,47 @@ export async function sendMessage(params: {
       senderName,
       body,
     }).catch((err) => console.error("[sendMessage] Email notification error:", err))
+
+    // ── NOTIF-14: When customer sends a message, notify owner+office ─────────
+    if (senderRole === "customer") {
+      void notifyOrgRole(orgId, "owner+office", {
+        type: "portal_message",
+        urgency: "needs_action",
+        title: "Customer message",
+        body: `${customer.full_name}: ${body ? body.substring(0, 100) : "[Photo]"}`,
+        link: `/portal-inbox`,
+      }).catch((err) =>
+        console.error("[sendMessage] NOTIF-14 dispatch failed (non-blocking):", err)
+      )
+    }
+
+    // ── NOTIF-32: When office replies, send portal_reply_sms to customer ─────
+    if (senderRole === "office" && customer.phone) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+        // Fetch org name for sms template
+        const orgRows = await adminDb
+          .select({ name: orgs.name })
+          .from(orgs)
+          .where(eq(orgs.id, orgId))
+          .limit(1)
+        const companyName = orgRows[0]?.name ?? "Pool Company"
+
+        const smsTemplate = await getResolvedTemplate(orgId, "portal_reply_sms", {
+          customer_name: customer.full_name,
+          company_name: companyName,
+          portal_link: `${appUrl}/portal`,
+        })
+        if (smsTemplate?.sms_text) {
+          const supabaseAdmin = createAdminClient()
+          await supabaseAdmin.functions.invoke("send-sms", {
+            body: { to: customer.phone, text: smsTemplate.sms_text, orgId },
+          })
+        }
+      } catch (smsErr) {
+        console.error("[sendMessage] NOTIF-32 SMS failed (non-blocking):", smsErr)
+      }
+    }
 
     return { success: true, message: messagePayload }
   } catch (err) {

@@ -28,6 +28,7 @@ import { signReportToken } from "@/lib/reports/report-token"
 import { getOrgSettings } from "@/actions/company-settings"
 import { toLocalDateString } from "@/lib/date-utils"
 import { getResolvedTemplate } from "@/actions/notification-templates"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -765,6 +766,92 @@ export async function completeStop(
       }
     }
 
+    // ── 12. NOTIF-05: Notify owner+office of stop completion (fire-and-forget) ──
+    void notifyOrgRole(orgId, "owner+office", {
+      type: "stop_completed",
+      urgency: "informational",
+      title: "Stop completed",
+      body: `${techName} completed ${customerName}`,
+      link: `/customers/${input.customerId}`,
+    }).catch((err) =>
+      console.error("[completeStop] NOTIF-05 dispatch failed (non-blocking):", err)
+    )
+
+    // ── 13. NOTIF-09: Chemistry alert if any readings are out of range ────────
+    // Best-effort — we check chemistry readings after the fact so office can follow up.
+    // Only fire on first completion (not edits).
+    if (!isUpdate && input.chemistry && Object.keys(input.chemistry).length > 0) {
+      try {
+        const CHEMISTRY_LIMITS: Record<string, { min?: number; max?: number }> = {
+          freeChlorine: { min: 1, max: 5 },
+          pH: { min: 7.0, max: 7.9 },
+          totalAlkalinity: { min: 60, max: 140 },
+          calciumHardness: { min: 150, max: 450 },
+          cya: { min: 20, max: 100 },
+          bromine: { min: 2, max: 6 },
+        }
+        const outOfRangeParams: string[] = []
+        for (const [param, val] of Object.entries(input.chemistry)) {
+          if (val === null || val === undefined) continue
+          const limits = CHEMISTRY_LIMITS[param]
+          if (!limits) continue
+          if ((limits.min !== undefined && val < limits.min) ||
+              (limits.max !== undefined && val > limits.max)) {
+            outOfRangeParams.push(`${param}: ${val}`)
+          }
+        }
+        if (outOfRangeParams.length > 0) {
+          void notifyOrgRole(orgId, "owner+office", {
+            type: "chemistry_alert",
+            urgency: "needs_action",
+            title: "Chemistry out of range",
+            body: `${outOfRangeParams.join(", ")} at ${customerName}`,
+            link: `/customers/${input.customerId}`,
+          }).catch((err) =>
+            console.error("[completeStop] NOTIF-09 dispatch failed (non-blocking):", err)
+          )
+        }
+      } catch (chemAlertErr) {
+        // Non-fatal — chemistry alert check must never block completion
+        console.error("[completeStop] Chemistry alert check failed (non-blocking):", chemAlertErr)
+      }
+    }
+
+    // ── 14. NOTIF-25: Send service_report_sms to customer (best-effort) ─────
+    // Only on first completion. Skip if no phone number.
+    if (!isUpdate) {
+      const customerPhone = await adminDb
+        .select({ phone: customers.phone })
+        .from(customers)
+        .where(eq(customers.id, input.customerId))
+        .limit(1)
+        .then((rows) => rows[0]?.phone ?? null)
+
+      if (customerPhone) {
+        try {
+          const smsTemplate = await getResolvedTemplate(orgId, "service_report_sms", {
+            customer_name: customerName,
+            company_name: companyName,
+            tech_name: techName,
+            report_link: reportUrl,
+          })
+          if (smsTemplate?.sms_text) {
+            const supabase = await createClient()
+            await supabase.functions.invoke("send-sms", {
+              body: {
+                to: customerPhone,
+                text: smsTemplate.sms_text,
+                orgId,
+              },
+            })
+          }
+        } catch (smsErr) {
+          // Non-fatal — SMS failure must never block completion
+          console.error("[completeStop] service_report_sms failed (non-blocking):", smsErr)
+        }
+      }
+    }
+
     return { success: true }
   } catch (err) {
     console.error("[completeStop] Error:", err)
@@ -836,12 +923,14 @@ export async function skipStop(
   try {
     const now = new Date()
 
+    const orgId = token.org_id as string
+
     await withRls(token, async (db) => {
       await db
         .insert(serviceVisits)
         .values({
           id: input.visitId,
-          org_id: token.org_id as string,
+          org_id: orgId,
           customer_id: input.customerId,
           pool_id: input.poolId,
           tech_id: token.sub,
@@ -858,6 +947,25 @@ export async function skipStop(
           },
         })
     })
+
+    // ── NOTIF-06: Notify owner+office of skipped stop (fire-and-forget) ──────
+    const techId = token.sub
+    const [techRow, customerRow] = await Promise.allSettled([
+      adminDb.select({ full_name: profiles.full_name }).from(profiles).where(eq(profiles.id, techId)).limit(1),
+      adminDb.select({ full_name: customers.full_name }).from(customers).where(eq(customers.id, input.customerId)).limit(1),
+    ])
+    const techName = techRow.status === "fulfilled" ? (techRow.value[0]?.full_name ?? "Tech") : "Tech"
+    const customerName = customerRow.status === "fulfilled" ? (customerRow.value[0]?.full_name ?? "Customer") : "Customer"
+
+    void notifyOrgRole(orgId, "owner+office", {
+      type: "stop_skipped",
+      urgency: "needs_action",
+      title: "Stop skipped",
+      body: `${techName} skipped ${customerName}: ${input.skipReason.trim()}`,
+      link: `/customers/${input.customerId}`,
+    }).catch((err) =>
+      console.error("[skipStop] NOTIF-06 dispatch failed (non-blocking):", err)
+    )
 
     return { success: true }
   } catch (err) {
@@ -912,3 +1020,9 @@ export async function updateInternalNotes(
     }
   }
 }
+
+// TODO(10-10): Wire NOTIF-07 (stop_cant_complete) when a markCantComplete() action is added.
+// When a tech marks a stop as can't-complete, call:
+//   notifyOrgRole(orgId, 'owner+office', { type: 'stop_cant_complete', urgency: 'needs_action',
+//     title: 'Stop inaccessible', body: '{techName} could not service {customerName}: {reason}',
+//     link: '/customers/{customerId}' })

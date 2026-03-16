@@ -8,6 +8,7 @@ import type { SupabaseToken } from "@/lib/db"
 import { customers } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { syncCustomerToQbo } from "@/actions/qbo-sync"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
 
 // ─── Input types ───────────────────────────────────────────────────────────────
 
@@ -110,6 +111,17 @@ export async function createCustomer(
     if (result[0]?.id) {
       syncCustomerToQbo(result[0].id).catch(() => {})
     }
+
+    // ── NOTIF-16: Notify owner+office of new customer (fire-and-forget) ───────
+    void notifyOrgRole(user.org_id, "owner+office", {
+      type: "customer_added",
+      urgency: "informational",
+      title: "New customer added",
+      body: `${input.full_name.trim()} has been added`,
+      link: `/customers/${result[0]?.id}`,
+    }).catch((err) =>
+      console.error("[createCustomer] NOTIF-16 dispatch failed (non-blocking):", err)
+    )
 
     return { success: true, customerId: result[0]?.id }
   } catch (err) {

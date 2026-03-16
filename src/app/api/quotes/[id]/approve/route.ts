@@ -24,6 +24,7 @@ import { adminDb } from "@/lib/db"
 import { quotes, workOrders, alerts } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { sql } from "drizzle-orm"
+import { notifyOrgRole, notifyUser } from "@/lib/notifications/dispatch"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,42 @@ async function _handleApprove(
         },
       })
       .onConflictDoNothing()
+
+    // ── NOTIF-11: Push notification to owner+office (fire-and-forget) ────────
+    void notifyOrgRole(quote.org_id, "owner+office", {
+      type: "quote_approved",
+      urgency: "informational",
+      title: "Quote approved",
+      body: `Customer approved quote #${quote.quote_number ?? quote.id}${wo ? ` — "${wo.title}"` : ""}`,
+      link: `/work-orders/${quote.work_order_id}`,
+    }).catch((err) =>
+      console.error("[approve] NOTIF-11 dispatch failed (non-blocking):", err)
+    )
+
+    // ── NOTIF-20: Notify assigned tech their quote was approved ───────────────
+    if (wo) {
+      try {
+        const woFullRow = await adminDb
+          .select({ assigned_tech_id: workOrders.assigned_tech_id })
+          .from(workOrders)
+          .where(eq(workOrders.id, quote.work_order_id))
+          .limit(1)
+        const techId = woFullRow[0]?.assigned_tech_id
+        if (techId) {
+          void notifyUser(techId, quote.org_id, {
+            type: "tech_quote_approved",
+            urgency: "informational",
+            title: "Quote approved",
+            body: `Customer approved your quote for "${wo.title}"`,
+            link: `/work-orders/${quote.work_order_id}`,
+          }).catch((err) =>
+            console.error("[approve] NOTIF-20 dispatch failed (non-blocking):", err)
+          )
+        }
+      } catch (techNotifErr) {
+        console.error("[approve] NOTIF-20 lookup failed (non-blocking):", techNotifErr)
+      }
+    }
   }
 }
 
@@ -284,6 +321,17 @@ async function _handleDecline(
       },
     })
     .onConflictDoNothing()
+
+  // ── NOTIF-11: Push notification to owner+office (fire-and-forget) ──────────
+  void notifyOrgRole(quote.org_id, "owner+office", {
+    type: "quote_rejected",
+    urgency: "needs_action",
+    title: "Quote declined",
+    body: `Customer declined quote #${quote.quote_number ?? quote.id}${declineReason ? `: ${declineReason}` : ""}`,
+    link: `/work-orders/${quote.work_order_id}`,
+  }).catch((err) =>
+    console.error("[approve] NOTIF-11 decline dispatch failed (non-blocking):", err)
+  )
 }
 
 /**

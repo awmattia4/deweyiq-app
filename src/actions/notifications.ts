@@ -7,6 +7,7 @@ import { routeStops, customers, profiles } from "@/lib/db/schema"
 import { and, eq, isNull, inArray } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
 import { getResolvedTemplate } from "@/actions/notification-templates"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -237,5 +238,67 @@ export async function startRoute(): Promise<SendPreArrivalResult> {
   const techId = token.sub
   if (!techId) return { sent: 0, error: "Invalid token — no sub" }
 
-  return sendPreArrivalNotifications(techId)
+  const orgId = token.org_id as string | undefined
+
+  const result = await sendPreArrivalNotifications(techId)
+
+  // ── NOTIF-08: Notify owner+office that tech started their route ────────────
+  if (orgId) {
+    try {
+      // Fetch tech name and today's stop count for the notification body
+      const today = toLocalDateString()
+      const stopCount = await withRls(token, async (db) => {
+        const rows = await db
+          .select({ id: routeStops.id })
+          .from(routeStops)
+          .where(
+            and(
+              eq(routeStops.org_id, orgId),
+              eq(routeStops.tech_id, techId),
+              eq(routeStops.scheduled_date, today)
+            )
+          )
+        return rows.length
+      })
+
+      const techRows = await withRls(token, async (db) =>
+        db
+          .select({ full_name: profiles.full_name })
+          .from(profiles)
+          .where(eq(profiles.id, techId))
+          .limit(1)
+      )
+      const techName = techRows[0]?.full_name ?? "Tech"
+
+      void notifyOrgRole(orgId, "owner+office", {
+        type: "route_started",
+        urgency: "informational",
+        title: "Route started",
+        body: `${techName} started their route (${stopCount} stop${stopCount !== 1 ? "s" : ""})`,
+        link: "/dispatch",
+      }).catch((err) =>
+        console.error("[startRoute] NOTIF-08 dispatch failed (non-blocking):", err)
+      )
+    } catch (notifErr) {
+      // Non-fatal — notification failure must never block the startRoute result
+      console.error("[startRoute] NOTIF-08 failed (non-blocking):", notifErr)
+    }
+  }
+
+  return result
 }
+
+// TODO(10-10): Wire NOTIF-08 (route_finished) when a finishRoute() action is added.
+// When all stops are marked complete, call:
+//   notifyOrgRole(orgId, 'owner+office', { type: 'route_finished', urgency: 'informational',
+//     title: 'Route finished', body: '{techName} completed their route', link: '/dispatch' })
+
+// TODO(10-10): Wire NOTIF-18 (weather_proposal) when Plan 10-06 weather proposal action is added.
+// When a weather delay proposal is created, call:
+//   notifyOrgRole(orgId, 'owner+office', { type: 'weather_proposal', urgency: 'needs_action',
+//     title: 'Weather delay proposed', body: '{count} stops affected by {weatherReason}', link: '/schedule' })
+
+// TODO(10-10): Wire NOTIF-22 (tech_weather_alert) when Plan 10-07 weather alert action is added.
+// When weather warnings affect a tech's route, call:
+//   notifyUser(techId, orgId, { type: 'tech_weather_alert', urgency: 'needs_action',
+//     title: 'Weather alert for your route', body: '{weatherReason} may affect {stopCount} stops', link: '/routes' })

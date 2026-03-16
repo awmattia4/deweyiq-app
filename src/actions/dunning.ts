@@ -41,6 +41,7 @@ import { signPayToken } from "@/lib/pay-token"
 import { chargeAutoPay } from "@/actions/payments"
 import { getResolvedTemplate } from "@/actions/notification-templates"
 import { toLocalDateString } from "@/lib/date-utils"
+import { notifyOrgRole } from "@/lib/notifications/dispatch"
 
 // ---------------------------------------------------------------------------
 // Default dunning steps
@@ -333,6 +334,17 @@ export async function runDunningScan(
               .set({ status: "overdue", updated_at: new Date() })
               .where(eq(invoices.id, invoice.id))
           }
+
+          // ── NOTIF-17: Notify owner+office of overdue invoice (fire-and-forget) ──
+          void notifyOrgRole(scanOrgId, "owner+office", {
+            type: "invoice_overdue",
+            urgency: "needs_action",
+            title: "Invoice overdue",
+            body: `Invoice ${invoice.invoice_number ?? invoice.id} for ${customer.full_name} is ${daysSinceDue} day${daysSinceDue !== 1 ? "s" : ""} overdue`,
+            link: `/billing`,
+          }).catch((err) =>
+            console.error("[runDunningScan] NOTIF-17 dispatch failed (non-blocking):", err)
+          )
         }
       } catch (orgErr) {
         const msg = `Org ${scanOrgId}: ${orgErr instanceof Error ? orgErr.message : "Unknown error"}`
