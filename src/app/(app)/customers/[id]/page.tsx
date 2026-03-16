@@ -14,6 +14,8 @@ import { ServiceHistoryTimeline } from "@/components/customers/service-history-t
 import { CustomerChecklistEditor } from "@/components/customers/customer-checklist-editor"
 import { getOrgSettings, getCustomerChecklistView } from "@/actions/company-settings"
 import { InboxThread } from "@/components/inbox/inbox-thread"
+import { getEquipmentHealth } from "@/actions/equipment-readings"
+import type { EquipmentHealthResult } from "@/actions/equipment-readings"
 
 export const metadata: Metadata = {
   title: "Customer Profile",
@@ -71,6 +73,26 @@ export default async function CustomerProfilePage({
     notFound()
   }
 
+  // Fetch equipment health in parallel for all equipment across all pools.
+  // Only fetches health if there are 6+ readings (getEquipmentHealth returns null otherwise).
+  // Fire-and-forget failures (non-fatal — health badges just won't show).
+  const allEquipmentIds = customer.pools.flatMap((pool) =>
+    pool.equipment.map((eq) => eq.id)
+  )
+  const healthResults = await Promise.all(
+    allEquipmentIds.map((eqId) =>
+      getEquipmentHealth(eqId).catch(() => null)
+    )
+  )
+  // Build a lookup map: equipment ID → health result
+  const equipmentHealthMap = new Map<string, EquipmentHealthResult>()
+  for (let i = 0; i < allEquipmentIds.length; i++) {
+    const result = healthResults[i]
+    if (result) {
+      equipmentHealthMap.set(allEquipmentIds[i], result)
+    }
+  }
+
   // Flatten service visits from all pools into a single list for the timeline.
   // Each visit gets the pool context attached so the timeline can show pool name.
   const allVisits = customer.pools.flatMap((pool) =>
@@ -118,9 +140,12 @@ export default async function CustomerProfilePage({
           <PoolList pools={customer.pools} customerId={customer.id} />
         </TabsContent>
 
-        {/* Equipment — compact equipment list grouped by pool */}
+        {/* Equipment — compact equipment list grouped by pool, with health badges */}
         <TabsContent value="equipment" className="mt-6">
-          <EquipmentList pools={customer.pools} />
+          <EquipmentList
+            pools={customer.pools}
+            equipmentHealth={Object.fromEntries(equipmentHealthMap)}
+          />
         </TabsContent>
 
         {/* Checklist — per-customer task customization */}

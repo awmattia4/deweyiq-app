@@ -7,6 +7,7 @@ import { adminDb } from "@/lib/db"
 import {
   customers,
   pools,
+  equipment,
   chemicalProducts,
   checklistTemplates,
   checklistTasks,
@@ -68,6 +69,27 @@ export interface StopContext {
       unit: string
     }>
   } | null
+  /**
+   * Phase 10: Internal notes from the previous visit at this pool.
+   * Used for tech handoff — current tech sees what the last tech flagged.
+   * Only populated when the previous visit had internal_notes or internal_flags.
+   */
+  previousInternalNotes: {
+    notes: string | null
+    flags: string[]
+    visitedAt: string
+  } | null
+  /**
+   * Phase 10: Equipment tracked for this pool.
+   * Used by EquipmentReadingsSection to show metric input fields during completion.
+   * Empty array if no equipment is tracked.
+   */
+  poolEquipment: Array<{
+    id: string
+    type: string
+    brand: string | null
+    model: string | null
+  }>
 }
 
 export interface CompleteStopInput {
@@ -376,12 +398,27 @@ export async function getStopContext(
         }
       }
 
-      // ── 6. Fetch previous visit's chemistry readings ──────────────────────
+      // ── 6. Fetch equipment for this pool ──────────────────────────────────────
+      const equipmentRows = await db
+        .select({
+          id: equipment.id,
+          type: equipment.type,
+          brand: equipment.brand,
+          model: equipment.model,
+        })
+        .from(equipment)
+        .where(eq(equipment.pool_id, poolId))
+
+      // ── 7. Fetch previous visit's chemistry readings + internal notes ────────
       let previousChemistry: Record<string, number | null> = {}
+      let previousInternalNotes: StopContext["previousInternalNotes"] = null
 
       const previousVisitRows = await db
         .select({
           chemistryReadings: serviceVisits.chemistry_readings,
+          internalNotes: serviceVisits.internal_notes,
+          internalFlags: serviceVisits.internal_flags,
+          visitedAt: serviceVisits.visited_at,
         })
         .from(serviceVisits)
         .where(
@@ -397,6 +434,22 @@ export async function getStopContext(
         const raw = previousVisitRows[0].chemistryReadings
         if (raw && typeof raw === "object" && !Array.isArray(raw)) {
           previousChemistry = raw as Record<string, number | null>
+        }
+      }
+
+      // Only populate previousInternalNotes if the last visit had notes or flags
+      if (previousVisitRows[0]) {
+        const prevVisit = previousVisitRows[0]
+        const prevFlags = (prevVisit.internalFlags as string[] | null) ?? []
+        const hasNotes = prevVisit.internalNotes || prevFlags.length > 0
+        if (hasNotes) {
+          previousInternalNotes = {
+            notes: prevVisit.internalNotes ?? null,
+            flags: prevFlags,
+            visitedAt: prevVisit.visitedAt instanceof Date
+              ? prevVisit.visitedAt.toISOString()
+              : String(prevVisit.visitedAt),
+          }
         }
       }
 
@@ -418,6 +471,8 @@ export async function getStopContext(
         serviceTypeName,
         routeStopId: currentStop?.id ?? null,
         workOrder: workOrderContext,
+        previousInternalNotes,
+        poolEquipment: equipmentRows,
       } satisfies StopContext
     })
   } catch (err) {

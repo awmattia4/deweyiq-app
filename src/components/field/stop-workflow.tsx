@@ -31,6 +31,7 @@ import { ChemistryDosing } from "@/components/field/chemistry-dosing"
 import { Checklist } from "@/components/field/checklist"
 import { PhotoCapture, processPhotoQueue } from "@/components/field/photo-capture"
 import { NotesField } from "@/components/field/notes-field"
+import { InternalNotes } from "@/components/field/internal-notes"
 import { CompletionModal, SkipStopDialog, OverrideWarningSheet } from "@/components/field/completion-modal"
 import { FlagIssueSheet } from "@/components/work-orders/flag-issue-sheet"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
@@ -40,6 +41,8 @@ import { enqueueWrite } from "@/lib/offline/sync"
 import { completeStop, skipStop, markStopStarted } from "@/actions/visits"
 import type { StopContext, CompleteStopWarnings } from "@/actions/visits"
 import type { FullChemistryReadings } from "@/lib/chemistry/dosing"
+import { logEquipmentReading } from "@/actions/equipment-readings"
+import type { EquipmentMetrics } from "@/actions/equipment-readings"
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
@@ -69,7 +72,7 @@ interface StopWorkflowProps {
 export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
   const router = useRouter()
 
-  const { draft, isCompleted, updateChemistry, updateChecklist, markAllChecklistComplete, updateNotes, completeDraft, reopenDraft } =
+  const { draft, isCompleted, updateChemistry, updateChecklist, markAllChecklistComplete, updateNotes, updateInternalNotesDraft, completeDraft, reopenDraft } =
     useVisitDraft(stopId, context.customerId, context.poolId, visitId)
 
   // ── Modal state ──────────────────────────────────────────────────────────
@@ -185,6 +188,11 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
     dosingAmountsRef.current = amounts
   }, [])
 
+  // ── Equipment readings ref — captures readings from EquipmentReadingsSection ──
+  // Populated when tech confirms completion via CompletionModal.
+  // Logged after stop completes (fire-and-forget — non-fatal).
+  const equipmentReadingsRef = useRef<Record<string, EquipmentMetrics>>({})
+
   // ── Minimum data check for enabling Complete button ─────────────────────
 
   const hasMinimumData = useMemo(() => {
@@ -251,6 +259,8 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           photoStoragePaths,
           overrideWarnings,
           dosingAmounts: dosingAmountsRef.current.length > 0 ? dosingAmountsRef.current : undefined,
+          internalNotes: draft.internalNotes || undefined,
+          internalFlags: draft.internalFlags && draft.internalFlags.length > 0 ? draft.internalFlags : undefined,
         }
 
         if (typeof navigator !== "undefined" && navigator.onLine) {
@@ -277,6 +287,27 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
         // Mark draft as completed and clean up Dexie draft
         await completeDraft()
+
+        // Log equipment readings — fire-and-forget, non-fatal
+        // Only when online (offline sync for equipment readings is not supported in Phase 10)
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          const readings = equipmentReadingsRef.current
+          const equipmentEntries = Object.entries(readings).filter(
+            ([, metrics]) => Object.keys(metrics).length > 0
+          )
+          for (const [equipmentId, metrics] of equipmentEntries) {
+            // Find pool_id for this equipment piece from context
+            const equipItem = context.poolEquipment?.find((e) => e.id === equipmentId)
+            if (equipItem) {
+              // Async fire-and-forget — log failure silently
+              logEquipmentReading(equipmentId, context.poolId, metrics, effectiveVisitId).catch(
+                (err) => console.warn("[StopWorkflow] Equipment reading log failed:", err)
+              )
+            }
+          }
+          // Clear the ref after logging
+          equipmentReadingsRef.current = {}
+        }
 
         // Clean up uploaded photo queue items (they're now saved to the visit)
         const uploadedPhotos = await offlineDb.photoQueue
@@ -310,6 +341,7 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
       visitId,
       context.customerId,
       context.poolId,
+      context.poolEquipment,
       context.customerName,
       context.poolName,
       getUploadedPhotoPaths,
@@ -320,7 +352,9 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
 
   // ── First attempt: check requirements before completing ──────────────────
 
-  const handleConfirmComplete = useCallback(async () => {
+  const handleConfirmComplete = useCallback(async (equipmentReadings: Record<string, EquipmentMetrics>) => {
+    // Store equipment readings in ref before executing so executeComplete can access them
+    equipmentReadingsRef.current = equipmentReadings
     await executeComplete(false)
   }, [executeComplete])
 
@@ -564,10 +598,19 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           {/* ── Notes tab ─────────────────────────────────────────────────── */}
           <TabsContent
             value="notes"
-            className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150"
+            className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150 space-y-4"
           >
             {draft ? (
-              <NotesField draft={draft} onUpdate={updateNotes} readOnly={isCompleted} />
+              <>
+                <NotesField draft={draft} onUpdate={updateNotes} readOnly={isCompleted} />
+                <InternalNotes
+                  notes={draft.internalNotes ?? ""}
+                  flags={draft.internalFlags ?? []}
+                  onChange={updateInternalNotesDraft}
+                  previousNotes={context.previousInternalNotes}
+                  readOnly={isCompleted}
+                />
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center gap-3">
                 <p className="text-sm text-muted-foreground">Loading...</p>

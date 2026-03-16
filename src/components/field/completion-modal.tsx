@@ -19,8 +19,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { VisitDraft } from "@/lib/offline/db"
-import type { StopContext } from "@/actions/visits"
+import type { StopContext, CompleteStopWarnings } from "@/actions/visits"
 import { calculateCSI, interpretCSI } from "@/lib/chemistry/lsi"
+import {
+  EquipmentReadingsSection,
+} from "@/components/field/equipment-readings-section"
+import type { EquipmentMetrics } from "@/actions/equipment-readings"
 
 // ---------------------------------------------------------------------------
 // Chemistry parameter display names
@@ -40,11 +44,115 @@ const PARAM_LABELS: Record<string, string> = {
   temperatureF: "Temperature",
 }
 
-// Required parameters per sanitizer type — tech warned if missing
-const REQUIRED_PARAMS: Record<string, string[]> = {
+// Checklist task ID to human-readable label
+const CHECKLIST_LABELS: Record<string, string> = {
+  skim: "Skim surface debris",
+  brush: "Brush walls and floor",
+  vacuum: "Vacuum pool",
+  emptyBaskets: "Empty skimmer and pump baskets",
+  backwash: "Backwash filter",
+  checkEquipment: "Check equipment operation",
+  cleanFilter: "Clean filter",
+}
+
+// Required parameters per sanitizer type — tech warned if missing (client-side defaults)
+// Note: server-side validation uses org_settings. This is the fallback for offline/no-settings.
+const DEFAULT_REQUIRED_PARAMS: Record<string, string[]> = {
   chlorine: ["freeChlorine", "pH", "totalAlkalinity", "calciumHardness"],
   salt: ["freeChlorine", "pH", "totalAlkalinity", "calciumHardness", "salt"],
   bromine: ["bromine", "pH", "totalAlkalinity", "calciumHardness"],
+}
+
+// ---------------------------------------------------------------------------
+// OverrideWarningSheet
+// ---------------------------------------------------------------------------
+
+interface OverrideWarningSheetProps {
+  open: boolean
+  warnings: CompleteStopWarnings
+  onGoBack: () => void
+  onCompleteAnyway: () => void
+  isSubmitting: boolean
+}
+
+/**
+ * OverrideWarningSheet — shown after completeStop returns { success: false, warnings }.
+ *
+ * Lists missing required chemistry readings and/or incomplete required tasks.
+ * Provides "Go Back" and "Complete Anyway" choices.
+ * "Complete Anyway" re-calls completeStop with overrideWarnings: true.
+ */
+export function OverrideWarningSheet({
+  open,
+  warnings,
+  onGoBack,
+  onCompleteAnyway,
+  isSubmitting,
+}: OverrideWarningSheetProps) {
+  const allMissing = [
+    ...warnings.missingChemistry.map((k) => PARAM_LABELS[k] ?? k),
+    ...warnings.missingChecklist.map((k) => CHECKLIST_LABELS[k] ?? k),
+  ]
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onGoBack()}>
+      <SheetContent
+        side="bottom"
+        className="rounded-t-2xl max-h-[90dvh] overflow-y-auto pb-safe mx-auto max-w-lg"
+      >
+        <SheetHeader className="pb-4 border-b border-border/60">
+          <SheetTitle className="flex items-center gap-2 text-lg text-amber-400">
+            <AlertTriangleIcon className="h-5 w-5" />
+            Missing Required Data
+          </SheetTitle>
+          <SheetDescription className="text-sm text-muted-foreground">
+            Some required items are incomplete. You can go back to fill them in, or complete anyway.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-5 px-4 pt-4">
+          {/* Missing items list */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="text-sm font-medium text-amber-300 mb-2">
+              Missing required items:
+            </p>
+            <ul className="flex flex-col gap-1">
+              {allMissing.map((item) => (
+                <li key={item} className="text-xs text-amber-300/80 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Completing without required data will generate an alert for your office manager to review.
+          </p>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3 pb-4">
+            <Button
+              className="w-full h-12 text-base font-semibold rounded-xl bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+              onClick={onCompleteAnyway}
+              disabled={isSubmitting}
+            >
+              <AlertTriangleIcon className="h-4 w-4 mr-2" />
+              {isSubmitting ? "Saving..." : "Complete Anyway"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full h-11 text-sm rounded-xl cursor-pointer"
+              onClick={onGoBack}
+              disabled={isSubmitting}
+            >
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +162,7 @@ const REQUIRED_PARAMS: Record<string, string[]> = {
 interface CompletionModalProps {
   open: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (equipmentReadings: Record<string, EquipmentMetrics>) => void
   draft: VisitDraft
   context: StopContext
   photoCount: number
@@ -69,6 +177,9 @@ interface CompletionModalProps {
  * entered, tasks checked, and photos taken — tech taps confirm to finalize"
  *
  * Implemented as a bottom Sheet (more natural on mobile than Dialog).
+ *
+ * Phase 10: Includes optional EquipmentReadingsSection for pools with tracked
+ * equipment. Equipment readings are passed back via onConfirm callback.
  */
 export function CompletionModal({
   open,
@@ -80,6 +191,14 @@ export function CompletionModal({
   isSubmitting,
   isEdit = false,
 }: CompletionModalProps) {
+  // ── Equipment readings state ─────────────────────────────────────────────
+  // Keyed by equipment ID
+  const [equipmentReadings, setEquipmentReadings] = useState<Record<string, EquipmentMetrics>>({})
+
+  const handleEquipmentReadingChange = (equipmentId: string, metrics: EquipmentMetrics) => {
+    setEquipmentReadings((prev) => ({ ...prev, [equipmentId]: metrics }))
+  }
+
   // ── Chemistry summary ───────────────────────────────────────────────────
 
   const enteredParams = useMemo(() => {
@@ -93,7 +212,7 @@ export function CompletionModal({
   }, [draft.chemistry])
 
   const requiredParams =
-    REQUIRED_PARAMS[context.sanitizerType] ?? REQUIRED_PARAMS.chlorine
+    DEFAULT_REQUIRED_PARAMS[context.sanitizerType] ?? DEFAULT_REQUIRED_PARAMS.chlorine
   const missingRequired = requiredParams.filter((p) => {
     const v = draft.chemistry[p]
     return v === null || v === undefined
@@ -269,11 +388,20 @@ export function CompletionModal({
             </div>
           )}
 
+          {/* ── Equipment readings section (optional, only for pools with equipment) ── */}
+          {context.poolEquipment && context.poolEquipment.length > 0 && (
+            <EquipmentReadingsSection
+              equipment={context.poolEquipment}
+              readings={equipmentReadings}
+              onChange={handleEquipmentReadingChange}
+            />
+          )}
+
           {/* ── Action buttons ───────────────────────────────────────────── */}
           <div className="flex flex-col gap-3 pt-2 pb-4">
             <Button
               className="w-full h-12 text-base font-semibold rounded-xl bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20 cursor-pointer"
-              onClick={onConfirm}
+              onClick={() => onConfirm(equipmentReadings)}
               disabled={isSubmitting}
             >
               <CheckCircle2Icon className="h-5 w-5 mr-2" />
