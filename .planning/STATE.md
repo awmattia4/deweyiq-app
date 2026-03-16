@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — IN PROGRESS
-Plan: 10/14 complete (01, 02, 03, 05, 06, 08, 09 done)
-Status: Phase 11 Plan 09 complete — smart bank reconciliation matching algorithm, BankFeed + ReconcilePanel UI in Accounting page, Stripe payout.paid auto-reconciliation webhook
-Last activity: 2026-03-16 — Phase 11 Plan 09 committed (bank reconciliation, Stripe payout auto-reconcile)
+Plan: 11/14 complete (01, 02, 03, 05, 06, 07, 08, 09, 11 done)
+Status: Phase 11 Plan 07 complete — financial report server actions: P&L, Balance Sheet, Cash Flow, Snapshot, Trial Balance aggregating journal_entry_lines by account type
+Last activity: 2026-03-16 — Phase 11 Plan 07 committed (financial-reports.ts server actions)
 
 Progress: [████████--] 47% (8 of 17 phases complete)
 
@@ -104,6 +104,7 @@ Progress: [████████--] 47% (8 of 17 phases complete)
 | Phase 11-payroll-team-management-full-accounting P05 | 10 | 2 tasks | 5 files |
 | Phase 11 P09 | 12 | 2 tasks | 8 files |
 | Phase 11 P11 | 14 | 2 tasks | 9 files |
+| Phase 11 P07 | 17 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -396,6 +397,8 @@ Recent decisions affecting current work:
 - [Phase 11-payroll-team-management-full-accounting]: updatePtoBalance uses select-then-upsert (no unique constraint on pto_balances)
 - [Phase 11]: Score >= 80 for auto-match (conservative), 50-79 for review; Stripe payout = Dr Checking / Cr Stripe Clearing (per-charge fees already in payment entries)
 - [Phase 11]: Payment lifecycle complete with QBO reconciliation, installment plans, credits, and collections dashboard in Billing page tabs
+- [Phase 11]: Financial reports use getAccountBalances helper with INNER JOIN (not correlated subquery) to filter by date and respect RLS
+- [Phase 11]: Positive=debit/negative=credit convention: income displayed as positive (negate credits), expenses/assets as positive (use debits), liabilities/equity as positive (negate credits)
 
 ### Pending Todos
 
