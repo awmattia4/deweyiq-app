@@ -69,6 +69,9 @@ class OfflineDB extends Dexie {
   // Phase 3 stores
   visitDrafts!: Table<VisitDraft>
   photoQueue!: Table<PhotoQueueItem>
+  // Phase 12 stores
+  projectTaskDrafts!: Table<ProjectTaskDraft>
+  projectPhotoQueue!: Table<ProjectPhotoQueueItem>
 
   constructor() {
     super("poolco-offline")
@@ -102,7 +105,70 @@ class OfflineDB extends Dexie {
       // orgId added as indexed field for global photo sync processor
       photoQueue: "++id, visitId, orgId, status, createdAt",
     })
+
+    // v4: Phase 12 — project offline stores for timer state + task completions + project photos
+    // Carry forward ALL v3 stores unchanged — Dexie immutable versioning.
+    this.version(4).stores({
+      syncQueue: "++id, createdAt, retries, status",
+      routeCache: "id, cachedAt, expiresAt",
+      visitDrafts: "id, stopId, updatedAt, status",
+      photoQueue: "++id, visitId, orgId, status, createdAt",
+      // Project task drafts: timer state + task completion state per project phase
+      // id = "{projectId}:{phaseId}" composite key (client-generated)
+      projectTaskDrafts: "id, projectId, phaseId, updatedAt, status",
+      // Project photo queue: same blob-not-indexed pattern as photoQueue
+      projectPhotoQueue: "++id, projectId, phaseId, status, createdAt",
+    })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Project-specific offline types
+// ---------------------------------------------------------------------------
+
+/**
+ * ProjectTaskDraft — timer state and task completion state for a project phase.
+ *
+ * id = "{projectId}:{phaseId}" — deterministic composite key so the record can be
+ * found without a scan. survives app close/reopen.
+ *
+ * status="active" = timer is running; "paused" = timer paused; "idle" = no active timer
+ */
+export interface ProjectTaskDraft {
+  id: string                      // "{projectId}:{phaseId}"
+  projectId: string
+  phaseId: string
+  // Timer state — stored here so it survives app close/reopen (per MEMORY.md Dexie pattern)
+  timerRunning: boolean
+  timerStartedAt: number | null   // Date.now() when timer started (null if not running)
+  timerAccumulatedMs: number      // total ms accumulated in prior timer runs
+  activeTaskId: string | null     // which task the timer is for (null = phase-level)
+  activeTimeLogId: string | null  // server-side project_time_logs.id (set after startProjectTimer)
+  // Task completion overrides (optimistic UI before server confirms)
+  // taskId -> boolean
+  taskCompletions: Record<string, boolean>
+  status: "idle" | "active" | "paused"
+  updatedAt: number               // Date.now()
+}
+
+/**
+ * ProjectPhotoQueueItem — compressed project photos staged for Supabase Storage upload.
+ *
+ * CRITICAL: blob is NOT indexed — indexing Blob columns corrupts IDB performance.
+ * Only projectId, phaseId, status, and createdAt are indexed for queue management.
+ */
+export interface ProjectPhotoQueueItem {
+  id?: number                     // auto-increment
+  projectId: string
+  phaseId: string | null
+  taskId: string | null
+  orgId: string
+  blob: Blob                      // raw compressed image — NOT base64, NOT indexed
+  tag: "before" | "during" | "after" | "issue" | null
+  caption?: string
+  status: "pending" | "uploaded" | "failed"
+  storagePath?: string            // filled after successful upload
+  createdAt: number
 }
 
 export const offlineDb = new OfflineDB()
