@@ -33,6 +33,7 @@ const TABS = [
   { id: "phases", label: "Phases" },
   { id: "subcontractors", label: "Subcontractors" },
   { id: "activity", label: "Activity" },
+  { id: "timeline", label: "Timeline", isLink: true },
   { id: "materials", label: "Materials", isLink: true },
   { id: "documents", label: "Documents", isLink: true },
 ]

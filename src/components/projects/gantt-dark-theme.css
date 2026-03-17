@@ -1,0 +1,81 @@
+/**
+ * gantt-dark-theme.css — Dark mode overrides for @svar-ui/react-gantt
+ *
+ * These styles are applied on top of WillowDark to integrate with the app's
+ * design system. The SVAR WillowDark theme provides sensible dark defaults;
+ * we override only what needs to match our specific token colors.
+ *
+ * IMPORTANT: Per MEMORY.md, NEVER use oklch() for any colors here — these
+ * CSS variables are passed to WebGL-adjacent rendering contexts that can't
+ * parse oklch(). Use hex values only.
+ */
+
+/* ── Container reset ──────────────────────────────────────────────────────── */
+.gantt-container {
+  height: 100%;
+  width: 100%;
+  /* Ensure it fills the parent layout slot */
+  min-height: 400px;
+}
+
+/* ── Status-color task bars ───────────────────────────────────────────────── */
+/*
+ * We inject custom status classes via taskTemplate/CSS overrides.
+ * The SVAR Gantt renders .wx-task (and .wx-bar) for each task row.
+ * Custom classes are applied via the tasks[] objects we pass in.
+ */
+
+/* not_started — muted gray */
+.gantt-task-not_started .wx-task {
+  background-color: #64748b !important;
+  border-color: #475569 !important;
+}
+.gantt-task-not_started .wx-task .wx-progress-percent {
+  background-color: #475569 !important;
+}
+
+/* in_progress — primary blue (matches app's --primary ~ #60a5fa) */
+.gantt-task-in_progress .wx-task {
+  background-color: #3b82f6 !important;
+  border-color: #2563eb !important;
+}
+.gantt-task-in_progress .wx-task .wx-progress-percent {
+  background-color: #2563eb !important;
+}
+
+/* complete — green */
+.gantt-task-complete .wx-task {
+  background-color: #22c55e !important;
+  border-color: #16a34a !important;
+}
+.gantt-task-complete .wx-task .wx-progress-percent {
+  background-color: #16a34a !important;
+}
+
+/* on_hold — amber/yellow */
+.gantt-task-on_hold .wx-task {
+  background-color: #f59e0b !important;
+  border-color: #d97706 !important;
+}
+.gantt-task-on_hold .wx-task .wx-progress-percent {
+  background-color: #d97706 !important;
+}
+
+/* skipped — muted with reduced opacity */
+.gantt-task-skipped .wx-task {
+  background-color: #374151 !important;
+  border-color: #1f2937 !important;
+  opacity: 0.6;
+}
+
+/* outdoor weather warning — adds a subtle orange border */
+.gantt-task-weather-warning .wx-task {
+  border-color: #f97316 !important;
+  box-shadow: 0 0 0 1px #f97316 !important;
+}
+
+/* ── Today marker ─────────────────────────────────────────────────────────── */
+.wx-willow-dark-theme {
+  --wx-gantt-marker-color: #60a5fa;
+  --wx-gantt-marker-font-color: #ffffff;
+}
