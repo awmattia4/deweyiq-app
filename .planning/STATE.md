@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 12/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline done)
-Status: Phase 12 Plan 11 complete — interactive Gantt timeline with @svar-ui/react-gantt, drag-to-reschedule, dependency cascade, weather delay alerts, and auto-schedule live
-Last activity: 2026-03-17 — Phase 12 Plan 11 Gantt timeline built
+Plan: 13/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode done)
+Status: Phase 12 Plan 12 complete — tech field project mode: Projects tab on /routes with task checklists, Dexie-persisted timer, auto-context photo capture, issue flagging, material usage, phase completion with quality self-inspection
+Last activity: 2026-03-17 — Phase 12 Plan 12 tech field project mode built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -117,6 +117,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 12-projects-renovations P03 | 14 | 2 tasks | 10 files |
 | Phase 12-projects-renovations P05 | 21 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P09 | 20 | 2 tasks | 9 files |
+| Phase 12-projects-renovations P12 | 13 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -445,6 +446,9 @@ Recent decisions affecting current work:
 - [Phase 12-03]: PROJECT_STAGES constants in lib/projects-constants.ts — Next.js 'use server' cannot export non-async values
 - [Phase 12-projects-renovations]: Multi-section scrollable proposal builder layout — all sections visible on one page for fast office editing
 - [Phase 12-projects-renovations]: createProposal is idempotent — returns existing active proposal rather than creating duplicates
+- [Phase 12-projects-renovations]: completePhase uses adminDb (not withRls) because project_phases UPDATE is owner+office-only RLS but tech completing their assigned phase is an expected operational field action
+- [Phase 12-projects-renovations]: flagIssue creates office alert via adminDb — does NOT auto-create a change order per user decision; office decides whether a CO is needed
+- [Phase 12-projects-renovations]: Dexie projectTaskDrafts key is {projectId}:{phaseId} composite for O(1) timer state lookup; timer state (timerRunning/timerStartedAt/timerAccumulatedMs) survives app close/reopen
 
 ### Pending Todos
 
