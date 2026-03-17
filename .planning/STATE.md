@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 11 COMPLETE — ready for Phase 12
+**Current focus:** Phase 12 IN PROGRESS — Projects & Renovations
 
 ## Current Position
 
-Phase: 11 of 17 (Payroll, Team Management & Full Accounting) — COMPLETE
-Plan: 14/14 complete (all plans done, QA passed, bug fixes applied)
-Status: Phase 11 complete — all 14 plans executed, comprehensive QA with 6 bug fixes applied, build clean
-Last activity: 2026-03-16 — Phase 11 QA bug fixes committed + schema pushed
+Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
+Plan: 1/16 complete (12-01-PLAN schema foundation done)
+Status: Phase 12 Plan 01 complete — all ~30 project tables live in Supabase, TypeScript clean
+Last activity: 2026-03-17 — Phase 12 Plan 01 schema pushed to DB
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -108,6 +108,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 11-payroll-team-management-full-accounting P10 | 90 | 2 tasks | 5 files |
 | Phase 11-payroll-team-management-full-accounting P04 | 45 | 2 tasks | 27 files |
 | Phase 11 P13 | 8 | 2 tasks | 3 files |
+| Phase 12-projects-renovations P01 | 8 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -412,6 +413,12 @@ Recent decisions affecting current work:
 - [Phase 11-04]: node-quickbooks TS types don't include Employee or TimeActivity methods — cast qbo to any at call sites; runtime behavior is correct
 - [Phase 11-04]: Timesheet approval is per-tech per-week — approveTimesheet marks all entries approved_at/approved_by, then triggers QBO batch push via pushPayPeriodToQbo
 - [Phase 11]: getTeamDashboard uses multiple withRls queries + JS aggregation to avoid RLS correlated subquery pitfall
+- [Phase 12-01]: archived_at soft-delete on all project document tables (proposals, change orders, inspections, photos, warranty claims, documents) per PROJ-91 immutability requirement
+- [Phase 12-01]: invoices table extended (not new table) with project_id, invoice_type, milestone_id, retainage_held/released — preserves service billing backward compatibility
+- [Phase 12-01]: project_proposal_line_items.tier_id nullable — null=shared across all tiers, set=specific to one tier (tiered proposal model)
+- [Phase 12-01]: project_time_logs.time_entry_id FK references parent shift (time_entries) for payroll reconciliation per research recommendation
+- [Phase 12-01]: Subcontractor SELECT restricted to owner/office only (insurance/license/financial data is sensitive) — differs from most project tables that allow tech SELECT
+- [Phase 12-01]: org_settings.project_inactivity_alert_days (default 7) for stalled project detection
 
 ### Pending Todos
 
@@ -437,6 +444,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Completed 11-04-PLAN.md
-Resume file: Phase 11 Plan 04 complete — weekly timesheet review UI with edit/approve/QBO push workflow, QBO time sync module (syncEmployeeToQbo, pushTimeEntryToQbo, pushPayPeriodToQbo), time tracking settings, Timesheets tab in Team page
+Last session: 2026-03-17
+Stopped at: Completed 12-01-PLAN.md
+Resume file: Phase 12 Plan 01 complete — ~30 project tables with RLS pushed to Supabase, invoices/org_settings extended, all relations defined in relations.ts, TypeScript clean
