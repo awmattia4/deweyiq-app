@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 13/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode done)
-Status: Phase 12 Plan 12 complete — tech field project mode: Projects tab on /routes with task checklists, Dexie-persisted timer, auto-context photo capture, issue flagging, material usage, phase completion with quality self-inspection
-Last activity: 2026-03-17 — Phase 12 Plan 12 tech field project mode built
+Plan: 14/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials done)
+Status: Phase 12 Plan 14 complete — progress billing, retainage, final invoice, profitability tracking, cancellation settlement, suspension, and /projects/[id]/financials dashboard
+Last activity: 2026-03-17 — Phase 12 Plan 14 project billing & financial dashboard built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -34,6 +34,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 12-projects-renovations P14 | 7 | 2 tasks | 6 files |
 | Phase 12-projects-renovations P11 | 9 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P06 | 18 | 1 tasks | 6 files |
 | Phase 12-projects-renovations P10 | 22 | 2 tasks | 10 files |
