@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 3/16 complete (12-01 schema, 12-02 project list, 12-03 project detail done)
-Status: Phase 12 Plan 03 complete — /projects/[id] detail page with phases, site notes, activity log live
-Last activity: 2026-03-17 — Phase 12 Plan 03 project detail page built
+Plan: 8/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents done)
+Status: Phase 12 Plan 08 complete — permit tracking, gate logic, HOA documents at /projects/[id]/documents live
+Last activity: 2026-03-17 — Phase 12 Plan 08 permit tracking and documents page built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -119,6 +119,9 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12-08]: checkPermitGate blocks in_progress if ANY non-archived, non-approved permit exists — office explicitly adds required permits; each must reach approved status
+- [Phase 12-08]: updateProjectStage return type extended to include blockers array for permit gate UI feedback
+- [Phase 12-08]: HOA doc upload uses base64/FileReader in client → server action with Buffer decode — avoids multipart form complexity
 - [Phase 11-10]: Recharts hex colors only (not oklch) — Tailwind oklch tokens cannot be used in Recharts paint props (same constraint as MapLibre GL)
 - [Phase 11-10]: QuickExpenseButton uses inline panel toggle (not modal) — avoids z-index stacking on routes page and keeps layout clean
 - [Phase 11-10]: Receipt upload failure is non-blocking — createExpense saves first, receipt upload attempted second; any error caught silently so expense always records
@@ -450,5 +453,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed 12-01-PLAN.md
-Resume file: Phase 12 Plan 01 complete — ~30 project tables with RLS pushed to Supabase, invoices/org_settings extended, all relations defined in relations.ts, TypeScript clean
+Stopped at: Completed 12-08-PLAN.md
+Resume file: Phase 12 Plan 08 complete — permit CRUD with gate logic, expiration alerts, HOA document storage, /projects/[id]/documents page with PermitTracker and HoaDocuments, Documents tab on project detail
