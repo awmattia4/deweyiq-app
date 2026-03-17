@@ -565,42 +565,97 @@ export async function getProjectInvoices(
  * Creates a DRAFT invoice held for office review before sending.
  */
 export async function generateFinalInvoice(
+  tokenOrNull: SupabaseToken | null,
   projectId: string
 ): Promise<{ data: ProjectInvoiceSummary } | { error: string }> {
-  const token = await getToken()
-  if (!token) return { error: "Not authenticated" }
-  if (!token.org_id) return { error: "No org context" }
+  // When called from portal (customerSignOffPunchList), tokenOrNull is null.
+  // Fall back to getToken() for authenticated office calls, or use adminDb for portal calls.
+  const token = tokenOrNull ?? (await getToken())
+
+  // Use adminDb for all queries when no user session is available (portal context)
+  const db = token ? (null as unknown as typeof adminDb) : adminDb
+  const queryFn = async <T>(
+    authenticatedFn: (t: SupabaseToken) => Promise<T>,
+    adminFn: () => Promise<T>
+  ): Promise<T> => {
+    if (token) return authenticatedFn(token)
+    return adminFn()
+  }
+
+  // Get org_id — if we have a token use it; otherwise fetch from project
+  let orgId: string
+
+  if (token?.org_id) {
+    orgId = token.org_id as string
+  } else {
+    // Portal context — fetch org_id from the project
+    const projectOrgRows = await adminDb
+      .select({ org_id: projects.org_id })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+    if (projectOrgRows.length === 0) return { error: "Project not found" }
+    orgId = projectOrgRows[0].org_id
+  }
 
   try {
-    const [project] = await withRls(token, (db) =>
-      db
-        .select({
-          id: projects.id,
-          customer_id: projects.customer_id,
-          contract_amount: projects.contract_amount,
-          retainage_pct: projects.retainage_pct,
-        })
-        .from(projects)
-        .where(eq(projects.id, projectId))
-        .limit(1)
+    const [project] = await queryFn(
+      (t) =>
+        withRls(t, (d) =>
+          d
+            .select({
+              id: projects.id,
+              customer_id: projects.customer_id,
+              contract_amount: projects.contract_amount,
+              retainage_pct: projects.retainage_pct,
+            })
+            .from(projects)
+            .where(eq(projects.id, projectId))
+            .limit(1)
+        ),
+      () =>
+        adminDb
+          .select({
+            id: projects.id,
+            customer_id: projects.customer_id,
+            contract_amount: projects.contract_amount,
+            retainage_pct: projects.retainage_pct,
+          })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .limit(1)
     )
 
     if (!project) return { error: "Project not found" }
     if (!project.contract_amount) return { error: "Project has no contract amount set" }
 
     // Check for existing final invoice
-    const existingFinal = await withRls(token, (db) =>
-      db
-        .select({ id: invoices.id })
-        .from(invoices)
-        .where(
-          and(
-            eq(invoices.project_id, projectId),
-            eq(invoices.invoice_type, "project_final"),
-            not(eq(invoices.status, "void"))
+    const existingFinal = await queryFn(
+      (t) =>
+        withRls(t, (d) =>
+          d
+            .select({ id: invoices.id })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.project_id, projectId),
+                eq(invoices.invoice_type, "project_final"),
+                not(eq(invoices.status, "void"))
+              )
+            )
+            .limit(1)
+        ),
+      () =>
+        adminDb
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.project_id, projectId),
+              eq(invoices.invoice_type, "project_final"),
+              not(eq(invoices.status, "void"))
+            )
           )
-        )
-        .limit(1)
+          .limit(1)
     )
 
     if (existingFinal.length > 0) {
@@ -608,21 +663,39 @@ export async function generateFinalInvoice(
     }
 
     // Fetch all non-void project invoices for this project
-    const priorInvoices = await withRls(token, (db) =>
-      db
-        .select({
-          total: invoices.total,
-          retainage_held: invoices.retainage_held,
-          retainage_released: invoices.retainage_released,
-        })
-        .from(invoices)
-        .where(
-          and(
-            eq(invoices.project_id, projectId),
-            not(eq(invoices.status, "void")),
-            not(eq(invoices.invoice_type, "project_final"))
+    const priorInvoices = await queryFn(
+      (t) =>
+        withRls(t, (d) =>
+          d
+            .select({
+              total: invoices.total,
+              retainage_held: invoices.retainage_held,
+              retainage_released: invoices.retainage_released,
+            })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.project_id, projectId),
+                not(eq(invoices.status, "void")),
+                not(eq(invoices.invoice_type, "project_final"))
+              )
+            )
+        ),
+      () =>
+        adminDb
+          .select({
+            total: invoices.total,
+            retainage_held: invoices.retainage_held,
+            retainage_released: invoices.retainage_released,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.project_id, projectId),
+              not(eq(invoices.status, "void")),
+              not(eq(invoices.invoice_type, "project_final"))
+            )
           )
-        )
     )
 
     // Calculate retainage to release and remaining contract balance
@@ -636,21 +709,39 @@ export async function generateFinalInvoice(
     }
 
     // Outstanding COs with cost_allocation='collect_immediately' that aren't yet invoiced
-    const collectImmediateCOs = await withRls(token, (db) =>
-      db
-        .select({
-          id: projectChangeOrders.id,
-          cost_impact: projectChangeOrders.cost_impact,
-          change_order_number: projectChangeOrders.change_order_number,
-        })
-        .from(projectChangeOrders)
-        .where(
-          and(
-            eq(projectChangeOrders.project_id, projectId),
-            eq(projectChangeOrders.status, "approved"),
-            eq(projectChangeOrders.cost_allocation, "collect_immediately")
+    const collectImmediateCOs = await queryFn(
+      (t) =>
+        withRls(t, (d) =>
+          d
+            .select({
+              id: projectChangeOrders.id,
+              cost_impact: projectChangeOrders.cost_impact,
+              change_order_number: projectChangeOrders.change_order_number,
+            })
+            .from(projectChangeOrders)
+            .where(
+              and(
+                eq(projectChangeOrders.project_id, projectId),
+                eq(projectChangeOrders.status, "approved"),
+                eq(projectChangeOrders.cost_allocation, "collect_immediately")
+              )
+            )
+        ),
+      () =>
+        adminDb
+          .select({
+            id: projectChangeOrders.id,
+            cost_impact: projectChangeOrders.cost_impact,
+            change_order_number: projectChangeOrders.change_order_number,
+          })
+          .from(projectChangeOrders)
+          .where(
+            and(
+              eq(projectChangeOrders.project_id, projectId),
+              eq(projectChangeOrders.status, "approved"),
+              eq(projectChangeOrders.cost_allocation, "collect_immediately")
+            )
           )
-        )
     )
 
     let outstandingCOAmount = 0
@@ -667,27 +758,49 @@ export async function generateFinalInvoice(
       return { error: "Final invoice amount is negative — check prior invoices and contract amount" }
     }
 
-    const invoiceNumber = await generateInvoiceNumber(token.org_id!)
+    const invoiceNumber = await generateInvoiceNumber(orgId)
 
-    const [newInvoice] = await withRls(token, (db) =>
-      db
-        .insert(invoices)
-        .values({
-          org_id: token.org_id!,
-          invoice_number: invoiceNumber,
-          status: "draft",
-          customer_id: project.customer_id,
-          subtotal: String(finalTotal),
-          tax_amount: "0",
-          discount_amount: "0",
-          total: String(finalTotal),
-          notes: "Final project invoice including retainage release",
-          invoice_type: "project_final",
-          project_id: projectId,
-          retainage_held: "0",
-          retainage_released: String(retainageRelease),
-        })
-        .returning()
+    const [newInvoice] = await queryFn(
+      (t) =>
+        withRls(t, (d) =>
+          d
+            .insert(invoices)
+            .values({
+              org_id: orgId,
+              invoice_number: invoiceNumber,
+              status: "draft",
+              customer_id: project.customer_id,
+              subtotal: String(finalTotal),
+              tax_amount: "0",
+              discount_amount: "0",
+              total: String(finalTotal),
+              notes: "Final project invoice including retainage release",
+              invoice_type: "project_final",
+              project_id: projectId,
+              retainage_held: "0",
+              retainage_released: String(retainageRelease),
+            })
+            .returning()
+        ),
+      () =>
+        adminDb
+          .insert(invoices)
+          .values({
+            org_id: orgId,
+            invoice_number: invoiceNumber,
+            status: "draft",
+            customer_id: project.customer_id,
+            subtotal: String(finalTotal),
+            tax_amount: "0",
+            discount_amount: "0",
+            total: String(finalTotal),
+            notes: "Final project invoice including retainage release",
+            invoice_type: "project_final",
+            project_id: projectId,
+            retainage_held: "0",
+            retainage_released: String(retainageRelease),
+          })
+          .returning()
     )
 
     // Add line items for transparency
@@ -707,7 +820,7 @@ export async function generateFinalInvoice(
 
     if (remainingBalance > 0) {
       lineItemsToInsert.push({
-        org_id: token.org_id!,
+        org_id: orgId,
         invoice_id: newInvoice.id,
         description: "Remaining contract balance",
         item_type: "other",
@@ -722,7 +835,7 @@ export async function generateFinalInvoice(
 
     if (retainageRelease > 0) {
       lineItemsToInsert.push({
-        org_id: token.org_id!,
+        org_id: orgId,
         invoice_id: newInvoice.id,
         description: `Retainage release (${project.retainage_pct ?? "10"}% held from progress invoices)`,
         item_type: "other",
@@ -739,7 +852,7 @@ export async function generateFinalInvoice(
       const coAmount = parseFloat(co.cost_impact)
       if (coAmount !== 0) {
         lineItemsToInsert.push({
-          org_id: token.org_id!,
+          org_id: orgId,
           invoice_id: newInvoice.id,
           description: `Change Order ${co.change_order_number ?? co.id.slice(0, 8)}`,
           item_type: "other",
@@ -754,19 +867,29 @@ export async function generateFinalInvoice(
     }
 
     if (lineItemsToInsert.length > 0) {
-      await withRls(token, (db) =>
-        db.insert(invoiceLineItems).values(lineItemsToInsert)
+      await queryFn(
+        (t) => withRls(t, (d) => d.insert(invoiceLineItems).values(lineItemsToInsert)),
+        () => adminDb.insert(invoiceLineItems).values(lineItemsToInsert)
       )
     }
 
     // Activity log
     try {
-      const [projectRow] = await withRls(token, (db) =>
-        db
-          .select({ activity_log: projects.activity_log })
-          .from(projects)
-          .where(eq(projects.id, projectId))
-          .limit(1)
+      const [projectRow] = await queryFn(
+        (t) =>
+          withRls(t, (d) =>
+            d
+              .select({ activity_log: projects.activity_log })
+              .from(projects)
+              .where(eq(projects.id, projectId))
+              .limit(1)
+          ),
+        () =>
+          adminDb
+            .select({ activity_log: projects.activity_log })
+            .from(projects)
+            .where(eq(projects.id, projectId))
+            .limit(1)
       )
 
       if (projectRow) {
@@ -776,15 +899,23 @@ export async function generateFinalInvoice(
           {
             type: "final_invoice_created",
             at: now.toISOString(),
-            by_id: token.sub,
+            by_id: token?.sub ?? "system",
             note: `Final invoice ${invoiceNumber} created for $${finalTotal.toFixed(2)} (includes $${retainageRelease.toFixed(2)} retainage release)`,
           },
         ]
-        await withRls(token, (db) =>
-          db
-            .update(projects)
-            .set({ activity_log: updatedLog, last_activity_at: now, updated_at: now })
-            .where(eq(projects.id, projectId))
+        await queryFn(
+          (t) =>
+            withRls(t, (d) =>
+              d
+                .update(projects)
+                .set({ activity_log: updatedLog, last_activity_at: now, updated_at: now })
+                .where(eq(projects.id, projectId))
+            ),
+          () =>
+            adminDb
+              .update(projects)
+              .set({ activity_log: updatedLog, last_activity_at: now, updated_at: now })
+              .where(eq(projects.id, projectId))
         )
       }
     } catch {

@@ -43,6 +43,8 @@ import {
 } from "@/lib/db/schema"
 import { eq, and, inArray, gte, lte, or, isNull, desc, asc } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
+// PROJ-71: Quality checklist validation — imported here to wire into completePhase
+import { getQualityChecklist } from "@/actions/projects-inspections"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -945,6 +947,23 @@ export async function completePhase(
         error: `${incompleteRequired.length} required task(s) not yet completed. Please complete all required tasks before finishing this phase.`,
       }
     }
+
+    // PROJ-71: Validate quality self-inspection checklist
+    // All required checklist items must be marked complete before phase can be finished.
+    const checklistResult = await getQualityChecklist(token, phaseId)
+    if (!("error" in checklistResult)) {
+      const incompleteChecklistItems = checklistResult.data.items.filter(
+        (item) => item.isRequired && !item.isCompleted
+      )
+      if (incompleteChecklistItems.length > 0) {
+        return {
+          error: `Cannot complete phase: quality checklist items incomplete`,
+          // @ts-expect-error — TypeScript doesn't know about the extra field, but it's intentional
+          incompleteItems: incompleteChecklistItems.map((item) => item.label),
+        }
+      }
+    }
+    // If checklist fetch fails, we allow phase completion (non-blocking degradation)
 
     // Validate: at least one completion photo
     const photos = await withRls(token, (db) =>
