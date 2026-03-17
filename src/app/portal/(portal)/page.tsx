@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getOrgBranding } from "@/actions/portal-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon } from "lucide-react"
+import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon, HammerIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "My Portal",
@@ -69,6 +69,24 @@ export default async function PortalHomePage() {
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 Access and pay invoices, view payment history.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/portal/projects" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10">
+                  <HammerIcon className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Projects</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                Track renovation and construction projects.
               </p>
             </CardContent>
           </Card>
