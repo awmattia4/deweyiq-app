@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 11/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-06 delivery done)
-Status: Phase 12 Plan 06 complete — proposal PDF generator, JWT token system (PROPOSAL_TOKEN_SECRET + CHANGE_ORDER_TOKEN_SECRET), email delivery via Resend with PDF attachment, and SMS via Edge Function live
-Last activity: 2026-03-17 — Phase 12 Plan 06 proposal PDF/token/email delivery built
+Plan: 12/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline done)
+Status: Phase 12 Plan 11 complete — interactive Gantt timeline with @svar-ui/react-gantt, drag-to-reschedule, dependency cascade, weather delay alerts, and auto-schedule live
+Last activity: 2026-03-17 — Phase 12 Plan 11 Gantt timeline built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -34,6 +34,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 12-projects-renovations P11 | 9 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P06 | 18 | 1 tasks | 6 files |
 | Phase 12-projects-renovations P10 | 22 | 2 tasks | 10 files |
 | Phase 12-projects-renovations P04 | 22 | 2 tasks | 7 files |
@@ -424,6 +425,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Score >= 80 for auto-match (conservative), 50-79 for review; Stripe payout = Dr Checking / Cr Stripe Clearing (per-charge fees already in payment entries)
 - [Phase 11]: Payment lifecycle complete with QBO reconciliation, installment plans, credits, and collections dashboard in Billing page tabs
 - [Phase 11]: Financial reports use getAccountBalances helper with INNER JOIN (not correlated subquery) to filter by date and respect RLS
+- [Phase 12-11]: @svar-ui/react-gantt resolved via webpack.resolve.alias (package.json exports map references ./dist/index.cjs.js but file is ./dist/index.cjs — extension mismatch)
+- [Phase 12-11]: SVAR Gantt CSS imported via direct relative node_modules path — webpack CSS loader doesn't follow package.json exports map subpath entries for CSS files
+- [Phase 12-11]: WillowDark wrapper for Gantt dark mode — ships with library, no manual CSS variable overrides needed for dark-first app
 - [Phase 11]: Positive=debit/negative=credit convention: income displayed as positive (negate credits), expenses/assets as positive (use debits), liabilities/equity as positive (negate credits)
 - [Phase 11-04]: DeweyIQ pushes time entries to QBO only — QBO handles all pay calculation, deductions, and payroll processing (PAYRL requirements satisfied via QBO)
 - [Phase 11-04]: pushWeekToQbo server action wrapper in timesheets.ts — client components must never import server-only QBO modules directly; wrapper enables client-safe QBO batch push
@@ -467,5 +471,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed 12-06-PLAN.md
-Resume file: Phase 12 Plan 06 complete — proposal PDF (ProposalDocument with tiers, conditional line detail, payment schedule, DeweyIQ footer), JWT tokens (PROPOSAL_TOKEN_SECRET + CHANGE_ORDER_TOKEN_SECRET), email via Resend with PDF attachment, sendProposal server action
+Stopped at: Completed 12-11-PLAN.md
+Resume file: Phase 12 Plan 11 complete — @svar-ui/react-gantt Gantt timeline with drag-to-reschedule, dependency cascade, weather delay alerts, auto-schedule button. Webpack alias needed for @svar-ui module resolution (package.json exports map has .cjs.js extension bug).
