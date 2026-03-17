@@ -127,6 +127,10 @@ export const orgSettings = pgTable(
     // Array of { jurisdiction: string; rate: number } — falls back to default_tax_rate when empty/null
     sales_tax_rates: jsonb("sales_tax_rates").$type<Array<{ jurisdiction: string; rate: number }>>(),
 
+    // Phase 12: Projects & Renovations settings
+    // Days of no activity on an active project before triggering a stalled-project alert
+    project_inactivity_alert_days: integer("project_inactivity_alert_days").notNull().default(7),
+
     // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
     // No complex queries needed on broadcast history; JSONB avoids a separate table.
     broadcast_history: jsonb("broadcast_history")

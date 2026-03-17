@@ -72,6 +72,16 @@ export const invoices = pgTable(
     // Phase 7: Communication tracking
     sent_at: timestamp("sent_at", { withTimezone: true }),
     sent_sms_at: timestamp("sent_sms_at", { withTimezone: true }),
+    // Phase 12: Project billing extension
+    // Nullable — only set for project-related invoices
+    project_id: uuid("project_id"),
+    // invoice_type: 'service' | 'project_deposit' | 'project_progress' | 'project_final'
+    invoice_type: text("invoice_type").notNull().default("service"),
+    // Links to the payment milestone this invoice fulfills
+    project_milestone_id: uuid("project_milestone_id"),
+    // Retainage (holdback) tracking for construction billing
+    retainage_held: numeric("retainage_held", { precision: 12, scale: 2 }),
+    retainage_released: numeric("retainage_released", { precision: 12, scale: 2 }),
   },
   (table) => [
     index("invoices_org_id_idx").on(table.org_id),

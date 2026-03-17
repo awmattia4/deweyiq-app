@@ -58,6 +58,14 @@ export * from "./bank-accounts"
 export * from "./team-management"
 export * from "./vendor-bills"
 
+// Phase 12 tables — Projects & Renovations
+export * from "./projects"
+export * from "./project-proposals"
+export * from "./project-materials"
+export * from "./project-billing"
+export * from "./subcontractors"
+export * from "./project-field"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

@@ -50,6 +50,45 @@ import {
   vendors,
 } from "./team-management"
 import { vendorBills } from "./vendor-bills"
+import {
+  projects,
+  projectTemplates,
+  projectPhases,
+  projectPhaseTasks,
+  projectSurveys,
+} from "./projects"
+import {
+  projectProposals,
+  projectProposalTiers,
+  projectProposalLineItems,
+  projectProposalAddons,
+  projectPaymentMilestones,
+  proposalChangeRequests,
+} from "./project-proposals"
+import {
+  projectMaterials,
+  projectPurchaseOrders,
+  projectPoLineItems,
+  projectMaterialReceipts,
+  projectMaterialUsage,
+  projectMaterialReturns,
+} from "./project-materials"
+import {
+  projectChangeOrders,
+  projectInspections,
+  projectPermits,
+  projectPunchList,
+  projectWarrantyTerms,
+  warrantyClaims,
+  projectDocuments,
+} from "./project-billing"
+import { subcontractors, projectPhaseSubcontractors } from "./subcontractors"
+import {
+  projectPhotos,
+  projectTimeLogs,
+  projectIssueFlags,
+  projectEquipmentAssignments,
+} from "./project-field"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -471,3 +510,362 @@ export const vendorBillsRelations = relations(vendorBills, ({ one }) => ({
   paidBy: one(profiles, { fields: [vendorBills.paid_by], references: [profiles.id], relationName: "vendorBillPaidBy" }),
   createdBy: one(profiles, { fields: [vendorBills.created_by], references: [profiles.id], relationName: "vendorBillCreatedBy" }),
 }))
+
+// Phase 12 relations — Projects & Renovations
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  org: one(orgs, { fields: [projects.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [projects.customer_id], references: [customers.id] }),
+  pool: one(pools, { fields: [projects.pool_id], references: [pools.id] }),
+  phases: many(projectPhases),
+  surveys: many(projectSurveys),
+  proposals: many(projectProposals),
+  paymentMilestones: many(projectPaymentMilestones),
+  materials: many(projectMaterials),
+  purchaseOrders: many(projectPurchaseOrders),
+  changeOrders: many(projectChangeOrders),
+  inspections: many(projectInspections),
+  permits: many(projectPermits),
+  punchList: many(projectPunchList),
+  warrantyClaims: many(warrantyClaims),
+  documents: many(projectDocuments),
+  photos: many(projectPhotos),
+  timeLogs: many(projectTimeLogs),
+  issueFlags: many(projectIssueFlags),
+  equipmentAssignments: many(projectEquipmentAssignments),
+}))
+
+export const projectTemplatesRelations = relations(projectTemplates, ({ one }) => ({
+  org: one(orgs, { fields: [projectTemplates.org_id], references: [orgs.id] }),
+}))
+
+export const projectPhasesRelations = relations(projectPhases, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectPhases.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPhases.project_id], references: [projects.id] }),
+  assignedTech: one(profiles, {
+    fields: [projectPhases.assigned_tech_id],
+    references: [profiles.id],
+  }),
+  tasks: many(projectPhaseTasks),
+  subcontractors: many(projectPhaseSubcontractors),
+  materialUsage: many(projectMaterialUsage),
+  timeLogs: many(projectTimeLogs),
+  photos: many(projectPhotos),
+  issueFlags: many(projectIssueFlags),
+}))
+
+export const projectPhaseTasksRelations = relations(projectPhaseTasks, ({ one }) => ({
+  org: one(orgs, { fields: [projectPhaseTasks.org_id], references: [orgs.id] }),
+  phase: one(projectPhases, { fields: [projectPhaseTasks.phase_id], references: [projectPhases.id] }),
+  completedBy: one(profiles, {
+    fields: [projectPhaseTasks.completed_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectSurveysRelations = relations(projectSurveys, ({ one }) => ({
+  org: one(orgs, { fields: [projectSurveys.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectSurveys.project_id], references: [projects.id] }),
+  routeStop: one(routeStops, {
+    fields: [projectSurveys.route_stop_id],
+    references: [routeStops.id],
+  }),
+  surveyedBy: one(profiles, {
+    fields: [projectSurveys.surveyed_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectProposalsRelations = relations(projectProposals, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectProposals.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectProposals.project_id], references: [projects.id] }),
+  tiers: many(projectProposalTiers),
+  lineItems: many(projectProposalLineItems),
+  addons: many(projectProposalAddons),
+  paymentMilestones: many(projectPaymentMilestones),
+  changeRequests: many(proposalChangeRequests),
+}))
+
+export const projectProposalTiersRelations = relations(projectProposalTiers, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectProposalTiers.org_id], references: [orgs.id] }),
+  proposal: one(projectProposals, {
+    fields: [projectProposalTiers.proposal_id],
+    references: [projectProposals.id],
+  }),
+  lineItems: many(projectProposalLineItems),
+}))
+
+export const projectProposalLineItemsRelations = relations(projectProposalLineItems, ({ one }) => ({
+  org: one(orgs, { fields: [projectProposalLineItems.org_id], references: [orgs.id] }),
+  proposal: one(projectProposals, {
+    fields: [projectProposalLineItems.proposal_id],
+    references: [projectProposals.id],
+  }),
+  tier: one(projectProposalTiers, {
+    fields: [projectProposalLineItems.tier_id],
+    references: [projectProposalTiers.id],
+  }),
+}))
+
+export const projectProposalAddonsRelations = relations(projectProposalAddons, ({ one }) => ({
+  org: one(orgs, { fields: [projectProposalAddons.org_id], references: [orgs.id] }),
+  proposal: one(projectProposals, {
+    fields: [projectProposalAddons.proposal_id],
+    references: [projectProposals.id],
+  }),
+}))
+
+export const projectPaymentMilestonesRelations = relations(projectPaymentMilestones, ({ one }) => ({
+  org: one(orgs, { fields: [projectPaymentMilestones.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPaymentMilestones.project_id], references: [projects.id] }),
+  proposal: one(projectProposals, {
+    fields: [projectPaymentMilestones.proposal_id],
+    references: [projectProposals.id],
+  }),
+  triggerPhase: one(projectPhases, {
+    fields: [projectPaymentMilestones.trigger_phase_id],
+    references: [projectPhases.id],
+  }),
+  invoice: one(invoices, {
+    fields: [projectPaymentMilestones.invoice_id],
+    references: [invoices.id],
+  }),
+}))
+
+export const proposalChangeRequestsRelations = relations(proposalChangeRequests, ({ one }) => ({
+  org: one(orgs, { fields: [proposalChangeRequests.org_id], references: [orgs.id] }),
+  proposal: one(projectProposals, {
+    fields: [proposalChangeRequests.proposal_id],
+    references: [projectProposals.id],
+  }),
+}))
+
+export const projectMaterialsRelations = relations(projectMaterials, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectMaterials.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectMaterials.project_id], references: [projects.id] }),
+  proposalLineItem: one(projectProposalLineItems, {
+    fields: [projectMaterials.proposal_line_item_id],
+    references: [projectProposalLineItems.id],
+  }),
+  receipts: many(projectMaterialReceipts),
+  usage: many(projectMaterialUsage),
+  returns: many(projectMaterialReturns),
+  poLineItems: many(projectPoLineItems),
+}))
+
+export const projectPurchaseOrdersRelations = relations(projectPurchaseOrders, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectPurchaseOrders.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPurchaseOrders.project_id], references: [projects.id] }),
+  lineItems: many(projectPoLineItems),
+  receipts: many(projectMaterialReceipts),
+}))
+
+export const projectPoLineItemsRelations = relations(projectPoLineItems, ({ one }) => ({
+  org: one(orgs, { fields: [projectPoLineItems.org_id], references: [orgs.id] }),
+  purchaseOrder: one(projectPurchaseOrders, {
+    fields: [projectPoLineItems.po_id],
+    references: [projectPurchaseOrders.id],
+  }),
+  material: one(projectMaterials, {
+    fields: [projectPoLineItems.material_id],
+    references: [projectMaterials.id],
+  }),
+}))
+
+export const projectMaterialReceiptsRelations = relations(projectMaterialReceipts, ({ one }) => ({
+  org: one(orgs, { fields: [projectMaterialReceipts.org_id], references: [orgs.id] }),
+  material: one(projectMaterials, {
+    fields: [projectMaterialReceipts.material_id],
+    references: [projectMaterials.id],
+  }),
+  purchaseOrder: one(projectPurchaseOrders, {
+    fields: [projectMaterialReceipts.po_id],
+    references: [projectPurchaseOrders.id],
+  }),
+  receivedBy: one(profiles, {
+    fields: [projectMaterialReceipts.received_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectMaterialUsageRelations = relations(projectMaterialUsage, ({ one }) => ({
+  org: one(orgs, { fields: [projectMaterialUsage.org_id], references: [orgs.id] }),
+  material: one(projectMaterials, {
+    fields: [projectMaterialUsage.material_id],
+    references: [projectMaterials.id],
+  }),
+  project: one(projects, { fields: [projectMaterialUsage.project_id], references: [projects.id] }),
+  phase: one(projectPhases, {
+    fields: [projectMaterialUsage.phase_id],
+    references: [projectPhases.id],
+  }),
+  loggedBy: one(profiles, {
+    fields: [projectMaterialUsage.logged_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectMaterialReturnsRelations = relations(projectMaterialReturns, ({ one }) => ({
+  org: one(orgs, { fields: [projectMaterialReturns.org_id], references: [orgs.id] }),
+  material: one(projectMaterials, {
+    fields: [projectMaterialReturns.material_id],
+    references: [projectMaterials.id],
+  }),
+  returnedBy: one(profiles, {
+    fields: [projectMaterialReturns.returned_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectChangeOrdersRelations = relations(projectChangeOrders, ({ one }) => ({
+  org: one(orgs, { fields: [projectChangeOrders.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectChangeOrders.project_id], references: [projects.id] }),
+}))
+
+export const projectInspectionsRelations = relations(projectInspections, ({ one }) => ({
+  org: one(orgs, { fields: [projectInspections.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectInspections.project_id], references: [projects.id] }),
+  phase: one(projectPhases, {
+    fields: [projectInspections.phase_id],
+    references: [projectPhases.id],
+  }),
+}))
+
+export const projectPermitsRelations = relations(projectPermits, ({ one }) => ({
+  org: one(orgs, { fields: [projectPermits.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPermits.project_id], references: [projects.id] }),
+}))
+
+export const projectPunchListRelations = relations(projectPunchList, ({ one }) => ({
+  org: one(orgs, { fields: [projectPunchList.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPunchList.project_id], references: [projects.id] }),
+  assignedTo: one(profiles, {
+    fields: [projectPunchList.assigned_to],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectWarrantyTermsRelations = relations(projectWarrantyTerms, ({ one, many }) => ({
+  org: one(orgs, { fields: [projectWarrantyTerms.org_id], references: [orgs.id] }),
+  claims: many(warrantyClaims),
+}))
+
+export const warrantyClaimsRelations = relations(warrantyClaims, ({ one }) => ({
+  org: one(orgs, { fields: [warrantyClaims.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [warrantyClaims.project_id], references: [projects.id] }),
+  warrantyTerm: one(projectWarrantyTerms, {
+    fields: [warrantyClaims.warranty_term_id],
+    references: [projectWarrantyTerms.id],
+  }),
+  workOrder: one(workOrders, {
+    fields: [warrantyClaims.work_order_id],
+    references: [workOrders.id],
+  }),
+}))
+
+export const projectDocumentsRelations = relations(projectDocuments, ({ one }) => ({
+  org: one(orgs, { fields: [projectDocuments.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectDocuments.project_id], references: [projects.id] }),
+  uploadedBy: one(profiles, {
+    fields: [projectDocuments.uploaded_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const subcontractorsRelations = relations(subcontractors, ({ one, many }) => ({
+  org: one(orgs, { fields: [subcontractors.org_id], references: [orgs.id] }),
+  phaseAssignments: many(projectPhaseSubcontractors),
+}))
+
+export const projectPhaseSubcontractorsRelations = relations(
+  projectPhaseSubcontractors,
+  ({ one }) => ({
+    org: one(orgs, { fields: [projectPhaseSubcontractors.org_id], references: [orgs.id] }),
+    phase: one(projectPhases, {
+      fields: [projectPhaseSubcontractors.phase_id],
+      references: [projectPhases.id],
+    }),
+    subcontractor: one(subcontractors, {
+      fields: [projectPhaseSubcontractors.subcontractor_id],
+      references: [subcontractors.id],
+    }),
+  })
+)
+
+export const projectPhotosRelations = relations(projectPhotos, ({ one }) => ({
+  org: one(orgs, { fields: [projectPhotos.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectPhotos.project_id], references: [projects.id] }),
+  phase: one(projectPhases, {
+    fields: [projectPhotos.phase_id],
+    references: [projectPhases.id],
+  }),
+  task: one(projectPhaseTasks, {
+    fields: [projectPhotos.task_id],
+    references: [projectPhaseTasks.id],
+  }),
+  takenBy: one(profiles, {
+    fields: [projectPhotos.taken_by],
+    references: [profiles.id],
+  }),
+}))
+
+export const projectTimeLogsRelations = relations(projectTimeLogs, ({ one }) => ({
+  org: one(orgs, { fields: [projectTimeLogs.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectTimeLogs.project_id], references: [projects.id] }),
+  phase: one(projectPhases, {
+    fields: [projectTimeLogs.phase_id],
+    references: [projectPhases.id],
+  }),
+  task: one(projectPhaseTasks, {
+    fields: [projectTimeLogs.task_id],
+    references: [projectPhaseTasks.id],
+  }),
+  tech: one(profiles, {
+    fields: [projectTimeLogs.tech_id],
+    references: [profiles.id],
+  }),
+  timeEntry: one(timeEntries, {
+    fields: [projectTimeLogs.time_entry_id],
+    references: [timeEntries.id],
+  }),
+}))
+
+export const projectIssueFlagsRelations = relations(projectIssueFlags, ({ one }) => ({
+  org: one(orgs, { fields: [projectIssueFlags.org_id], references: [orgs.id] }),
+  project: one(projects, { fields: [projectIssueFlags.project_id], references: [projects.id] }),
+  phase: one(projectPhases, {
+    fields: [projectIssueFlags.phase_id],
+    references: [projectPhases.id],
+  }),
+  task: one(projectPhaseTasks, {
+    fields: [projectIssueFlags.task_id],
+    references: [projectPhaseTasks.id],
+  }),
+  flaggedBy: one(profiles, {
+    fields: [projectIssueFlags.flagged_by],
+    references: [profiles.id],
+  }),
+  changeOrder: one(projectChangeOrders, {
+    fields: [projectIssueFlags.change_order_id],
+    references: [projectChangeOrders.id],
+  }),
+  alert: one(alerts, {
+    fields: [projectIssueFlags.alert_id],
+    references: [alerts.id],
+  }),
+}))
+
+export const projectEquipmentAssignmentsRelations = relations(
+  projectEquipmentAssignments,
+  ({ one }) => ({
+    org: one(orgs, { fields: [projectEquipmentAssignments.org_id], references: [orgs.id] }),
+    project: one(projects, {
+      fields: [projectEquipmentAssignments.project_id],
+      references: [projects.id],
+    }),
+    assignedBy: one(profiles, {
+      fields: [projectEquipmentAssignments.assigned_by],
+      references: [profiles.id],
+    }),
+  })
+)
