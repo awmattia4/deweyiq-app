@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 1/16 complete (12-01-PLAN schema foundation done)
-Status: Phase 12 Plan 01 complete — all ~30 project tables live in Supabase, TypeScript clean
-Last activity: 2026-03-17 — Phase 12 Plan 01 schema pushed to DB
+Plan: 3/16 complete (12-01 schema, 12-02 project list, 12-03 project detail done)
+Status: Phase 12 Plan 03 complete — /projects/[id] detail page with phases, site notes, activity log live
+Last activity: 2026-03-17 — Phase 12 Plan 03 project detail page built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -109,6 +109,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 11-payroll-team-management-full-accounting P04 | 45 | 2 tasks | 27 files |
 | Phase 11 P13 | 8 | 2 tasks | 3 files |
 | Phase 12-projects-renovations P01 | 8 | 2 tasks | 11 files |
+| Phase 12-projects-renovations P03 | 14 | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -419,6 +420,9 @@ Recent decisions affecting current work:
 - [Phase 12-01]: project_time_logs.time_entry_id FK references parent shift (time_entries) for payroll reconciliation per research recommendation
 - [Phase 12-01]: Subcontractor SELECT restricted to owner/office only (insurance/license/financial data is sensitive) — differs from most project tables that allow tech SELECT
 - [Phase 12-01]: org_settings.project_inactivity_alert_days (default 7) for stalled project detection
+- [Phase 12-03]: ProjectDetail extends ProjectSummary — unified type hierarchy, avoids duplication
+- [Phase 12-03]: Phase dependency cascade uses Kahn's algorithm topological sort in TypeScript server actions
+- [Phase 12-03]: PROJECT_STAGES constants in lib/projects-constants.ts — Next.js 'use server' cannot export non-async values
 
 ### Pending Todos
 
