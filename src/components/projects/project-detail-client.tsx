@@ -35,6 +35,7 @@ const TABS = [
   { id: "activity", label: "Activity" },
   { id: "timeline", label: "Timeline", isLink: true },
   { id: "materials", label: "Materials", isLink: true },
+  { id: "financials", label: "Financials", isLink: true },
   { id: "documents", label: "Documents", isLink: true },
 ]
 
