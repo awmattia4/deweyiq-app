@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 9/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents, 12-09 materials done)
-Status: Phase 12 Plan 09 complete — material procurement system with PO creation, partial delivery tracking, cost variance, and /projects/[id]/materials page live
-Last activity: 2026-03-17 — Phase 12 Plan 09 material procurement system built
+Plan: 10/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors done)
+Status: Phase 12 Plan 10 complete — subcontractor management system with directory, phase assignments, payment tracking, lien waivers, and Resend schedule notification emails live
+Last activity: 2026-03-17 — Phase 12 Plan 10 subcontractor management system built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -34,6 +34,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 12-projects-renovations P10 | 22 | 2 tasks | 10 files |
 | Phase 12-projects-renovations P04 | 22 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P02 | 16 | 2 tasks | 14 files |
 | Phase 02-customer-pool-data-model P01 | 11 | 2 tasks | 10 files |
@@ -122,6 +123,10 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12-10]: Sub assignments display inline per phase (not a separate list) — office sees assignments in scheduling context
+- [Phase 12-10]: Lien waiver path is a text field for Supabase Storage path — full file upload UI deferred (requires storage bucket config)
+- [Phase 12-10]: Payment amount is cumulative total paid (not per-transaction ledger) — simpler schema, matches how pool companies track sub payments
+- [Phase 12-10]: Task 1 artifacts pre-built by plan 12-09 as forward-compatible stubs — plan 10 built UI on top without duplication
 - [Phase 12-08]: checkPermitGate blocks in_progress if ANY non-archived, non-approved permit exists — office explicitly adds required permits; each must reach approved status
 - [Phase 12-08]: updateProjectStage return type extended to include blockers array for permit gate UI feedback
 - [Phase 12-08]: HOA doc upload uses base64/FileReader in client → server action with Buffer decode — avoids multipart form complexity
@@ -458,5 +463,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed 12-08-PLAN.md
-Resume file: Phase 12 Plan 08 complete — permit CRUD with gate logic, expiration alerts, HOA document storage, /projects/[id]/documents page with PermitTracker and HoaDocuments, Documents tab on project detail
+Stopped at: Completed 12-10-PLAN.md
+Resume file: Phase 12 Plan 10 complete — subcontractor management with directory (settings), per-phase assignments inline in Phases tab, payment tracker with lien waivers in Subcontractors tab, Resend schedule notification emails
