@@ -14,6 +14,10 @@ import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
 import { StartRouteButton } from "@/components/field/start-route-button"
 import { ClockInBanner } from "@/components/field/clock-in-banner"
 import { QuickExpenseButton } from "@/components/field/quick-expense"
+import { RoutesTabsClient } from "@/components/field/routes-tabs-client"
+import { getTechProjects, getTechProjectBriefing } from "@/actions/projects-field"
+import type { TechProjectSummary, ProjectBriefingData } from "@/actions/projects-field"
+import { toLocalDateString } from "@/lib/date-utils"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -64,11 +68,25 @@ export default async function RoutesPage() {
   // Fetch today's stops server-side for instant render (no loading flicker)
   // Also check if route was already started for the Start Route button initial state
   // Also fetch time tracking enabled flag (conditionally for field users only)
-  const [stops, routeAlreadyStarted, timeTrackingEnabled] = await Promise.all([
+  // Also fetch project data for field users (tech/owner only)
+  const [stops, routeAlreadyStarted, timeTrackingEnabled, techProjectsResult, briefingResult] = await Promise.all([
     getTodayStops(),
     user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
     isFieldUser ? getTimeTrackingEnabled() : Promise.resolve(false),
+    // Project data — only for tech/owner field users
+    isFieldUser ? getTechProjects() : Promise.resolve([] as TechProjectSummary[]),
+    isFieldUser ? getTechProjectBriefing() : Promise.resolve({ todayPhases: [], materialsNeeded: [], subsOnSite: [], upcomingInspections: [] } as ProjectBriefingData),
   ])
+
+  // Normalize project data (handle error gracefully — don't break the page)
+  const techProjects: TechProjectSummary[] = Array.isArray(techProjectsResult)
+    ? techProjectsResult
+    : []
+  const briefing: ProjectBriefingData = "error" in briefingResult
+    ? { todayPhases: [], materialsNeeded: [], subsOnSite: [], upcomingInspections: [] }
+    : briefingResult
+
+  const todayLabel = toLocalDateString(new Date())
 
   // ── Weather fetch (Phase 10-07) ──────────────────────────────────────────
   // Fetch a single daily forecast for the route area — all stops share the same
@@ -110,6 +128,49 @@ export default async function RoutesPage() {
     (s) => s.stopStatus === "complete" || s.stopStatus === "skipped"
   ).length
 
+  // ── Routes tab content — assembled as JSX (passed as prop to RoutesTabsClient) ──
+  const routesContent = (
+    <div className="flex flex-col gap-5">
+      {/* ── Clock-in banner — tech/owner, shown when time tracking is enabled ── */}
+      {isFieldUser && timeTrackingEnabled && (
+        <ClockInBanner />
+      )}
+
+      {/* ── Start Route button — tech-only, shown when there are stops ──── */}
+      {user.role === "tech" && stops.length > 0 && (
+        <StartRouteButton alreadyStarted={routeAlreadyStarted} />
+      )}
+
+      {/* ── Quick expense button — field expense logging for tech/owner ─── */}
+      {isFieldUser && (
+        <QuickExpenseButton />
+      )}
+
+      {/* ── Progress bar ─────────────────────────────────────────────────── */}
+      {stops.length > 0 && (
+        <RouteProgress
+          completedStops={completedStops}
+          totalStops={stops.length}
+        />
+      )}
+
+      {/* ── Stop list ────────────────────────────────────────────────────── */}
+      <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} />
+
+      {/* ── Tech context footer ──────────────────────────────────────────── */}
+      {user.role === "tech" && (
+        <p className="text-xs text-muted-foreground text-center pb-2">
+          Logged in as {user.full_name || user.email}
+        </p>
+      )}
+
+      {/* ── GPS Broadcaster — activates position sharing while on route ──── */}
+      {user.role === "tech" && (
+        <GpsBroadcaster orgId={user.org_id} techId={user.id} />
+      )}
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-5">
       {/* ── Date header ──────────────────────────────────────────────────── */}
@@ -137,46 +198,16 @@ export default async function RoutesPage() {
         )}
       </div>
 
-      {/* ── Clock-in banner — tech/owner, shown when time tracking is enabled ── */}
-      {/* Persistently visible above route list. Visually distinct from Start Route. */}
-      {isFieldUser && timeTrackingEnabled && (
-        <ClockInBanner />
-      )}
-
-      {/* ── Start Route button — tech-only, shown when there are stops ──── */}
-      {user.role === "tech" && stops.length > 0 && (
-        <StartRouteButton alreadyStarted={routeAlreadyStarted} />
-      )}
-
-      {/* ── Quick expense button — field expense logging for tech/owner ─── */}
-      {/* Phase 11 Plan 10: Accessible from routes page for minimal-friction field expense capture */}
-      {isFieldUser && (
-        <QuickExpenseButton />
-      )}
-
-      {/* ── Progress bar ─────────────────────────────────────────────────── */}
-      {stops.length > 0 && (
-        <RouteProgress
-          completedStops={completedStops}
-          totalStops={stops.length}
-        />
-      )}
-
-      {/* ── Stop list ────────────────────────────────────────────────────── */}
-      <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} />
-
-      {/* ── Tech context footer ──────────────────────────────────────────── */}
-      {user.role === "tech" && (
-        <p className="text-xs text-muted-foreground text-center pb-2">
-          Logged in as {user.full_name || user.email}
-        </p>
-      )}
-
-      {/* ── GPS Broadcaster — activates position sharing while on route ──── */}
-      {/* Render-null component; no visual output. Active only for tech role. */}
-      {user.role === "tech" && (
-        <GpsBroadcaster orgId={user.org_id} techId={user.id} />
-      )}
+      {/* ── Routes | Projects tabs (Phase 12 Plan 12) ─────────────────────── */}
+      {/* For field users (tech/owner), shows Routes and Projects tabs.      */}
+      {/* For office users, shows routes content directly with no tabs.       */}
+      <RoutesTabsClient
+        routesContent={routesContent}
+        projects={techProjects}
+        briefing={briefing}
+        today={todayLabel}
+        showProjectsTab={isFieldUser}
+      />
     </div>
   )
 }
