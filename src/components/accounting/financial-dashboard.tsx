@@ -36,7 +36,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { JournalEntryList } from "./journal-entry-list"
 import { ChartOfAccountsEditor } from "./chart-of-accounts-editor"
-import { BankFeed } from "./bank-feed"
 import { SalesTaxManager } from "./sales-tax-manager"
 import { PeriodClose } from "./period-close"
 import { AuditTrail } from "./audit-trail"
@@ -404,6 +403,30 @@ export function FinancialDashboard({
   }
 
   const accountantTabsVisible = accountantMode
+  const [activeTab, setActiveTab] = useState("overview")
+
+  function onTabChange(value: string) {
+    setActiveTab(value)
+    handleTabChange(value)
+  }
+
+  // Build tab options list
+  const tabOptions: Array<{ value: string; label: string }> = [
+    { value: "overview", label: "Overview" },
+    { value: "pl", label: "Profit & Loss" },
+    { value: "bs", label: "Balance Sheet" },
+    { value: "cf", label: "Cash Flow" },
+    ...(isOwner ? [{ value: "ap", label: "Accounts Payable" }] : []),
+    ...(isOwner ? [{ value: "sales-tax", label: "Sales Tax" }] : []),
+    ...(accountantTabsVisible
+      ? [
+          { value: "journal", label: "Journal Entries" },
+          { value: "coa", label: "Chart of Accounts" },
+          { value: "periods", label: "Period Close" },
+          { value: "audit", label: "Audit Trail" },
+        ]
+      : []),
+  ]
 
   return (
     <div className="space-y-6">
@@ -417,7 +440,7 @@ export function FinancialDashboard({
         <Label htmlFor="accountant-mode" className="text-sm cursor-pointer">
           Accountant Mode
         </Label>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground hidden sm:inline">
           {accountantMode
             ? "Showing full double-entry detail, journal entries, and chart of accounts"
             : "Simplified view — toggle to reveal accounting detail for CPA handoff"}
@@ -425,32 +448,30 @@ export function FinancialDashboard({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" onValueChange={handleTabChange}>
-        <TabsList className="flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="pl">Profit & Loss</TabsTrigger>
-          <TabsTrigger value="bs">Balance Sheet</TabsTrigger>
-          <TabsTrigger value="cf">Cash Flow</TabsTrigger>
-          {/* Bank Feed tab — shown to owners who have Plaid connected */}
-          {isOwner && (
-            <TabsTrigger value="bank-feed">Bank Feed</TabsTrigger>
-          )}
-          {/* Accounts Payable — visible to all owners in both modes */}
-          {isOwner && (
-            <TabsTrigger value="ap">Accounts Payable</TabsTrigger>
-          )}
-          {/* Sales Tax — visible to all owners (applies to billing, not just accountant mode) */}
-          {isOwner && (
-            <TabsTrigger value="sales-tax">Sales Tax</TabsTrigger>
-          )}
-          {accountantTabsVisible && (
-            <>
-              <TabsTrigger value="journal">Journal Entries</TabsTrigger>
-              <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
-              <TabsTrigger value="periods">Period Close</TabsTrigger>
-              <TabsTrigger value="audit">Audit Trail</TabsTrigger>
-            </>
-          )}
+      <Tabs value={activeTab} onValueChange={onTabChange}>
+        {/* Mobile: dropdown select */}
+        <div className="sm:hidden">
+          <Select value={activeTab} onValueChange={onTabChange}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tabOptions.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop: tab bar */}
+        <TabsList className="hidden sm:inline-flex flex-wrap h-auto gap-1 p-1">
+          {tabOptions.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* ── Overview tab ───────────────────────────────────────────────── */}
@@ -842,13 +863,6 @@ export function FinancialDashboard({
             </div>
           )}
         </TabsContent>
-
-        {/* ── Bank Feed / Reconciliation tab ────────────────────────────── */}
-        {isOwner && (
-          <TabsContent value="bank-feed" className="mt-6">
-            <BankFeed bankAccounts={bankAccounts} />
-          </TabsContent>
-        )}
 
         {/* ── Journal Entries tab (accountant mode) ─────────────────────── */}
         {accountantTabsVisible && (

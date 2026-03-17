@@ -25,12 +25,10 @@ import { ChemistryCostSettings } from "@/components/settings/chemistry-cost-sett
 import { SafetySettings } from "@/components/settings/safety-settings"
 import { BroadcastMessaging } from "@/components/settings/broadcast-messaging"
 import { NotificationPreferences } from "@/components/settings/notification-preferences"
-import { PlaidConnect } from "@/components/settings/plaid-connect"
 import { TimeTrackingSettings } from "@/components/settings/time-tracking-settings"
 import { ProjectTemplates } from "@/components/settings/project-templates"
 import { SubcontractorSettings } from "@/components/settings/subcontractor-settings"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
-import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
 import type { OrgSettings, ChecklistTemplateRow } from "@/actions/company-settings"
@@ -120,8 +118,6 @@ interface SettingsTabsProps {
   broadcastHistory: BroadcastHistoryEntry[]
   // Phase 10-11: Per-user notification preferences (all roles)
   initialNotifPreferences: NotificationPreferenceRow[]
-  // Phase 11-08: Plaid bank accounts (owner only)
-  initialBankAccounts: BankAccountRow[]
   // Phase 12: Project templates (owner only)
   projectTemplates: ProjectTemplate[]
   // Phase 12: Subcontractor directory (owner only)
@@ -162,7 +158,6 @@ export function SettingsTabs({
   broadcastTechProfiles,
   broadcastHistory,
   initialNotifPreferences,
-  initialBankAccounts,
   projectTemplates,
   initialSubcontractors,
   signOutAction,
@@ -529,17 +524,6 @@ export function SettingsTabs({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Bank Accounts</CardTitle>
-              <CardDescription>
-                Connect your business bank accounts to automatically import transactions for reconciliation. Supports checking, savings, and credit cards.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PlaidConnect initialAccounts={initialBankAccounts} />
-            </CardContent>
-          </Card>
         </div>
       )}
 

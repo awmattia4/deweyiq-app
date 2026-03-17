@@ -260,12 +260,12 @@ export function CreateProjectDialog({
           {/* Lead Source */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="project-lead-source">Lead Source</Label>
-            <Select value={leadSource} onValueChange={setLeadSource}>
+            <Select value={leadSource || "none"} onValueChange={(v) => setLeadSource(v === "none" ? "" : v)}>
               <SelectTrigger id="project-lead-source">
                 <SelectValue placeholder="Select source..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {LEAD_SOURCES.map((s) => (
                   <SelectItem key={s.value} value={s.value}>
                     {s.label}
@@ -279,12 +279,12 @@ export function CreateProjectDialog({
           {allTemplatesForType && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="project-template">Template</Label>
-              <Select value={templateId} onValueChange={setTemplateId}>
+              <Select value={templateId || "none"} onValueChange={(v) => setTemplateId(v === "none" ? "" : v)}>
                 <SelectTrigger id="project-template">
                   <SelectValue placeholder="No template (start blank)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No template (start blank)</SelectItem>
+                  <SelectItem value="none">No template (start blank)</SelectItem>
                   {relevantTemplates.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}

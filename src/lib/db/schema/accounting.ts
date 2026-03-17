@@ -1,4 +1,4 @@
-import { boolean, date, index, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { boolean, date, index, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 import { pgPolicy } from "drizzle-orm/pg-core"
 import { authenticatedRole } from "drizzle-orm/supabase"
 import { sql } from "drizzle-orm"
@@ -48,8 +48,8 @@ export const chartOfAccounts = pgTable(
   (table) => [
     // Fast lookup by org (list all accounts for org)
     index("chart_of_accounts_org_idx").on(table.org_id),
-    // Fast lookup by account number within org (used by getAccountByNumber helper)
-    index("chart_of_accounts_org_number_idx").on(table.org_id, table.account_number),
+    // Unique constraint on (org_id, account_number) — required for idempotent seeding
+    uniqueIndex("chart_of_accounts_org_number_idx").on(table.org_id, table.account_number),
 
     // RLS: owner + office can view (accountant mode is owner/office only)
     pgPolicy("chart_of_accounts_select_policy", {

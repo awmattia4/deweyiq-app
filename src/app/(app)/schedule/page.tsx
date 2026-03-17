@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getScheduleRules, getHolidays, getStopsForDay, getUnassignedCustomers, type UnassignedCustomer } from "@/actions/schedule"
 import { withRls } from "@/lib/db"
-import { customers, pools, profiles } from "@/lib/db/schema"
+import { customers, pools, profiles, orgSettings } from "@/lib/db/schema"
 import { createClient } from "@/lib/supabase/server"
 import { eq, asc } from "drizzle-orm"
 import type { SupabaseToken } from "@/lib/db"
@@ -90,6 +90,7 @@ export default async function SchedulePage() {
   let customerList: { id: string; full_name: string }[] = []
   let poolList: { id: string; name: string; customer_id: string }[] = []
   let techListForDialog: { id: string; full_name: string }[] = []
+  let homeBase: { lat: number; lng: number; address?: string } | null = null
 
   try {
     const supabase = await createClient()
@@ -98,7 +99,7 @@ export default async function SchedulePage() {
     if (claimsData?.claims) {
       const token = claimsData.claims as SupabaseToken
 
-      const [customerRows, poolRows, techRows] = await Promise.all([
+      const [customerRows, poolRows, techRows, orgSettingsRows] = await Promise.all([
         withRls(token, (db) =>
           db
             .select({ id: customers.id, full_name: customers.full_name })
@@ -120,15 +121,34 @@ export default async function SchedulePage() {
             .where(eq(profiles.org_id, user.org_id))
             .orderBy(asc(profiles.full_name))
         ),
+        withRls(token, (db) =>
+          db
+            .select({
+              home_base_lat: orgSettings.home_base_lat,
+              home_base_lng: orgSettings.home_base_lng,
+              home_base_address: orgSettings.home_base_address,
+            })
+            .from(orgSettings)
+            .where(eq(orgSettings.org_id, user.org_id))
+            .limit(1)
+        ),
       ])
 
       customerList = customerRows
       poolList = poolRows
       techListForDialog = techRows
 
-      // Tech list for route builder tabs: only 'tech' role profiles
+      if (orgSettingsRows[0]?.home_base_lat && orgSettingsRows[0]?.home_base_lng) {
+        homeBase = {
+          lat: orgSettingsRows[0].home_base_lat,
+          lng: orgSettingsRows[0].home_base_lng,
+          address: orgSettingsRows[0].home_base_address ?? undefined,
+        }
+      }
+
+      // Tech list for route builder tabs: include tech + owner roles
       techList = techRows
-        .filter((p) => p.role === "tech")
+        .filter((p) => p.role === "tech" || p.role === "owner")
         .map((p) => ({ id: p.id, name: p.full_name ?? "Unknown Tech" }))
     }
   } catch (err) {
@@ -359,6 +379,7 @@ export default async function SchedulePage() {
                 initialTechId={firstTechId}
                 initialStops={initialStops}
                 initialUnassigned={initialUnassigned}
+                homeBase={homeBase}
               />
             ),
           rules: rulesPanel,

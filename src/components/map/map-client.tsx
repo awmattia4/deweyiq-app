@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
 import { MapPinIcon } from "lucide-react"
+import "maplibre-gl/dist/maplibre-gl.css"
 
 // MapLibre is loaded lazily to avoid SSR issues (window access on import).
 // This component must be consumed via next/dynamic with { ssr: false }.

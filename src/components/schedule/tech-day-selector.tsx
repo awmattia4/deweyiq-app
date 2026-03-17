@@ -23,6 +23,24 @@ interface TechDaySelectorProps {
   onWeekChange?: (offset: number) => void
 }
 
+// ─── Date helpers ──────────────────────────────────────────────────────────────
+
+/** Get the Monday of a given week offset from the current week. */
+function getMondayOfWeek(weekOffset: number): Date {
+  const today = new Date()
+  const jsDay = today.getDay() // 0=Sun, 1=Mon ... 6=Sat
+  const daysFromMonday = jsDay === 0 ? -6 : 1 - jsDay
+  const monday = new Date(today)
+  monday.setDate(today.getDate() + daysFromMonday + weekOffset * 7)
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
+/** Format a Date as "Mar 17" style. */
+function formatShortDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
 // ─── Day labels ────────────────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const
@@ -99,41 +117,54 @@ export function TechDaySelector({
         >
           {DAY_LABELS.map((label, idx) => {
             const isActive = idx === selectedDay
+            const monday = getMondayOfWeek(weekOffset)
+            const dayDate = new Date(monday)
+            dayDate.setDate(monday.getDate() + idx)
             return (
               <button
                 key={label}
                 onClick={() => onDayChange(idx)}
                 className={cn(
-                  "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors cursor-pointer",
+                  "flex-1 rounded px-2 py-1.5 text-center transition-colors cursor-pointer",
                   isActive
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 )}
               >
-                {label}
+                <span className="block text-xs font-medium">{label}</span>
+                <span className="block text-[10px] leading-tight opacity-70">{formatShortDate(dayDate)}</span>
               </button>
             )
           })}
         </div>
 
-        {/* Week label + next week */}
+        {/* Next week */}
         {onWeekChange && (
-          <>
-            {weekOffset !== 0 && (
-              <span className="flex-shrink-0 text-[10px] text-muted-foreground/60 px-1">
-                {weekOffset > 0 ? `+${weekOffset}w` : `${weekOffset}w`}
-              </span>
-            )}
-            <button
-              onClick={() => onWeekChange(weekOffset + 1)}
-              className="flex-shrink-0 rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors cursor-pointer"
-              aria-label="Next week"
-            >
-              <ChevronRightIcon className="h-3.5 w-3.5" />
-            </button>
-          </>
+          <button
+            onClick={() => onWeekChange(weekOffset + 1)}
+            className="flex-shrink-0 rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Next week"
+          >
+            <ChevronRightIcon className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
+      {/* ── Today button — shown when navigated away from current week ── */}
+      {onWeekChange && weekOffset !== 0 && (
+        <div className="flex items-center justify-center">
+          <button
+            onClick={() => {
+              onWeekChange(0)
+              const jsDay = new Date().getDay()
+              const todayIdx = jsDay === 0 ? 4 : jsDay === 6 ? 4 : jsDay - 1
+              onDayChange(todayIdx)
+            }}
+            className="rounded-md px-3 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+          >
+            Back to Today
+          </button>
+        </div>
+      )}
     </div>
   )
 }
