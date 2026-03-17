@@ -4,6 +4,7 @@ import { getProjectDetail } from "@/actions/projects"
 import { getSurveyData, getSurveySchedule, getSurveyChecklist } from "@/actions/projects-survey"
 import { getTechProfiles } from "@/actions/work-orders"
 import { getSubcontractors, getSubAssignmentsForProject, getSubPaymentSummary } from "@/actions/projects-subcontractors"
+import { getChangeOrders, getChangeOrderImpact } from "@/actions/projects-change-orders"
 import { ProjectDetailClient } from "@/components/projects/project-detail-client"
 
 interface ProjectDetailPageProps {
@@ -42,8 +43,8 @@ export default async function ProjectDetailPage({
   const { id } = await params
   const { tab } = await searchParams
 
-  // Fetch project + survey data + sub data in parallel
-  const [project, surveyData, surveySchedule, techProfiles, checklistCategories, subsResult, subAssignmentsResult, subPaymentsResult] =
+  // Fetch project + survey data + sub data + change orders in parallel
+  const [project, surveyData, surveySchedule, techProfiles, checklistCategories, subsResult, subAssignmentsResult, subPaymentsResult, changeOrders, changeOrderImpact] =
     await Promise.all([
       getProjectDetail(id),
       getSurveyData(id),
@@ -53,6 +54,8 @@ export default async function ProjectDetailPage({
       getSubcontractors(false),
       getSubAssignmentsForProject(id),
       getSubPaymentSummary(id),
+      getChangeOrders(id),
+      getChangeOrderImpact(id),
     ])
 
   if (!project) {
@@ -75,6 +78,8 @@ export default async function ProjectDetailPage({
       availableSubs={availableSubs}
       initialSubAssignments={subAssignments}
       initialSubPayments={subPayments}
+      initialChangeOrders={changeOrders}
+      initialChangeOrderImpact={changeOrderImpact}
     />
   )
 }
