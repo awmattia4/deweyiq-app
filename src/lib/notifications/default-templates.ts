@@ -25,6 +25,8 @@ export type TemplateType =
   | "pre_arrival_sms"
   | "quote_email"
   | "quote_sms"
+  | "proposal_email"
+  | "proposal_sms"
   | "invoice_email"
   | "invoice_sms"
   | "receipt_email"
@@ -51,6 +53,8 @@ export const TEMPLATE_TYPE_META: Record<TemplateType, { label: string; channel: 
   pre_arrival_sms: { label: "Pre-Arrival SMS", channel: "sms" },
   quote_email: { label: "Quote", channel: "email" },
   quote_sms: { label: "Quote SMS", channel: "sms" },
+  proposal_email: { label: "Project Proposal", channel: "email" },
+  proposal_sms: { label: "Project Proposal SMS", channel: "sms" },
   invoice_email: { label: "Invoice", channel: "email" },
   invoice_sms: { label: "Invoice SMS", channel: "sms" },
   receipt_email: { label: "Payment Receipt", channel: "email" },
@@ -74,6 +78,8 @@ export const ALL_TEMPLATE_TYPES: TemplateType[] = [
   "pre_arrival_sms",
   "quote_email",
   "quote_sms",
+  "proposal_email",
+  "proposal_sms",
   "invoice_email",
   "invoice_sms",
   "receipt_email",
@@ -140,6 +146,25 @@ The full quote is also attached as a PDF to this email.
 
   quote_sms: {
     sms_text: `{{company_name}}: You have a new quote ready. View & approve: {{quote_link}} {{sms_signature}}`,
+  },
+
+  proposal_email: {
+    subject: "Project Proposal from {{company_name}}",
+    body_html: `Hi {{customer_name}},
+
+{{company_name}} has prepared a project proposal for your review. Please click the link below to view the details and approve.
+
+View & Approve Proposal: {{proposal_link}}
+
+The full proposal is also attached as a PDF to this email.
+
+{{review_link_section}}
+
+{{custom_footer}}`,
+  },
+
+  proposal_sms: {
+    sms_text: `{{company_name}}: You have a project proposal ready to review. View & approve: {{proposal_link}} {{sms_signature}}`,
   },
 
   invoice_email: {

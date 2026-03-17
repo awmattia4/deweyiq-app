@@ -2,20 +2,22 @@
 
 /**
  * projects-proposals.ts — Server actions for proposal CRUD, tier management,
- * line items, add-ons, payment schedule, and proposal versioning.
+ * line items, add-ons, payment schedule, proposal versioning, and delivery.
  *
- * Phase 12: Projects & Renovations — Plan 05
+ * Phase 12: Projects & Renovations — Plans 05 + 06
  *
  * Key patterns:
  * - All mutating actions return fresh state (per MEMORY.md invoicing pattern)
  * - LEFT JOIN for all relational fetches (no correlated subqueries per RLS pitfalls)
  * - Versioning: createNewProposalVersion supersedes current, copies all sub-records
  * - Payment schedule: percentages must sum to 100 (validated server-side)
+ * - sendProposal: generates PDF, sends email via Resend, optionally SMS, updates status
  */
 
 import { revalidatePath } from "next/cache"
+import { createElement } from "react"
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   projects,
@@ -27,8 +29,19 @@ import {
   projectPhases,
   projectSurveys,
   projectTemplates,
+  customers,
+  orgs,
+  orgSettings,
 } from "@/lib/db/schema"
 import { eq, and, asc, desc, inArray, sql } from "drizzle-orm"
+import { renderToBuffer } from "@react-pdf/renderer"
+import { render as renderEmail } from "@react-email/render"
+import { Resend } from "resend"
+import { signProposalToken } from "@/lib/projects/proposal-token"
+import { ProposalDocument } from "@/lib/pdf/proposal-pdf"
+import type { ProposalDocumentProps } from "@/lib/pdf/proposal-pdf"
+import { ProposalEmail } from "@/lib/emails/proposal-email"
+import { getResolvedTemplate } from "@/actions/notification-templates"
 
 // ---------------------------------------------------------------------------
 // Auth helper
@@ -1286,5 +1299,460 @@ export async function createNewProposalVersion(
   } catch (err) {
     console.error("[createNewProposalVersion]", err)
     return { error: "Failed to create new proposal version" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// buildProposalDocumentProps (internal helper)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches all data needed to render the proposal PDF.
+ * Uses adminDb so it can be called from both sendProposal (user context) and
+ * getProposalPdf (public token context).
+ */
+async function buildProposalDocumentProps(
+  proposalId: string,
+  orgId: string
+): Promise<ProposalDocumentProps | null> {
+  // Fetch proposal with related project
+  const proposalRows = await adminDb
+    .select()
+    .from(projectProposals)
+    .where(and(eq(projectProposals.id, proposalId), eq(projectProposals.org_id, orgId)))
+    .limit(1)
+
+  const proposal = proposalRows[0]
+  if (!proposal) return null
+
+  // Fetch project info
+  const projectRows = await adminDb
+    .select({
+      id: projects.id,
+      customer_id: projects.customer_id,
+      project_type: projects.project_type,
+      name: projects.name,
+    })
+    .from(projects)
+    .where(eq(projects.id, proposal.project_id))
+    .limit(1)
+
+  const project = projectRows[0]
+  if (!project) return null
+
+  // Fetch customer
+  const customerRows = await adminDb
+    .select({
+      id: customers.id,
+      full_name: customers.full_name,
+      address: customers.address,
+    })
+    .from(customers)
+    .where(eq(customers.id, project.customer_id))
+    .limit(1)
+
+  const customer = customerRows[0]
+
+  // Fetch org
+  const orgRows = await adminDb
+    .select({ name: orgs.name, logo_url: orgs.logo_url })
+    .from(orgs)
+    .where(eq(orgs.id, orgId))
+    .limit(1)
+
+  const org = orgRows[0]
+  const companyName = org?.name ?? "Pool Company"
+  const companyLogoUrl = org?.logo_url ?? null
+
+  // Fetch tiers
+  const tiers = await adminDb
+    .select()
+    .from(projectProposalTiers)
+    .where(eq(projectProposalTiers.proposal_id, proposalId))
+    .orderBy(asc(projectProposalTiers.sort_order))
+
+  // Fetch line items
+  const lineItems = await adminDb
+    .select()
+    .from(projectProposalLineItems)
+    .where(eq(projectProposalLineItems.proposal_id, proposalId))
+    .orderBy(asc(projectProposalLineItems.sort_order))
+
+  // Fetch add-ons
+  const addons = await adminDb
+    .select()
+    .from(projectProposalAddons)
+    .where(eq(projectProposalAddons.proposal_id, proposalId))
+    .orderBy(asc(projectProposalAddons.sort_order))
+
+  // Fetch milestones
+  const milestones = await adminDb
+    .select()
+    .from(projectPaymentMilestones)
+    .where(eq(projectPaymentMilestones.proposal_id, proposalId))
+    .orderBy(asc(projectPaymentMilestones.sort_order))
+
+  const proposalDate = new Date(proposal.created_at).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+
+  return {
+    proposalNumber: String(proposal.version ?? 1),
+    proposalVersion: proposal.version ?? 1,
+    proposalDate,
+    companyName,
+    companyLogoUrl,
+    companyAddress: null,
+    customerName: customer?.full_name ?? "Customer",
+    customerAddress: customer?.address ?? null,
+    projectType: project.project_type,
+    projectDescription: project.name,
+    scopeDescription: proposal.scope_description,
+    showLineItemDetail: proposal.show_line_item_detail,
+    tiers: tiers.map((t) => ({
+      tier_level: t.tier_level,
+      name: t.name,
+      description: t.description,
+      price: t.price,
+      features: t.features,
+    })),
+    lineItems: lineItems.map((li) => ({
+      category: li.category,
+      description: li.description,
+      quantity: li.quantity,
+      unit_price: li.unit_price,
+      total: li.total,
+      tier_id: li.tier_id,
+    })),
+    addons: addons.map((a) => ({
+      name: a.name,
+      description: a.description,
+      price: a.price,
+    })),
+    milestones: milestones.map((m) => ({
+      name: m.name,
+      percentage: m.percentage,
+      amount: m.amount,
+    })),
+    totalAmount: proposal.total_amount,
+    termsAndConditions: proposal.terms_and_conditions,
+    warrantyInfo: proposal.warranty_info,
+    cancellationPolicy: proposal.cancellation_policy,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// sendProposal
+// ---------------------------------------------------------------------------
+
+/**
+ * Sends a proposal to the customer via email (with PDF attachment + approval link)
+ * and/or SMS.
+ *
+ * Flow:
+ * 1. Fetch proposal, project, customer, org data.
+ * 2. Build ProposalDocumentProps.
+ * 3. Generate PDF buffer via @react-pdf/renderer.
+ * 4. Sign approval token → /proposal/[token] URL.
+ * 5. Resolve notification templates.
+ * 6. Render email HTML via @react-email/render.
+ * 7. Send via Resend SDK with PDF attachment.
+ * 8. Optionally send SMS via Supabase Edge Function.
+ * 9. Update proposal status='sent', sent_at=now.
+ * 10. Update project stage='proposal_sent', add to activity_log.
+ */
+export async function sendProposal(
+  proposalId: string,
+  options?: { email?: boolean; sms?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userId = token.sub
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  const doEmail = options?.email ?? true
+  const doSms = options?.sms ?? false
+
+  try {
+    // ── 1. Fetch proposal ─────────────────────────────────────────────────
+    const proposalRows = await adminDb
+      .select()
+      .from(projectProposals)
+      .where(and(eq(projectProposals.id, proposalId), eq(projectProposals.org_id, orgId)))
+      .limit(1)
+
+    const proposal = proposalRows[0]
+    if (!proposal) return { success: false, error: "Proposal not found" }
+
+    // ── 2. Fetch project + customer ───────────────────────────────────────
+    const projectRows = await adminDb
+      .select({
+        id: projects.id,
+        customer_id: projects.customer_id,
+        project_type: projects.project_type,
+        name: projects.name,
+        stage: projects.stage,
+      })
+      .from(projects)
+      .where(eq(projects.id, proposal.project_id))
+      .limit(1)
+
+    const project = projectRows[0]
+    if (!project) return { success: false, error: "Project not found" }
+
+    const customerRows = await adminDb
+      .select({
+        id: customers.id,
+        full_name: customers.full_name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.id, project.customer_id))
+      .limit(1)
+
+    const customer = customerRows[0]
+    if (!customer) return { success: false, error: "Customer not found" }
+
+    if (doEmail && !customer.email) {
+      return { success: false, error: "Customer has no email address on file" }
+    }
+    if (doSms && !customer.phone && !customer.email) {
+      return { success: false, error: "Customer has no email or phone number on file" }
+    }
+
+    // ── 3. Build org info ─────────────────────────────────────────────────
+    const orgRows = await adminDb
+      .select({ name: orgs.name, logo_url: orgs.logo_url })
+      .from(orgs)
+      .where(eq(orgs.id, orgId))
+      .limit(1)
+
+    const org = orgRows[0]
+    const companyName = org?.name ?? "Pool Company"
+
+    // ── 4. Build PDF document props ───────────────────────────────────────
+    const docProps = await buildProposalDocumentProps(proposalId, orgId)
+    if (!docProps) return { success: false, error: "Failed to build proposal data" }
+
+    // ── 5. Generate PDF buffer ────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfBuffer = await renderToBuffer(
+      createElement(ProposalDocument, docProps) as any
+    )
+
+    // ── 6. Sign approval token ────────────────────────────────────────────
+    const approvalToken = await signProposalToken(proposalId)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
+    const approvalUrl = `${appUrl}/proposal/${approvalToken}`
+
+    const now = new Date()
+
+    // ── 7. Resolve notification templates ─────────────────────────────────
+    const totalFormatted = proposal.total_amount
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(parseFloat(proposal.total_amount) || 0)
+      : "Contact us for pricing"
+
+    const emailTemplate = await getResolvedTemplate(orgId, "proposal_email", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      proposal_number: String(proposal.version ?? 1),
+      proposal_total: totalFormatted,
+      proposal_link: approvalUrl,
+    })
+
+    const smsTemplate = await getResolvedTemplate(orgId, "proposal_sms", {
+      customer_name: customer.full_name,
+      company_name: companyName,
+      proposal_number: String(proposal.version ?? 1),
+      proposal_total: totalFormatted,
+      proposal_link: approvalUrl,
+    })
+
+    // ── 8. Email delivery ─────────────────────────────────────────────────
+    if (doEmail && customer.email && emailTemplate) {
+      const projectTypeLabel = project.project_type
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c: string) => c.toUpperCase())
+
+      const emailHtml = await renderEmail(
+        createElement(ProposalEmail, {
+          companyName,
+          customerName: customer.full_name,
+          proposalNumber: String(proposal.version ?? 1),
+          proposalTotal: totalFormatted,
+          projectType: project.project_type,
+          projectAddress: customer.address ?? null,
+          approvalUrl,
+          scopeSnippet: proposal.scope_description,
+          customBody: emailTemplate.body_html,
+          customFooter: null,
+        })
+      )
+
+      const resendApiKey = process.env.RESEND_API_KEY
+      const isDev = process.env.NODE_ENV === "development"
+
+      if (!resendApiKey) {
+        if (isDev) {
+          console.log("\n--- [DEV] Proposal Email ------------------------------------")
+          console.log(`To: ${customer.email}`)
+          console.log(`Subject: ${emailTemplate.subject ?? `Project Proposal from ${companyName}`}`)
+          console.log(`Approval URL: ${approvalUrl}`)
+          console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
+          console.log("-------------------------------------------------------------\n")
+        } else {
+          return { success: false, error: "RESEND_API_KEY not configured" }
+        }
+      } else {
+        const resend = new Resend(resendApiKey)
+
+        const fromAddress = isDev
+          ? "DeweyIQ Dev <onboarding@resend.dev>"
+          : `${companyName} <proposals@poolco.app>`
+
+        const { error: resendError } = await resend.emails.send({
+          from: fromAddress,
+          to: isDev ? ["delivered@resend.dev"] : [customer.email],
+          subject: emailTemplate.subject ?? `Project Proposal from ${companyName}`,
+          html: emailHtml,
+          attachments: [
+            {
+              filename: `proposal-v${proposal.version ?? 1}.pdf`,
+              content: Buffer.from(pdfBuffer).toString("base64"),
+            },
+          ],
+        })
+
+        if (resendError) {
+          console.error("[sendProposal] Resend error:", resendError)
+          return {
+            success: false,
+            error: `Email delivery failed: ${resendError.message}`,
+          }
+        }
+      }
+    }
+
+    // ── 9. SMS delivery ───────────────────────────────────────────────────
+    if (doSms && customer.phone && smsTemplate) {
+      try {
+        const supabase = await createClient()
+        await supabase.functions.invoke("send-invoice-sms", {
+          body: {
+            phone: customer.phone,
+            approvalUrl,
+            proposalNumber: String(proposal.version ?? 1),
+            total: totalFormatted,
+            companyName,
+            type: "proposal",
+            customText: smsTemplate.sms_text ?? undefined,
+          },
+        })
+      } catch (smsErr) {
+        // SMS failure is non-fatal if email was also sent
+        console.error("[sendProposal] SMS delivery error:", smsErr)
+        if (!doEmail) {
+          return {
+            success: false,
+            error: `SMS delivery failed: ${smsErr instanceof Error ? smsErr.message : "Unknown error"}`,
+          }
+        }
+      }
+    }
+
+    // ── 10. Update proposal status + project stage ────────────────────────
+    await withRls(token, async (db) => {
+      await db
+        .update(projectProposals)
+        .set({
+          status: "sent",
+          sent_at: now,
+          updated_at: now,
+        })
+        .where(eq(projectProposals.id, proposalId))
+    })
+
+    await withRls(token, async (db) => {
+      await db
+        .update(projects)
+        .set({
+          stage: "proposal_sent",
+          stage_entered_at: now,
+          updated_at: now,
+          activity_log: sql`COALESCE(activity_log, '[]'::jsonb) || ${JSON.stringify([{
+            type: "proposal_sent",
+            at: now.toISOString(),
+            by_id: userId,
+            note: `Proposal v${proposal.version ?? 1} sent to ${customer.email ?? customer.phone}`,
+          }])}::jsonb`,
+        })
+        .where(eq(projects.id, proposal.project_id))
+    })
+
+    revalidatePath(`/projects/${proposal.project_id}/proposal`)
+    revalidatePath(`/projects/${proposal.project_id}`)
+    revalidatePath("/projects")
+
+    return { success: true }
+  } catch (err) {
+    console.error("[sendProposal]", err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to send proposal",
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getProposalPdf
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates and returns a PDF buffer for a proposal.
+ * Used for download/preview from the proposal builder page.
+ * Requires authenticated user (owner/office role).
+ */
+export async function getProposalPdf(
+  proposalId: string
+): Promise<{ data: Buffer; filename: string } | { error: string }> {
+  const token = await getToken()
+  if (!token) return { error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { error: "Insufficient permissions" }
+  }
+
+  try {
+    const docProps = await buildProposalDocumentProps(proposalId, orgId)
+    if (!docProps) return { error: "Proposal not found" }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfBuffer = await renderToBuffer(
+      createElement(ProposalDocument, docProps) as any
+    )
+
+    return {
+      data: Buffer.from(pdfBuffer),
+      filename: `proposal-v${docProps.proposalVersion}.pdf`,
+    }
+  } catch (err) {
+    console.error("[getProposalPdf]", err)
+    return { error: "Failed to generate PDF" }
   }
 }
