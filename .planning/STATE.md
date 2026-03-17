@@ -111,6 +111,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 11 P13 | 8 | 2 tasks | 3 files |
 | Phase 12-projects-renovations P01 | 8 | 2 tasks | 11 files |
 | Phase 12-projects-renovations P03 | 14 | 2 tasks | 10 files |
+| Phase 12-projects-renovations P05 | 21 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -427,6 +428,8 @@ Recent decisions affecting current work:
 - [Phase 12-03]: ProjectDetail extends ProjectSummary — unified type hierarchy, avoids duplication
 - [Phase 12-03]: Phase dependency cascade uses Kahn's algorithm topological sort in TypeScript server actions
 - [Phase 12-03]: PROJECT_STAGES constants in lib/projects-constants.ts — Next.js 'use server' cannot export non-async values
+- [Phase 12-projects-renovations]: Multi-section scrollable proposal builder layout — all sections visible on one page for fast office editing
+- [Phase 12-projects-renovations]: createProposal is idempotent — returns existing active proposal rather than creating duplicates
 
 ### Pending Todos
 
