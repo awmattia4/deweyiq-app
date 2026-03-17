@@ -18,6 +18,8 @@ import { getNotificationPreferences } from "@/actions/user-notifications"
 import { getBankAccounts } from "@/actions/bank-feeds"
 import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
+import { getProjectTemplates } from "@/actions/projects"
+import type { ProjectTemplate } from "@/actions/projects"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -56,7 +58,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -68,8 +70,14 @@ export default async function SettingsPage() {
         getDunningConfig(),
         getTemplates(),
         getOrgTemplateSettings(),
+        getProjectTemplates(),
       ])
-    : [null, [], null, [], [], null, null, null, [], null]
+    : [null, [], null, [], [], null, null, null, [], null, []]
+
+  const projectTemplateList: ProjectTemplate[] =
+    isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
+      ? (projectTemplatesResult as ProjectTemplate[])
+      : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
   // adminDb bypasses RLS, so explicitly filter by org_id
@@ -216,6 +224,7 @@ export default async function SettingsPage() {
         broadcastHistory={broadcastHistoryList}
         initialNotifPreferences={initialNotifPreferences}
         initialBankAccounts={initialBankAccounts}
+        projectTemplates={projectTemplateList}
         signOutAction={async () => {
           "use server"
           await signOut()

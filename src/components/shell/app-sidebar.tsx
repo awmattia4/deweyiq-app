@@ -20,6 +20,7 @@ import {
   MessageCircleIcon,
   ClipboardListIcon,
   BookOpenIcon,
+  FolderKanbanIcon,
 } from "lucide-react"
 import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
@@ -125,6 +126,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Work Orders",
     href: "/work-orders",
     icon: WrenchIcon,
+    roles: ["owner", "office"],
+  },
+  // ── Available in Phase 12 ──────────────────────────────────────────────────
+  {
+    label: "Projects",
+    href: "/projects",
+    icon: FolderKanbanIcon,
     roles: ["owner", "office"],
   },
   // ── Available in Phase 7 ───────────────────────────────────────────────────

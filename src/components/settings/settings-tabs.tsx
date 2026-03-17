@@ -27,6 +27,7 @@ import { BroadcastMessaging } from "@/components/settings/broadcast-messaging"
 import { NotificationPreferences } from "@/components/settings/notification-preferences"
 import { PlaidConnect } from "@/components/settings/plaid-connect"
 import { TimeTrackingSettings } from "@/components/settings/time-tracking-settings"
+import { ProjectTemplates } from "@/components/settings/project-templates"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
@@ -37,6 +38,7 @@ import type { DunningStep } from "@/lib/db/schema/dunning"
 import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
 import type { StripeAccountStatus } from "@/actions/stripe-connect"
+import type { ProjectTemplate } from "@/actions/projects"
 import {
   LogOutIcon,
   BuildingIcon,
@@ -56,7 +58,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "account"
+type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "account"
 
 interface TabDef {
   id: TabId
@@ -69,6 +71,7 @@ const OWNER_TABS: TabDef[] = [
   { id: "work-orders", label: "Work Orders" },
   { id: "billing", label: "Billing" },
   { id: "time-tracking", label: "Time Tracking" },
+  { id: "projects", label: "Projects" },
   { id: "account", label: "Account" },
 ]
 
@@ -117,6 +120,8 @@ interface SettingsTabsProps {
   initialNotifPreferences: NotificationPreferenceRow[]
   // Phase 11-08: Plaid bank accounts (owner only)
   initialBankAccounts: BankAccountRow[]
+  // Phase 12: Project templates (owner only)
+  projectTemplates: ProjectTemplate[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -154,6 +159,7 @@ export function SettingsTabs({
   broadcastHistory,
   initialNotifPreferences,
   initialBankAccounts,
+  projectTemplates,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -552,6 +558,24 @@ export function SettingsTabs({
                   pay_period_type: orgSettings.pay_period_type,
                 }}
               />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Projects tab — owner only */}
+      {isOwner && (
+        <div className={cn("flex flex-col gap-6", activeTab === "projects" ? "block" : "hidden")}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Project Templates</CardTitle>
+              <CardDescription>
+                Create templates that pre-populate phases and tasks when starting a new project. Use
+                templates to standardize your renovation and new pool workflows.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProjectTemplates initialTemplates={projectTemplates} />
             </CardContent>
           </Card>
         </div>
