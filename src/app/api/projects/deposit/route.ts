@@ -30,6 +30,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { getStripe } from "@/lib/stripe/client"
+import { toLocalDateString } from "@/lib/date-utils"
 
 export async function POST(req: NextRequest) {
   try {
@@ -209,7 +210,7 @@ export async function POST(req: NextRequest) {
     if (splitDeposit && secondHalfAmount !== undefined) {
       const secondDueDate = new Date()
       secondDueDate.setDate(secondDueDate.getDate() + 7)
-      const secondDueDateStr = secondDueDate.toISOString().split("T")[0]
+      const secondDueDateStr = toLocalDateString(secondDueDate)
 
       // Check if second milestone already exists
       const existingSecond = await adminDb

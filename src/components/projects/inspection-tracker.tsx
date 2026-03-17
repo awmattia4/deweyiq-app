@@ -13,7 +13,25 @@
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { toLocalDateString } from "@/lib/date-utils"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   createInspection,
   recordInspectionResult,
@@ -138,57 +156,63 @@ function ScheduleInspectionDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
-        <h3 className="text-base font-semibold mb-4">Schedule Inspection</h3>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Schedule Inspection</DialogTitle>
+          <DialogDescription>
+            Add a new inspection to track for this project.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Inspection Type</label>
-            <select
+            <Label>Inspection Type</Label>
+            <Select
               value={form.inspectionType}
-              onChange={(e) => setForm((f) => ({ ...f, inspectionType: e.target.value }))}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              onValueChange={(v) => setForm((f) => ({ ...f, inspectionType: v }))}
             >
-              <option value="framing">Framing</option>
-              <option value="electrical">Electrical</option>
-              <option value="plumbing">Plumbing</option>
-              <option value="pool_spa">Pool/Spa</option>
-              <option value="final">Final</option>
-              <option value="health_dept">Health Dept</option>
-              <option value="structural">Structural</option>
-              <option value="other">Other</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="framing">Framing</SelectItem>
+                <SelectItem value="electrical">Electrical</SelectItem>
+                <SelectItem value="plumbing">Plumbing</SelectItem>
+                <SelectItem value="pool_spa">Pool/Spa</SelectItem>
+                <SelectItem value="final">Final</SelectItem>
+                <SelectItem value="health_dept">Health Dept</SelectItem>
+                <SelectItem value="structural">Structural</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Scheduled Date</label>
-            <input
+            <Label>Scheduled Date</Label>
+            <Input
               type="date"
               value={form.scheduledDate}
               onChange={(e) => setForm((f) => ({ ...f, scheduledDate: e.target.value }))}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Inspector Name</label>
-            <input
+            <Label>Inspector Name</Label>
+            <Input
               type="text"
               value={form.inspectorName}
               onChange={(e) => setForm((f) => ({ ...f, inspectorName: e.target.value }))}
               placeholder="Inspector name"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Inspector Contact</label>
-            <input
+            <Label>Inspector Contact</Label>
+            <Input
               type="text"
               value={form.inspectorContact}
               onChange={(e) => setForm((f) => ({ ...f, inspectorContact: e.target.value }))}
               placeholder="Phone or email"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
@@ -203,8 +227,8 @@ function ScheduleInspectionDialog({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -223,7 +247,7 @@ function RecordResultDialog({
 }) {
   const [form, setForm] = useState({
     status: "passed" as "passed" | "failed" | "cancelled" | "rescheduled",
-    actualDate: new Date().toISOString().split("T")[0],
+    actualDate: toLocalDateString(new Date()),
     resultNotes: "",
     correctionTasksText: "",
   })
@@ -269,67 +293,69 @@ function RecordResultDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
-        <h3 className="text-base font-semibold mb-1">Record Result</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          {inspectionTypeLabel(inspection.inspectionType)} inspection
-        </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Result</DialogTitle>
+          <DialogDescription>
+            {inspectionTypeLabel(inspection.inspectionType)} inspection
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Result</label>
-            <select
+            <Label>Result</Label>
+            <Select
               value={form.status}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  status: e.target.value as typeof form.status,
-                }))
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, status: v as typeof form.status }))
               }
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             >
-              <option value="passed">Passed</option>
-              <option value="failed">Failed</option>
-              <option value="rescheduled">Rescheduled</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="passed">Passed</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="rescheduled">Rescheduled</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Date</label>
-            <input
+            <Label>Date</Label>
+            <Input
               type="date"
               value={form.actualDate}
               onChange={(e) => setForm((f) => ({ ...f, actualDate: e.target.value }))}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Notes</label>
-            <textarea
+            <Label>Notes</Label>
+            <Textarea
               value={form.resultNotes}
               onChange={(e) => setForm((f) => ({ ...f, resultNotes: e.target.value }))}
               placeholder="Inspector notes, requirements, observations..."
               rows={3}
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              className="resize-none"
             />
           </div>
 
           {form.status === "failed" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">
-                Correction Items Required
-                <span className="text-muted-foreground font-normal ml-1">(one per line)</span>
-              </label>
-              <textarea
+              <Label>
+                Correction Items Required{" "}
+                <span className="text-muted-foreground font-normal">(one per line)</span>
+              </Label>
+              <Textarea
                 value={form.correctionTasksText}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, correctionTasksText: e.target.value }))
                 }
                 placeholder={"Fix deficiency 1\nFix deficiency 2\nSchedule re-inspection"}
                 rows={4}
-                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
                 These will be added as required tasks on the relevant phase.
@@ -348,8 +374,8 @@ function RecordResultDialog({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

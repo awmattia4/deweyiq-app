@@ -18,6 +18,16 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import {
   createPunchListItem,
   updatePunchListItem,
@@ -134,19 +144,24 @@ function AddItemDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
-        <h3 className="text-base font-semibold mb-4">Add Punch List Item</h3>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Punch List Item</DialogTitle>
+          <DialogDescription>
+            Describe the item that needs attention during the final walkthrough.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Description</label>
-            <textarea
+            <Label>Description</Label>
+            <Textarea
               value={form.itemDescription}
               onChange={(e) => setForm((f) => ({ ...f, itemDescription: e.target.value }))}
               placeholder="Describe the item that needs attention..."
               rows={3}
               autoFocus
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              className="resize-none"
             />
           </div>
 
@@ -161,8 +176,8 @@ function AddItemDialog({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -207,48 +222,50 @@ function SignOffDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
-        <h3 className="text-base font-semibold mb-1">Complete Walkthrough</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Signing off accepts all {itemCount} resolved item{itemCount !== 1 ? "s" : ""} and marks
-          the project complete. This will activate the warranty and generate the final invoice.
-        </p>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Complete Walkthrough</DialogTitle>
+          <DialogDescription>
+            Signing off accepts all {itemCount} resolved item{itemCount !== 1 ? "s" : ""} and marks
+            the project complete. This will activate the warranty and generate the final invoice.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4 mt-2">
+          <div className="bg-muted/40 border border-border rounded-md p-3">
+            <p className="text-xs text-muted-foreground">
+              By signing below, you confirm that all punch list items have been reviewed and
+              resolved to your satisfaction.
+            </p>
+          </div>
 
-        <div className="bg-muted/40 border border-border rounded-md p-3 mb-4">
-          <p className="text-xs text-muted-foreground">
-            By signing below, you confirm that all punch list items have been reviewed and
-            resolved to your satisfaction.
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label>Type your name to sign</Label>
+            <Input
+              type="text"
+              value={signatureText}
+              onChange={(e) => setSignatureText(e.target.value)}
+              placeholder="Full name"
+            />
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={saving || !signatureText.trim()}
+              onClick={handleSignOff}
+            >
+              {saving ? "Processing..." : "Sign Off & Complete"}
+            </Button>
+          </div>
         </div>
-
-        <div className="flex flex-col gap-1.5 mb-4">
-          <label className="text-sm font-medium">Type your name to sign</label>
-          <input
-            type="text"
-            value={signatureText}
-            onChange={(e) => setSignatureText(e.target.value)}
-            placeholder="Full name"
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-
-        {error && <p className="text-sm text-destructive mb-3">{error}</p>}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            disabled={saving || !signatureText.trim()}
-            onClick={handleSignOff}
-          >
-            {saving ? "Processing..." : "Sign Off & Complete"}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

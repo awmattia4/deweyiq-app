@@ -1552,7 +1552,7 @@ export async function sendProposal(
 
     // ── 6. Sign approval token ────────────────────────────────────────────
     const approvalToken = await signProposalToken(proposalId)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.deweyiq.com"
     const approvalUrl = `${appUrl}/proposal/${approvalToken}`
 
     const now = new Date()

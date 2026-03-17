@@ -478,6 +478,142 @@ export async function generateWarrantyCertificate(
 // Uses adminDb — called from customer portal (no user session).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// getActiveWarranties — compute active warranty coverage for a project
+// ---------------------------------------------------------------------------
+
+export async function getActiveWarranties(
+  token: SupabaseToken | null,
+  projectId: string
+): Promise<ActiveWarranty[] | { error: string }> {
+  const t = token ?? (await getToken())
+  if (!t) return { error: "Not authenticated" }
+  if (!t.org_id) return { error: "No org context" }
+
+  try {
+    const orgId = t.org_id as string
+
+    // Fetch project type + completion date
+    const projectRows = await withRls(t, (db) =>
+      db
+        .select({
+          project_type: projects.project_type,
+          actual_completion_date: projects.actual_completion_date,
+          stage: projects.stage,
+        })
+        .from(projects)
+        .where(and(eq(projects.id, projectId), eq(projects.org_id, orgId)))
+    )
+
+    if (projectRows.length === 0) return { error: "Project not found" }
+    const project = projectRows[0]
+
+    // Warranty only applies to warranty_active or complete stages
+    if (project.stage !== "warranty_active" && project.stage !== "complete") {
+      return []
+    }
+
+    const completionDate = project.actual_completion_date ?? toLocalDateString(new Date())
+
+    // Fetch active warranty terms for this project type
+    const terms = await withRls(t, (db) =>
+      db
+        .select()
+        .from(projectWarrantyTerms)
+        .where(
+          and(
+            eq(projectWarrantyTerms.org_id, orgId),
+            eq(projectWarrantyTerms.project_type, project.project_type ?? "new_pool"),
+            eq(projectWarrantyTerms.is_active, true)
+          )
+        )
+    )
+
+    return terms.map((term) => {
+      const startDate = new Date(completionDate)
+      const expirationDate = new Date(startDate)
+      expirationDate.setMonth(expirationDate.getMonth() + term.duration_months)
+      const daysUntilExpiry = Math.ceil(
+        (expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+      return {
+        termId: term.id,
+        warrantyType: term.warranty_type,
+        durationMonths: term.duration_months,
+        whatCovered: term.what_covered,
+        exclusions: term.exclusions,
+        activatedDate: completionDate,
+        expirationDate: toLocalDateString(expirationDate),
+        daysUntilExpiry,
+      }
+    })
+  } catch (err) {
+    console.error("[getActiveWarranties]", err)
+    return { error: "Failed to fetch active warranties" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getWarrantyClaims — fetch claims for a project
+// ---------------------------------------------------------------------------
+
+export async function getWarrantyClaims(
+  token: SupabaseToken | null,
+  projectId: string
+): Promise<WarrantyClaimSummary[] | { error: string }> {
+  const t = token ?? (await getToken())
+  if (!t) return { error: "Not authenticated" }
+  if (!t.org_id) return { error: "No org context" }
+
+  try {
+    const orgId = t.org_id as string
+
+    const rows = await withRls(t, (db) =>
+      db
+        .select({
+          id: warrantyClaims.id,
+          project_id: warrantyClaims.project_id,
+          warranty_term_id: warrantyClaims.warranty_term_id,
+          work_order_id: warrantyClaims.work_order_id,
+          customer_description: warrantyClaims.customer_description,
+          status: warrantyClaims.status,
+          submitted_at: warrantyClaims.submitted_at,
+          resolution_notes: warrantyClaims.resolution_notes,
+          is_warranty_covered: warrantyClaims.is_warranty_covered,
+          created_at: warrantyClaims.created_at,
+        })
+        .from(warrantyClaims)
+        .where(
+          and(
+            eq(warrantyClaims.project_id, projectId),
+            eq(warrantyClaims.org_id, orgId)
+          )
+        )
+        .orderBy(asc(warrantyClaims.created_at))
+    )
+
+    return rows.map((r) => ({
+      id: r.id,
+      projectId: r.project_id,
+      warrantyTermId: r.warranty_term_id,
+      workOrderId: r.work_order_id,
+      customerDescription: r.customer_description,
+      status: r.status,
+      submittedAt: r.submitted_at ?? r.created_at,
+      resolutionNotes: r.resolution_notes,
+      isWarrantyCovered: r.is_warranty_covered ?? true,
+      createdAt: r.created_at,
+    }))
+  } catch (err) {
+    console.error("[getWarrantyClaims]", err)
+    return { error: "Failed to fetch warranty claims" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// submitWarrantyClaim (PROJ-76)
+// ---------------------------------------------------------------------------
+
 export interface SubmitWarrantyClaimInput {
   projectId: string
   warrantyTermId?: string | null

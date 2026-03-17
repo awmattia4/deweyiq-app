@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { toLocalDateString } from "@/lib/date-utils"
 import {
   Dialog,
   DialogContent,
@@ -221,7 +222,7 @@ export function ProjectPhasesTab({
     startTransition(async () => {
       const result = await updateProjectPhase(phase.id, {
         status: "complete",
-        actual_end_date: new Date().toISOString().split("T")[0],
+        actual_end_date: toLocalDateString(new Date()),
       })
       if (!result.success) {
         toast.error(result.error ?? "Failed to mark phase complete")

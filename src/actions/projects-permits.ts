@@ -24,7 +24,6 @@ import {
   projects,
   projectPermits,
   projectDocuments,
-  projectTemplates,
   alerts,
 } from "@/lib/db/schema"
 import { eq, and, isNull, lte, isNotNull } from "drizzle-orm"

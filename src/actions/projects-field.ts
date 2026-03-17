@@ -41,7 +41,7 @@ import {
   alerts,
   timeEntries,
 } from "@/lib/db/schema"
-import { eq, and, inArray, gte, lte, or, isNull, desc, asc } from "drizzle-orm"
+import { eq, and, inArray, gte, lte, or, isNull, desc, asc, sql } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
 // PROJ-71: Quality checklist validation — imported here to wire into completePhase
 import { getQualityChecklist } from "@/actions/projects-inspections"
@@ -890,13 +890,11 @@ export async function logMaterialUsage(
       })
     )
 
-    // Update cumulative quantity_used on the material record (best effort via adminDb)
+    // Accumulate quantity_used on the material record (best effort via adminDb)
     await adminDb
       .update(projectMaterials)
       .set({
-        quantity_used: String(
-          parseFloat("0") + data.quantityUsed
-        ),
+        quantity_used: sql`COALESCE(${projectMaterials.quantity_used}::numeric, 0) + ${data.quantityUsed}`,
         updated_at: new Date(),
       })
       .where(eq(projectMaterials.id, data.materialId))
@@ -1048,6 +1046,7 @@ export async function completePhase(
     }
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
 
     return { success: true }
   } catch (err) {

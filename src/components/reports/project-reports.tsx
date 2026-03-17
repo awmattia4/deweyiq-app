@@ -269,7 +269,7 @@ function SubcontractorSpendTable({ data }: { data: SubcontractorSpend[] }) {
           </tr>
         </thead>
         <tbody>
-          {data.sort((a, b) => b.totalSpend - a.totalSpend).map((row) => (
+          {[...data].sort((a, b) => b.totalSpend - a.totalSpend).map((row) => (
             <tr key={row.subId} className="border-b border-border/40">
               <td className="py-2.5 pr-4 font-medium">{row.subName}</td>
               <td className="py-2.5 pr-4 text-muted-foreground capitalize">{row.trade}</td>

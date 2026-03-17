@@ -17,6 +17,15 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import {
   reviewWarrantyClaim,
   resolveWarrantyClaim,
   generateWarrantyCertificate,
@@ -180,16 +189,18 @@ function ReviewClaimDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-md p-6">
-        <h3 className="text-base font-semibold mb-1">Review Warranty Claim</h3>
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-          {claim.customerDescription}
-        </p>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Review Warranty Claim</DialogTitle>
+          <DialogDescription className="line-clamp-3">
+            {claim.customerDescription}
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Decision</label>
+            <Label>Decision</Label>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -218,7 +229,7 @@ function ReviewClaimDialog({
 
           {approved === true && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Coverage</label>
+              <Label>Coverage</Label>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -253,13 +264,12 @@ function ReviewClaimDialog({
           )}
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Notes</label>
-            <textarea
+            <Label>Notes</Label>
+            <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Review notes, reason for decision..."
               rows={3}
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
             />
           </div>
 
@@ -274,8 +284,60 @@ function ReviewClaimDialog({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ResolveClaimDialog
+// ---------------------------------------------------------------------------
+
+function ResolveClaimDialog({
+  claimId,
+  onResolved,
+  onClose,
+}: {
+  claimId: string
+  onResolved: (claimId: string, notes: string) => void
+  onClose: () => void
+}) {
+  const [notes, setNotes] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit() {
+    setSaving(true)
+    const result = await resolveWarrantyClaim(null, claimId, notes || "Resolved")
+    setSaving(false)
+    if (!("error" in result)) {
+      onResolved(claimId, notes || "Resolved")
+      onClose()
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Resolve Claim</DialogTitle>
+          <DialogDescription>Enter resolution notes for this warranty claim.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Resolution notes..."
+            rows={3}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button size="sm" disabled={saving} onClick={handleSubmit}>
+              {saving ? "Saving..." : "Resolve"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -302,6 +364,7 @@ export function WarrantyManager({
   const [reviewingClaim, setReviewingClaim] = useState<WarrantyClaimSummary | null>(null)
   const [generatingCert, setGeneratingCert] = useState(false)
   const [certMessage, setCertMessage] = useState<string | null>(null)
+  const [resolvingClaimId, setResolvingClaimId] = useState<string | null>(null)
 
   const isWarrantyActive =
     projectStage === "warranty_active" || projectStage === "complete"
@@ -327,14 +390,8 @@ export function WarrantyManager({
     }
   }
 
-  async function handleResolveClaim(claimId: string) {
-    const resolution = window.prompt("Resolution notes:")
-    if (resolution === null) return
-
-    const result = await resolveWarrantyClaim(null, claimId, resolution || "Resolved")
-    if (!("error" in result)) {
-      handleClaimUpdated(claimId, { status: "resolved", resolutionNotes: resolution || "Resolved" })
-    }
+  function handleClaimResolved(claimId: string, notes: string) {
+    handleClaimUpdated(claimId, { status: "resolved", resolutionNotes: notes })
   }
 
   return (
@@ -441,7 +498,7 @@ export function WarrantyManager({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleResolveClaim(claim.id)}
+                        onClick={() => setResolvingClaimId(claim.id)}
                       >
                         Resolve
                       </Button>
@@ -459,6 +516,14 @@ export function WarrantyManager({
           claim={reviewingClaim}
           onReviewed={handleClaimUpdated}
           onClose={() => setReviewingClaim(null)}
+        />
+      )}
+
+      {resolvingClaimId && (
+        <ResolveClaimDialog
+          claimId={resolvingClaimId}
+          onResolved={handleClaimResolved}
+          onClose={() => setResolvingClaimId(null)}
         />
       )}
     </div>

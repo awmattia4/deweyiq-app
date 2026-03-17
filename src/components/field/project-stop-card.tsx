@@ -125,7 +125,7 @@ export function ProjectStopCard({ project }: ProjectStopCardProps) {
       {/* Due date */}
       {project.estimatedEndDate && (
         <p className="text-xs text-muted-foreground/60 mt-1.5">
-          Target: {project.estimatedEndDate}
+          Est. Completion: {project.estimatedEndDate}
         </p>
       )}
     </button>

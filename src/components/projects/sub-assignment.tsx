@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { toLocalDateString } from "@/lib/date-utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -143,8 +144,7 @@ export function SubAssignmentSection({
 
   const insuranceExpired = (expiry: string | null): boolean => {
     if (!expiry) return false
-    const today = new Date().toISOString().slice(0, 10)
-    return expiry < today
+    return expiry < toLocalDateString(new Date())
   }
 
   // Subs not already assigned to this phase

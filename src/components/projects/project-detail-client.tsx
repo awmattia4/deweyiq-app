@@ -17,7 +17,7 @@ import type { TechProfile } from "@/actions/work-orders"
 import type { SubcontractorRow, SubAssignmentRow, SubPaymentSummary } from "@/actions/projects-subcontractors"
 import type { ChangeOrderSummary, ChangeOrderImpact } from "@/actions/projects-change-orders"
 import type { InspectionSummary, PunchListItem } from "@/actions/projects-inspections"
-import type { WarrantyTerm } from "@/actions/projects-warranty"
+import type { WarrantyTerm, ActiveWarranty, WarrantyClaimSummary } from "@/actions/projects-warranty"
 import { cn } from "@/lib/utils"
 
 interface ProjectDetailClientProps {
@@ -40,6 +40,8 @@ interface ProjectDetailClientProps {
   initialInspections?: InspectionSummary[]
   initialPunchList?: PunchListItem[]
   warrantyTerms?: WarrantyTerm[]
+  activeWarranties?: ActiveWarranty[]
+  warrantyClaims?: WarrantyClaimSummary[]
 }
 
 // Tabs that are always visible
@@ -89,6 +91,8 @@ export function ProjectDetailClient({
   initialInspections = [],
   initialPunchList = [],
   warrantyTerms = [],
+  activeWarranties = [],
+  warrantyClaims = [],
 }: ProjectDetailClientProps) {
   const [project, setProject] = useState(initialProject)
   const [surveyData, setSurveyData] = useState(initialSurveyData)
@@ -238,8 +242,8 @@ export function ProjectDetailClient({
           <WarrantyManager
             projectId={project.id}
             projectStage={project.stage}
-            activeWarranties={[]}
-            initialClaims={[]}
+            activeWarranties={activeWarranties}
+            initialClaims={warrantyClaims}
             warrantyTerms={warrantyTerms}
           />
         )}

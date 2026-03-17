@@ -1206,7 +1206,7 @@ function _recalculateDependentPhases(
     // New start = day after parent ends
     const parentEnd = new Date(parentEndDate)
     parentEnd.setDate(parentEnd.getDate() + 1)
-    const newStart = parentEnd.toISOString().split("T")[0]
+    const newStart = toLocalDateString(parentEnd)
 
     // Preserve original duration
     let newEnd: string | null = null
@@ -1218,7 +1218,7 @@ function _recalculateDependentPhases(
       )
       const endDate = new Date(newStart)
       endDate.setDate(endDate.getDate() + durationDays)
-      newEnd = endDate.toISOString().split("T")[0]
+      newEnd = toLocalDateString(endDate)
     }
 
     updates.set(phaseId, { estimated_start_date: newStart, estimated_end_date: newEnd })

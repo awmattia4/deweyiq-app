@@ -430,16 +430,16 @@ export function ChangeOrderBuilder({
                   onChange={(e) => updateLineItem(li.id, "quantityStr", e.target.value)}
                   placeholder="1"
                   className="h-8 text-sm"
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                 />
                 <Input
                   value={li.unitPriceStr}
                   onChange={(e) => updateLineItem(li.id, "unitPriceStr", e.target.value)}
                   placeholder="0.00"
                   className="h-8 text-sm"
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                 />
                 <div className="flex items-center gap-1">
                   {lineTotal !== 0 && (
@@ -489,7 +489,8 @@ export function ChangeOrderBuilder({
         <Input
           value={scheduleImpactStr}
           onChange={(e) => setScheduleImpactStr(e.target.value)}
-          type="number"
+          type="text"
+          inputMode="decimal"
           placeholder="0"
           className="w-32"
         />

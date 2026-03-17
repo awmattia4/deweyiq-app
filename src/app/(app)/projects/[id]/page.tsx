@@ -6,7 +6,7 @@ import { getTechProfiles } from "@/actions/work-orders"
 import { getSubcontractors, getSubAssignmentsForProject, getSubPaymentSummary } from "@/actions/projects-subcontractors"
 import { getChangeOrders, getChangeOrderImpact } from "@/actions/projects-change-orders"
 import { getInspections, getPunchList } from "@/actions/projects-inspections"
-import { getWarrantyTerms } from "@/actions/projects-warranty"
+import { getWarrantyTerms, getActiveWarranties, getWarrantyClaims } from "@/actions/projects-warranty"
 import { ProjectDetailClient } from "@/components/projects/project-detail-client"
 
 interface ProjectDetailPageProps {
@@ -60,6 +60,8 @@ export default async function ProjectDetailPage({
     inspectionsResult,
     punchListResult,
     warrantyTermsResult,
+    activeWarrantiesResult,
+    warrantyClaimsResult,
   ] = await Promise.all([
     getProjectDetail(id),
     getSurveyData(id),
@@ -77,6 +79,9 @@ export default async function ProjectDetailPage({
     getPunchList(null, id),
     // Plan 15: Warranty terms (for settings/display)
     getWarrantyTerms(null),
+    // Plan 15: Active warranty coverage + claims
+    getActiveWarranties(null, id),
+    getWarrantyClaims(null, id),
   ])
 
   if (!project) {
@@ -89,6 +94,8 @@ export default async function ProjectDetailPage({
   const inspections = !("error" in inspectionsResult) ? inspectionsResult : []
   const punchListItems = !("error" in punchListResult) ? punchListResult : []
   const warrantyTerms = !("error" in warrantyTermsResult) ? warrantyTermsResult : []
+  const activeWarranties = Array.isArray(activeWarrantiesResult) ? activeWarrantiesResult : []
+  const warrantyClaims = Array.isArray(warrantyClaimsResult) ? warrantyClaimsResult : []
 
   return (
     <ProjectDetailClient
@@ -107,6 +114,8 @@ export default async function ProjectDetailPage({
       initialInspections={inspections}
       initialPunchList={punchListItems}
       warrantyTerms={warrantyTerms}
+      activeWarranties={activeWarranties}
+      warrantyClaims={warrantyClaims}
     />
   )
 }

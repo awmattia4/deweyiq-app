@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useEffect, useTransition } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -108,12 +108,15 @@ export function ProjectOverviewTab({
   const [showSurveyWorkflow, setShowSurveyWorkflow] = useState(false)
 
   // Check service agreement suggestion for completed projects
-  if (project.status === "complete" && !checkedServiceAgreement) {
-    setCheckedServiceAgreement(true)
-    suggestServiceAgreement(project.id).then(({ shouldSuggest }) => {
-      if (shouldSuggest) setShowServicePrompt(true)
-    })
-  }
+  useEffect(() => {
+    if (project.status === "complete" && !checkedServiceAgreement) {
+      setCheckedServiceAgreement(true)
+      suggestServiceAgreement(project.id).then(({ shouldSuggest }) => {
+        if (shouldSuggest) setShowServicePrompt(true)
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, project.status])
 
   // Compute phases progress
   const totalPhases = project.phases.length

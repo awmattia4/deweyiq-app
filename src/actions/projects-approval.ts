@@ -456,6 +456,7 @@ export async function approveProposal(
       console.error("[approveProposal] PROJ-28 material population failed:", materialErr)
     }
 
+    revalidatePath("/projects")
     revalidatePath(`/projects/${proposal.project_id}`)
 
     return {
@@ -626,6 +627,7 @@ export async function submitChangeRequest(
       console.error("[submitChangeRequest] Email notification failed:", emailErr)
     }
 
+    revalidatePath("/projects")
     revalidatePath(`/projects/${proposal.project_id}`)
     return { success: true }
   } catch (err) {
@@ -699,6 +701,7 @@ export async function recordOfflineDeposit(
         .where(eq(projects.id, proposal.project_id))
     }
 
+    revalidatePath("/projects")
     revalidatePath(`/projects/${proposal.project_id}`)
     return { success: true }
   } catch (err) {

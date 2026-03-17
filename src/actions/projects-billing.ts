@@ -311,6 +311,7 @@ export async function onPhaseComplete(
     }
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${phase.project_id}`)
     revalidatePath("/billing")
     return { invoicesCreated }
   } catch (err) {
@@ -411,6 +412,7 @@ export async function generateProgressInvoice(
     )
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${milestone.project_id}`)
     revalidatePath("/billing")
 
     return {
@@ -923,6 +925,7 @@ export async function generateFinalInvoice(
     }
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     revalidatePath("/billing")
 
     return {
@@ -1417,6 +1420,7 @@ export async function recordCancellationRefund(
     )
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     return { success: true }
   } catch (err) {
     console.error("[recordCancellationRefund]", err)
@@ -1501,6 +1505,7 @@ export async function suspendProject(
     }
 
     revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     return { success: true }
   } catch (err) {
     console.error("[suspendProject]", err)

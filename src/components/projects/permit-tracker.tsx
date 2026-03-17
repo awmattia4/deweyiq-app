@@ -192,9 +192,8 @@ function AddPermitDialog({
             <Label htmlFor="permit-fee">Fee (optional)</Label>
             <Input
               id="permit-fee"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               value={fee}
               onChange={(e) => setFee(e.target.value)}
@@ -383,9 +382,8 @@ function EditPermitDialog({
             <Label htmlFor="edit-permit-fee">Fee</Label>
             <Input
               id="edit-permit-fee"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               value={fee}
               onChange={(e) => setFee(e.target.value)}

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getProjectDetail } from "@/actions/projects"
-import { createProposal } from "@/actions/projects-proposals"
+import { getProposalForProject, createProposal } from "@/actions/projects-proposals"
 import { ProposalBuilder } from "@/components/projects/proposal-builder"
 
 interface ProposalPageProps {
@@ -35,19 +35,32 @@ export default async function ProposalPage({ params }: ProposalPageProps) {
 
   const { id } = await params
 
-  const project = await getProjectDetail(id)
+  // Fetch project and existing proposal in parallel
+  const [project, existingProposal] = await Promise.all([
+    getProjectDetail(id),
+    getProposalForProject(id),
+  ])
   if (!project) notFound()
 
-  // Get or create the active proposal
-  const proposalResult = await createProposal(id)
+  // Use existing proposal or create a draft if none exists
+  if (existingProposal && "data" in existingProposal) {
+    return (
+      <ProposalBuilder
+        project={project}
+        initialProposal={existingProposal.data}
+      />
+    )
+  }
 
-  if ("error" in proposalResult) {
-    // Show builder with no proposal — it will prompt to create one
+  // No existing proposal (null or error) — create a draft
+  const createResult = await createProposal(id)
+
+  if ("error" in createResult) {
     return (
       <ProposalBuilder
         project={project}
         initialProposal={null}
-        error={proposalResult.error}
+        error={createResult.error}
       />
     )
   }
@@ -55,7 +68,7 @@ export default async function ProposalPage({ params }: ProposalPageProps) {
   return (
     <ProposalBuilder
       project={project}
-      initialProposal={proposalResult.data}
+      initialProposal={createResult.data}
     />
   )
 }

@@ -178,12 +178,9 @@ function ChangeOrdersList({ changeOrders, projectId }: { changeOrders: PortalCha
             </p>
           </div>
           {co.status === "pending_approval" && (
-            <Button size="sm" variant="outline" asChild>
-              <Link href={`/portal/projects/${projectId}/change-orders/${co.id}`}>
-                Review
-                <ChevronRightIcon className="h-3.5 w-3.5 ml-1" />
-              </Link>
-            </Button>
+            <p className="text-xs text-amber-500 mt-1">
+              Pending your approval — check your email for the approval link
+            </p>
           )}
         </div>
       ))}

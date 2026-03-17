@@ -145,11 +145,7 @@ function EditMaterialDialog({
   const isNew = !material
   const [name, setName] = useState(material?.name ?? "")
   const [category, setCategory] = useState(material?.category ?? "other")
-  const [qtyEst, setQtyEst] = useState(fmt(material?.quantity_estimated))
   const [unit, setUnit] = useState(material?.unit ?? "each")
-  const [costEst, setCostEst] = useState(
-    material?.unit_cost_estimated ? fmt(material.unit_cost_estimated) : ""
-  )
   const [supplier, setSupplier] = useState(material?.supplier ?? "")
   const [notes, setNotes] = useState(material?.notes ?? "")
   const [isPending, startTransition] = useTransition()

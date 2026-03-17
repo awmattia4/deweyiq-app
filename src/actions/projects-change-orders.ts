@@ -219,7 +219,15 @@ export async function updateChangeOrder(
   if (!token) return { success: false, error: "Not authenticated" }
 
   try {
-    await withRls(token, async (db) => {
+    const projectId = await withRls(token, async (db) => {
+      const [co] = await db
+        .select({ project_id: projectChangeOrders.project_id })
+        .from(projectChangeOrders)
+        .where(eq(projectChangeOrders.id, changeOrderId))
+        .limit(1)
+
+      if (!co) throw new Error("Change order not found")
+
       await db
         .update(projectChangeOrders)
         .set({
@@ -239,8 +247,12 @@ export async function updateChangeOrder(
             eq(projectChangeOrders.status, "draft")
           )
         )
+
+      return co.project_id
     })
 
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     return { success: true }
   } catch (err) {
     console.error("updateChangeOrder error:", err)
@@ -728,6 +740,8 @@ export async function approveChangeOrder(
       }
     }
 
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     return { success: true }
   } catch (err) {
     console.error("approveChangeOrder error:", err)
@@ -805,6 +819,8 @@ export async function declineChangeOrder(
         .where(eq(projects.id, co.project_id))
     }
 
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${co.project_id}`)
     return { success: true }
   } catch (err) {
     console.error("declineChangeOrder error:", err)
@@ -1041,7 +1057,15 @@ export async function deleteChangeOrder(
   if (!token) return { success: false, error: "Not authenticated" }
 
   try {
-    await withRls(token, async (db) => {
+    const projectId = await withRls(token, async (db) => {
+      const [co] = await db
+        .select({ project_id: projectChangeOrders.project_id })
+        .from(projectChangeOrders)
+        .where(eq(projectChangeOrders.id, changeOrderId))
+        .limit(1)
+
+      if (!co) throw new Error("Change order not found")
+
       await db
         .update(projectChangeOrders)
         .set({ archived_at: new Date(), updated_at: new Date() })
@@ -1051,8 +1075,12 @@ export async function deleteChangeOrder(
             eq(projectChangeOrders.status, "draft")
           )
         )
+
+      return co.project_id
     })
 
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
     return { success: true }
   } catch (err) {
     console.error("deleteChangeOrder error:", err)
