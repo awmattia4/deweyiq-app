@@ -40,6 +40,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, and, desc, count, sql, isNull, inArray, lt } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
+import { checkPermitGate } from "./projects-permits"
 import { PROJECT_STAGES, PROJECT_STAGE_LABELS } from "@/lib/projects-constants"
 
 // ---------------------------------------------------------------------------
@@ -331,11 +332,22 @@ export async function createProject(
 export async function updateProjectStage(
   projectId: string,
   newStage: string
-): Promise<{ success: true } | { error: string }> {
+): Promise<{ success: true } | { error: string; blockers?: Array<{ permitType: string; currentStatus: string }> }> {
   const token = await getToken()
   if (!token) return { error: "Not authenticated" }
 
   try {
+    // PERMIT GATE (PROJ-25): Block advancement to 'in_progress' without approved permits
+    if (newStage === "in_progress") {
+      const gateResult = await checkPermitGate(projectId)
+      if (!gateResult.canAdvance) {
+        return {
+          error: "Cannot advance: required permits not approved",
+          blockers: gateResult.blockers,
+        }
+      }
+    }
+
     const now = new Date()
 
     // Fetch existing activity_log and stage
