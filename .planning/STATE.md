@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 8/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents done)
-Status: Phase 12 Plan 08 complete — permit tracking, gate logic, HOA documents at /projects/[id]/documents live
-Last activity: 2026-03-17 — Phase 12 Plan 08 permit tracking and documents page built
+Plan: 9/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents, 12-09 materials done)
+Status: Phase 12 Plan 09 complete — material procurement system with PO creation, partial delivery tracking, cost variance, and /projects/[id]/materials page live
+Last activity: 2026-03-17 — Phase 12 Plan 09 material procurement system built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -112,6 +112,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 12-projects-renovations P01 | 8 | 2 tasks | 11 files |
 | Phase 12-projects-renovations P03 | 14 | 2 tasks | 10 files |
 | Phase 12-projects-renovations P05 | 21 | 2 tasks | 7 files |
+| Phase 12-projects-renovations P09 | 20 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
