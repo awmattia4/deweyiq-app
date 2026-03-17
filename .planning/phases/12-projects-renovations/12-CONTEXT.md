@@ -21,7 +21,7 @@ Full project lifecycle management for pool construction, renovations, and remode
 
 ### Tech Field Experience
 - **Separate tabs** for route stops and project work — Routes tab (existing) and new Projects tab in the field app; each has its own list and workflow
-- Time logging supports **both start/stop timer and manual entry** — timer for real-time tracking, manual entry as fallback for different work styles
+- Time logging supports **both start/stop timer and manual entry** — timer for real-time tracking, manual entry as fallback for different work styles. NOTE: This is **task-level** time logging (per project task), distinct from the existing **shift-level** clock-in/out system (time_entries table, ClockInBanner). Both coexist — shift clock tracks the workday, project task times track granular work within it. Project task time should reference the parent time_entry_id for reconciliation.
 - Photo capture uses **auto-context + manual tag** — system auto-fills project/phase/task from current context, tech picks the type (before/during/after/issue) from a quick-select bar
 - Issue flags **create an alert for office** — tech's notes/photos go to office as an alert; office decides whether to create a change order (not auto-generated)
 
@@ -53,7 +53,7 @@ Full project lifecycle management for pool construction, renovations, and remode
 <specifics>
 ## Specific Ideas
 
-- Proposal approval page should feel like a polished product experience — side-by-side tier columns, live-updating total, signature canvas, deposit payment inline. No account creation required.
+- Proposal approval page should feel like a polished product experience — side-by-side tier columns on desktop, stacked cards on mobile (responsive), live-updating total, signature canvas, deposit payment inline. No account creation required.
 - Tech project mode should be simple like regular route stops — "just another tab." Don't overload with project management complexity. Task checklist, timer, camera, flag issue.
 - Issue flag → office alert (not auto-change-order) because not every issue warrants a change order — office triages.
 - Office chooses cost allocation per change order because pool renovation jobs vary widely — a plumbing surprise goes on final, a customer upgrade request might collect immediately.
