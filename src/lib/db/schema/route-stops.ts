@@ -9,6 +9,9 @@ import { pools } from "./pools"
 import { scheduleRules } from "./schedule-rules"
 import { workOrders } from "./work-orders"
 import { checklistTemplates } from "./checklists"
+// NOTE: projects imported lazily via string FK to avoid circular dependency
+// (projects.ts imports routeStops, routeStops imports projects = circular)
+// project_id is added as a plain uuid with no Drizzle FK reference.
 
 /**
  * Route stops — one row per stop on a tech's daily route.
@@ -43,6 +46,11 @@ export const routeStops = pgTable(
     schedule_rule_id: uuid("schedule_rule_id").references(() => scheduleRules.id, { onDelete: "set null" }),
     // Links this stop to a work order (NULL for regular service stops)
     work_order_id: uuid("work_order_id").references(() => workOrders.id, { onDelete: "set null" }),
+    // stop_type: 'service' | 'work_order' | 'survey' — survey type used for project site surveys (Phase 12)
+    stop_type: text("stop_type").notNull().default("service"),
+    // project_id: FK to projects table (NULL except for stop_type='survey' and stop_type='work_order')
+    // No Drizzle FK reference to avoid circular dependency (projects.ts already imports routeStops)
+    project_id: uuid("project_id"),
     // Service type — links to checklist template (null = org's default template)
     checklist_template_id: uuid("checklist_template_id").references(
       () => checklistTemplates.id,
@@ -77,6 +85,8 @@ export const routeStops = pgTable(
     index("route_stops_tech_date_idx").on(table.tech_id, table.scheduled_date),
     // Fast lookup by schedule rule (for regenerating stops from rules)
     index("route_stops_schedule_rule_idx").on(table.schedule_rule_id),
+    // Fast lookup by project (for survey stops)
+    index("route_stops_project_id_idx").on(table.project_id),
     // Upsert idempotency: one stop per customer+pool per day per org
     unique("route_stops_org_customer_pool_date_unique").on(
       table.org_id,
