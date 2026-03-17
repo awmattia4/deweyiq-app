@@ -25,8 +25,8 @@ import {
   updateProjectTemplate,
   deleteProjectTemplate,
 } from "@/actions/projects"
-import { PROJECT_TYPE_LABELS } from "@/actions/projects"
 import type { ProjectTemplate, CreateTemplateInput } from "@/actions/projects"
+import { PROJECT_TYPE_LABELS } from "@/lib/projects-constants"
 import { PlusIcon, PencilIcon, Trash2Icon } from "lucide-react"
 
 // ---------------------------------------------------------------------------
