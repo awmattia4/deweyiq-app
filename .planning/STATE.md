@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 ## Current Position
 
-Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 15/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials, 12-15 inspections/quality/punch-list/warranty done)
-Status: Phase 12 Plan 15 complete — inspection tracking with rework cycles, quality checklist validation in completePhase, digital punch list with customer sign-off triggering completion + warranty activation + final invoice, warranty certificate PDF, claim handling, expiration reminders.
-Last activity: 2026-03-17 — Phase 12 Plan 15 inspections/quality/punch-list/warranty system built
+Phase: 12 of 17 (Projects & Renovations) — AWAITING HUMAN VERIFICATION
+Plan: 16/16 code complete — awaiting Task 3 human-verify checkpoint (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials, 12-15 inspections/quality/punch-list/warranty, 12-16 dashboard/reporting/portal)
+Status: Phase 12 Plan 16 code complete — dashboard widgets, project analytics reports, full customer portal project experience (timeline, financials, punch list sign-off, project-scoped messaging). Awaiting human verification to officially close Phase 12.
+Last activity: 2026-03-17 — Phase 12 Plan 16 dashboard enhancements, reporting, and portal project pages built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -122,6 +122,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 12-projects-renovations P07 | 8 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P13 | 10 | 2 tasks | 9 files |
 | Phase 12 P15 | 28 | 2 tasks | 9 files |
+| Phase 12-projects-renovations P16 | 16 | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -463,6 +464,8 @@ Recent decisions affecting current work:
 - [Phase 12-projects-renovations]: Cost allocation (add_to_final/spread_remaining/collect_immediately) chosen per change order per user decision — office decides billing strategy for each CO
 - [Phase 12]: generateFinalInvoice accepts token | null — portal sign-off context uses adminDb, authenticated context uses withRls
 - [Phase 12]: customerSignOffPunchList uses dynamic import for cross-action calls to prevent circular module dependencies
+- [Phase 12-projects-renovations]: Portal data layer uses adminDb with validateCustomerOwnsProject() ownership guard — portal customers use magic-link auth without staff JWT claims
+- [Phase 12-projects-renovations]: project_id added to portal_messages as nullable column (no FK constraint) for project-scoped messaging (PROJ-88)
 
 ### Pending Todos
 
