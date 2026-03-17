@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 10/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 change orders, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors done)
-Status: Phase 12 Plan 10 complete — subcontractor management system with directory, phase assignments, payment tracking, lien waivers, and Resend schedule notification emails live
-Last activity: 2026-03-17 — Phase 12 Plan 10 subcontractor management system built
+Plan: 11/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-06 delivery done)
+Status: Phase 12 Plan 06 complete — proposal PDF generator, JWT token system (PROPOSAL_TOKEN_SECRET + CHANGE_ORDER_TOKEN_SECRET), email delivery via Resend with PDF attachment, and SMS via Edge Function live
+Last activity: 2026-03-17 — Phase 12 Plan 06 proposal PDF/token/email delivery built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -34,6 +34,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 - Trend: Stable
 
 *Updated after each plan completion*
+| Phase 12-projects-renovations P06 | 18 | 1 tasks | 6 files |
 | Phase 12-projects-renovations P10 | 22 | 2 tasks | 10 files |
 | Phase 12-projects-renovations P04 | 22 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P02 | 16 | 2 tasks | 14 files |
@@ -124,6 +125,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - [Phase 12-10]: Sub assignments display inline per phase (not a separate list) — office sees assignments in scheduling context
+- [Phase 12-06]: PROPOSAL_TOKEN_SECRET and CHANGE_ORDER_TOKEN_SECRET are separate from QUOTE_TOKEN_SECRET — prevents cross-type token confusion attacks
+- [Phase 12-06]: CHANGE_ORDER_TOKEN_SECRET defined in Plan 06 (not Plan 13) to keep token utilities co-located in lib/projects/
+- [Phase 12-06]: PDF show_line_item_detail toggle: true = full itemized table by category, false = one summary row per category total
 - [Phase 12-10]: Lien waiver path is a text field for Supabase Storage path — full file upload UI deferred (requires storage bucket config)
 - [Phase 12-10]: Payment amount is cumulative total paid (not per-transaction ledger) — simpler schema, matches how pool companies track sub payments
 - [Phase 12-10]: Task 1 artifacts pre-built by plan 12-09 as forward-compatible stubs — plan 10 built UI on top without duplication
@@ -463,5 +467,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed 12-10-PLAN.md
-Resume file: Phase 12 Plan 10 complete — subcontractor management with directory (settings), per-phase assignments inline in Phases tab, payment tracker with lien waivers in Subcontractors tab, Resend schedule notification emails
+Stopped at: Completed 12-06-PLAN.md
+Resume file: Phase 12 Plan 06 complete — proposal PDF (ProposalDocument with tiers, conditional line detail, payment schedule, DeweyIQ footer), JWT tokens (PROPOSAL_TOKEN_SECRET + CHANGE_ORDER_TOKEN_SECRET), email via Resend with PDF attachment, sendProposal server action
