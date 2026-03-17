@@ -5,6 +5,8 @@ import { getSurveyData, getSurveySchedule, getSurveyChecklist } from "@/actions/
 import { getTechProfiles } from "@/actions/work-orders"
 import { getSubcontractors, getSubAssignmentsForProject, getSubPaymentSummary } from "@/actions/projects-subcontractors"
 import { getChangeOrders, getChangeOrderImpact } from "@/actions/projects-change-orders"
+import { getInspections, getPunchList } from "@/actions/projects-inspections"
+import { getWarrantyTerms } from "@/actions/projects-warranty"
 import { ProjectDetailClient } from "@/components/projects/project-detail-client"
 
 interface ProjectDetailPageProps {
@@ -26,7 +28,7 @@ export async function generateMetadata({ params }: ProjectDetailPageProps) {
  * Fetches the project with all relations (customer, phases, tasks, milestones,
  * activity log) and renders the tabbed detail view.
  *
- * Also fetches survey data (schedule info + completed survey) for the overview tab.
+ * Also fetches survey data, inspection data, punch list, and warranty data.
  *
  * Role guard: owner and office only. Techs see projects via route stops, not this page.
  */
@@ -43,20 +45,39 @@ export default async function ProjectDetailPage({
   const { id } = await params
   const { tab } = await searchParams
 
-  // Fetch project + survey data + sub data + change orders in parallel
-  const [project, surveyData, surveySchedule, techProfiles, checklistCategories, subsResult, subAssignmentsResult, subPaymentsResult, changeOrders, changeOrderImpact] =
-    await Promise.all([
-      getProjectDetail(id),
-      getSurveyData(id),
-      getSurveySchedule(id),
-      getTechProfiles(),
-      getSurveyChecklist(),
-      getSubcontractors(false),
-      getSubAssignmentsForProject(id),
-      getSubPaymentSummary(id),
-      getChangeOrders(id),
-      getChangeOrderImpact(id),
-    ])
+  // Fetch all project data in parallel — including new Plan 15 data
+  const [
+    project,
+    surveyData,
+    surveySchedule,
+    techProfiles,
+    checklistCategories,
+    subsResult,
+    subAssignmentsResult,
+    subPaymentsResult,
+    changeOrders,
+    changeOrderImpact,
+    inspectionsResult,
+    punchListResult,
+    warrantyTermsResult,
+  ] = await Promise.all([
+    getProjectDetail(id),
+    getSurveyData(id),
+    getSurveySchedule(id),
+    getTechProfiles(),
+    getSurveyChecklist(),
+    getSubcontractors(false),
+    getSubAssignmentsForProject(id),
+    getSubPaymentSummary(id),
+    getChangeOrders(id),
+    getChangeOrderImpact(id),
+    // Plan 15: Inspections
+    getInspections(null, id),
+    // Plan 15: Punch list
+    getPunchList(null, id),
+    // Plan 15: Warranty terms (for settings/display)
+    getWarrantyTerms(null),
+  ])
 
   if (!project) {
     notFound()
@@ -65,6 +86,9 @@ export default async function ProjectDetailPage({
   const availableSubs = !("error" in subsResult) ? subsResult : []
   const subAssignments = !("error" in subAssignmentsResult) ? subAssignmentsResult : []
   const subPayments = !("error" in subPaymentsResult) ? subPaymentsResult : []
+  const inspections = !("error" in inspectionsResult) ? inspectionsResult : []
+  const punchListItems = !("error" in punchListResult) ? punchListResult : []
+  const warrantyTerms = !("error" in warrantyTermsResult) ? warrantyTermsResult : []
 
   return (
     <ProjectDetailClient
@@ -80,6 +104,9 @@ export default async function ProjectDetailPage({
       initialSubPayments={subPayments}
       initialChangeOrders={changeOrders}
       initialChangeOrderImpact={changeOrderImpact}
+      initialInspections={inspections}
+      initialPunchList={punchListItems}
+      warrantyTerms={warrantyTerms}
     />
   )
 }

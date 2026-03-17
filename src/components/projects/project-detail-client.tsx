@@ -8,11 +8,16 @@ import { ProjectPhasesTab } from "@/components/projects/project-phases-tab"
 import { ProjectActivityLog } from "@/components/projects/project-activity-log"
 import { SubPaymentTracker } from "@/components/projects/sub-payment-tracker"
 import { ProjectChangeOrdersTab } from "@/components/projects/project-change-orders-tab"
+import { InspectionTracker } from "@/components/projects/inspection-tracker"
+import { PunchList } from "@/components/projects/punch-list"
+import { WarrantyManager } from "@/components/projects/warranty-manager"
 import type { ProjectDetail } from "@/actions/projects"
 import type { SurveyData, SurveyScheduleInfo, SurveyChecklistCategory } from "@/actions/projects-survey"
 import type { TechProfile } from "@/actions/work-orders"
 import type { SubcontractorRow, SubAssignmentRow, SubPaymentSummary } from "@/actions/projects-subcontractors"
 import type { ChangeOrderSummary, ChangeOrderImpact } from "@/actions/projects-change-orders"
+import type { InspectionSummary, PunchListItem } from "@/actions/projects-inspections"
+import type { WarrantyTerm } from "@/actions/projects-warranty"
 import { cn } from "@/lib/utils"
 
 interface ProjectDetailClientProps {
@@ -31,11 +36,17 @@ interface ProjectDetailClientProps {
   // Change orders data (Plan 13)
   initialChangeOrders?: ChangeOrderSummary[]
   initialChangeOrderImpact?: ChangeOrderImpact | null
+  // Inspections, punch list, warranty (Plan 15)
+  initialInspections?: InspectionSummary[]
+  initialPunchList?: PunchListItem[]
+  warrantyTerms?: WarrantyTerm[]
 }
 
-const TABS = [
+// Tabs that are always visible
+const BASE_TABS = [
   { id: "overview", label: "Overview" },
   { id: "phases", label: "Phases" },
+  { id: "inspections", label: "Inspections" },
   { id: "change-orders", label: "Change Orders" },
   { id: "subcontractors", label: "Subcontractors" },
   { id: "activity", label: "Activity" },
@@ -45,11 +56,22 @@ const TABS = [
   { id: "documents", label: "Documents", isLink: true },
 ]
 
+// Stages where Punch List tab is visible
+const PUNCH_LIST_STAGES = ["punch_list", "complete", "warranty_active"]
+
+// Stages where Warranty tab is visible
+const WARRANTY_STAGES = ["warranty_active", "complete"]
+
 /**
  * ProjectDetailClient — Client wrapper for the project detail tabbed layout.
  *
  * Manages tab state and renders the appropriate tab content.
  * The server page fetches all data upfront; this component handles presentation.
+ *
+ * Contextual tabs:
+ * - Inspections: always visible
+ * - Punch List: visible when stage is punch_list, complete, or warranty_active
+ * - Warranty: visible when stage is warranty_active or complete
  */
 export function ProjectDetailClient({
   project: initialProject,
@@ -64,14 +86,30 @@ export function ProjectDetailClient({
   initialSubPayments = [],
   initialChangeOrders = [],
   initialChangeOrderImpact = null,
+  initialInspections = [],
+  initialPunchList = [],
+  warrantyTerms = [],
 }: ProjectDetailClientProps) {
   const [project, setProject] = useState(initialProject)
   const [surveyData, setSurveyData] = useState(initialSurveyData)
   const [surveySchedule, setSurveySchedule] = useState(initialSurveySchedule)
   const [subAssignments, setSubAssignments] = useState(initialSubAssignments)
   const [subPayments, setSubPayments] = useState(initialSubPayments)
+
+  const showPunchList = PUNCH_LIST_STAGES.includes(project.stage)
+  const showWarranty = WARRANTY_STAGES.includes(project.stage)
+
+  // Build dynamic tab list based on project stage
+  const TABS = [
+    ...BASE_TABS.slice(0, 3), // overview, phases, inspections
+    ...(showPunchList ? [{ id: "punch-list", label: "Punch List" }] : []),
+    ...BASE_TABS.slice(3), // change-orders, subcontractors, activity, link tabs
+    ...(showWarranty ? [{ id: "warranty", label: "Warranty" }] : []),
+  ]
+
+  const validTabIds = TABS.map((t) => t.id)
   const [activeTab, setActiveTab] = useState(
-    TABS.some((t) => t.id === initialTab) ? initialTab : "overview"
+    validTabIds.includes(initialTab) ? initialTab : "overview"
   )
 
   return (
@@ -135,6 +173,7 @@ export function ProjectDetailClient({
             }}
           />
         )}
+
         {activeTab === "phases" && (
           <ProjectPhasesTab
             project={project}
@@ -144,6 +183,25 @@ export function ProjectDetailClient({
             onSubAssignmentsChange={setSubAssignments}
           />
         )}
+
+        {activeTab === "inspections" && (
+          <InspectionTracker
+            projectId={project.id}
+            initialInspections={initialInspections}
+          />
+        )}
+
+        {activeTab === "punch-list" && (
+          <PunchList
+            projectId={project.id}
+            projectStage={project.stage}
+            initialItems={initialPunchList}
+            onProjectComplete={() =>
+              setProject((p) => ({ ...p, stage: "complete" }))
+            }
+          />
+        )}
+
         {activeTab === "change-orders" && (
           <ProjectChangeOrdersTab
             project={project}
@@ -152,6 +210,7 @@ export function ProjectDetailClient({
             onProjectUpdate={setProject}
           />
         )}
+
         {activeTab === "subcontractors" && (
           <div className="flex flex-col gap-4">
             <div>
@@ -167,10 +226,21 @@ export function ProjectDetailClient({
             />
           </div>
         )}
+
         {activeTab === "activity" && (
           <ProjectActivityLog
             activityLog={project.activity_log ?? []}
             projectId={project.id}
+          />
+        )}
+
+        {activeTab === "warranty" && (
+          <WarrantyManager
+            projectId={project.id}
+            projectStage={project.stage}
+            activeWarranties={[]}
+            initialClaims={[]}
+            warrantyTerms={warrantyTerms}
           />
         )}
       </div>
