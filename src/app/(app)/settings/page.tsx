@@ -20,6 +20,8 @@ import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import { getProjectTemplates } from "@/actions/projects"
 import type { ProjectTemplate } from "@/actions/projects"
+import { getSubcontractors } from "@/actions/projects-subcontractors"
+import type { SubcontractorRow } from "@/actions/projects-subcontractors"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -58,7 +60,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -71,12 +73,18 @@ export default async function SettingsPage() {
         getTemplates(),
         getOrgTemplateSettings(),
         getProjectTemplates(),
+        getSubcontractors(true),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, []]
+    : [null, [], null, [], [], null, null, null, [], null, [], []]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
       ? (projectTemplatesResult as ProjectTemplate[])
+      : []
+
+  const subcontractorList: SubcontractorRow[] =
+    isOwner && subcontractorsResult && !("error" in subcontractorsResult)
+      ? (subcontractorsResult as SubcontractorRow[])
       : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
@@ -225,6 +233,7 @@ export default async function SettingsPage() {
         initialNotifPreferences={initialNotifPreferences}
         initialBankAccounts={initialBankAccounts}
         projectTemplates={projectTemplateList}
+        initialSubcontractors={subcontractorList}
         signOutAction={async () => {
           "use server"
           await signOut()

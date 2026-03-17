@@ -28,6 +28,7 @@ import { NotificationPreferences } from "@/components/settings/notification-pref
 import { PlaidConnect } from "@/components/settings/plaid-connect"
 import { TimeTrackingSettings } from "@/components/settings/time-tracking-settings"
 import { ProjectTemplates } from "@/components/settings/project-templates"
+import { SubcontractorSettings } from "@/components/settings/subcontractor-settings"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { BankAccountRow } from "@/actions/bank-feeds"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
@@ -39,6 +40,7 @@ import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
 import type { StripeAccountStatus } from "@/actions/stripe-connect"
 import type { ProjectTemplate } from "@/actions/projects"
+import type { SubcontractorRow } from "@/actions/projects-subcontractors"
 import {
   LogOutIcon,
   BuildingIcon,
@@ -122,6 +124,8 @@ interface SettingsTabsProps {
   initialBankAccounts: BankAccountRow[]
   // Phase 12: Project templates (owner only)
   projectTemplates: ProjectTemplate[]
+  // Phase 12: Subcontractor directory (owner only)
+  initialSubcontractors: SubcontractorRow[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -160,6 +164,7 @@ export function SettingsTabs({
   initialNotifPreferences,
   initialBankAccounts,
   projectTemplates,
+  initialSubcontractors,
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -576,6 +581,20 @@ export function SettingsTabs({
             </CardHeader>
             <CardContent>
               <ProjectTemplates initialTemplates={projectTemplates} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Subcontractor Directory</CardTitle>
+              <CardDescription>
+                Manage the subcontractors your company uses for project work. Track insurance
+                certificates, license expiry, and contact information. Subs can be assigned to
+                project phases and receive schedule notification emails.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SubcontractorSettings initialSubs={initialSubcontractors} />
             </CardContent>
           </Card>
         </div>
