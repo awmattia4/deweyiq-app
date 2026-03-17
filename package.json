@@ -27,6 +27,7 @@
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
+    "@svar-ui/react-gantt": "^2.5.2",
     "@tanstack/react-table": "^8.21.3",
     "@types/web-push": "^3.6.4",
     "browser-image-compression": "^2.0.2",
