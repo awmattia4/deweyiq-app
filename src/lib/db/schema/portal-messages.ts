@@ -10,6 +10,7 @@ import { customers } from "./customers"
  *
  * Used for general messaging (top-level) and per-request threads
  * (when service_request_id is set). Supports optional photo attachments.
+ * Phase 12 Plan 16: added project_id FK for project-scoped messaging (PROJ-88).
  *
  * RLS:
  * - Office policy: owner+office can SELECT/INSERT/UPDATE/DELETE any message in their org
@@ -28,6 +29,8 @@ export const portalMessages = pgTable(
       .references(() => customers.id, { onDelete: "cascade" }),
     // When set, this message belongs to a specific service request thread
     service_request_id: uuid("service_request_id"),
+    // When set, this message belongs to a project thread (PROJ-88)
+    project_id: uuid("project_id"),
     // 'customer' | 'office'
     sender_role: text("sender_role").notNull(),
     sender_name: text("sender_name").notNull(),
@@ -43,6 +46,7 @@ export const portalMessages = pgTable(
     index("portal_messages_customer_id_idx").on(table.customer_id),
     index("portal_messages_org_id_idx").on(table.org_id),
     index("portal_messages_service_request_id_idx").on(table.service_request_id),
+    index("portal_messages_project_id_idx").on(table.project_id),
 
     // RLS: owner and office can manage all messages in their org
     pgPolicy("portal_messages_office_policy", {
