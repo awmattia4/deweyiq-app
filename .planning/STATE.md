@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
-Plan: 14/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials done)
-Status: Phase 12 Plan 14 complete — progress billing, retainage, final invoice, profitability tracking, cancellation settlement, suspension, and /projects/[id]/financials dashboard. Plan 07 also complete — customer proposal approval page with tier selection, e-signature, and Stripe deposit.
-Last activity: 2026-03-17 — Phase 12 Plan 13 change order system built (create, send, customer approve/decline, project auto-update, cumulative impact, issue flag conversion)
+Plan: 15/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials, 12-15 inspections/quality/punch-list/warranty done)
+Status: Phase 12 Plan 15 complete — inspection tracking with rework cycles, quality checklist validation in completePhase, digital punch list with customer sign-off triggering completion + warranty activation + final invoice, warranty certificate PDF, claim handling, expiration reminders.
+Last activity: 2026-03-17 — Phase 12 Plan 15 inspections/quality/punch-list/warranty system built
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -121,6 +121,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 12-projects-renovations P12 | 13 | 2 tasks | 11 files |
 | Phase 12-projects-renovations P07 | 8 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P13 | 10 | 2 tasks | 9 files |
+| Phase 12 P15 | 28 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -460,6 +461,8 @@ Recent decisions affecting current work:
 - [Phase 12-projects-renovations]: react-signature-canvas loaded via next/dynamic ssr:false for proposal e-signature draw mode
 - [Phase 12-projects-renovations]: approveChangeOrder and declineChangeOrder use adminDb (not withRls) — public approval page has no user JWT context; customer identity verified by JWT token in URL
 - [Phase 12-projects-renovations]: Cost allocation (add_to_final/spread_remaining/collect_immediately) chosen per change order per user decision — office decides billing strategy for each CO
+- [Phase 12]: generateFinalInvoice accepts token | null — portal sign-off context uses adminDb, authenticated context uses withRls
+- [Phase 12]: customerSignOffPunchList uses dynamic import for cross-action calls to prevent circular module dependencies
 
 ### Pending Todos
 
