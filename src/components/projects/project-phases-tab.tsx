@@ -23,6 +23,8 @@ import {
   getProjectDetail,
 } from "@/actions/projects"
 import type { ProjectDetail, ProjectPhaseSummary } from "@/actions/projects"
+import { SubAssignmentSection } from "@/components/projects/sub-assignment"
+import type { SubcontractorRow, SubAssignmentRow } from "@/actions/projects-subcontractors"
 
 // ─── Phase status config ───────────────────────────────────────────────────────
 
@@ -45,6 +47,10 @@ const PHASE_STATUS_COLORS: Record<string, string> = {
 interface ProjectPhasesTabProps {
   project: ProjectDetail
   onProjectUpdate: (project: ProjectDetail) => void
+  // Sub assignment data (Plan 10)
+  availableSubs?: SubcontractorRow[]
+  subAssignments?: SubAssignmentRow[]
+  onSubAssignmentsChange?: (updated: SubAssignmentRow[]) => void
 }
 
 interface PhaseFormData {
@@ -82,7 +88,13 @@ const EMPTY_PHASE_FORM: PhaseFormData = {
  * - Mark phase complete (validates required tasks are done first)
  * - Cascade notification: shows how many downstream phases were rescheduled
  */
-export function ProjectPhasesTab({ project, onProjectUpdate }: ProjectPhasesTabProps) {
+export function ProjectPhasesTab({
+  project,
+  onProjectUpdate,
+  availableSubs = [],
+  subAssignments = [],
+  onSubAssignmentsChange,
+}: ProjectPhasesTabProps) {
   const [isPending, startTransition] = useTransition()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editingPhaseId, setEditingPhaseId] = useState<string | null>(null)
@@ -419,6 +431,27 @@ export function ProjectPhasesTab({ project, onProjectUpdate }: ProjectPhasesTabP
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Sub assignments inline */}
+                    {(availableSubs.length > 0 || subAssignments.some((a) => a.phase_id === phase.id)) && (
+                      <div className="px-4 pb-3 border-t border-border pt-3">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-2">
+                          Subcontractors
+                        </span>
+                        <SubAssignmentSection
+                          phaseId={phase.id}
+                          phaseName={phase.name}
+                          assignments={subAssignments.filter((a) => a.phase_id === phase.id)}
+                          availableSubs={availableSubs}
+                          onAssignmentsChange={(updated) => {
+                            const otherAssignments = subAssignments.filter(
+                              (a) => a.phase_id !== phase.id
+                            )
+                            onSubAssignmentsChange?.([...otherAssignments, ...updated])
+                          }}
+                        />
                       </div>
                     )}
 
