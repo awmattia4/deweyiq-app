@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 
 Phase: 12 of 17 (Projects & Renovations) — IN PROGRESS
 Plan: 14/16 complete (12-01 schema, 12-02 project list, 12-03 project detail, 12-04 survey scheduling, 12-05 proposals, 12-06 PDF/token/email, 12-07 inspections, 12-08 permits/documents, 12-09 materials, 12-10 subcontractors, 12-11 gantt timeline, 12-12 field tech project mode, 12-13 change orders, 12-14 billing & financials done)
-Status: Phase 12 Plan 14 complete — progress billing, retainage, final invoice, profitability tracking, cancellation settlement, suspension, and /projects/[id]/financials dashboard
-Last activity: 2026-03-17 — Phase 12 Plan 14 project billing & financial dashboard built
+Status: Phase 12 Plan 14 complete — progress billing, retainage, final invoice, profitability tracking, cancellation settlement, suspension, and /projects/[id]/financials dashboard. Plan 07 also complete — customer proposal approval page with tier selection, e-signature, and Stripe deposit.
+Last activity: 2026-03-17 — Phase 12 Plan 07 customer proposal approval page built (out-of-order with 14)
 
 Progress: [███████████-] 61% (11 of 18 phases complete)
 
@@ -119,6 +119,7 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 | Phase 12-projects-renovations P05 | 21 | 2 tasks | 7 files |
 | Phase 12-projects-renovations P09 | 20 | 2 tasks | 9 files |
 | Phase 12-projects-renovations P12 | 13 | 2 tasks | 11 files |
+| Phase 12-projects-renovations P07 | 8 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,9 @@ Progress: [███████████-] 61% (11 of 18 phases complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12-07]: adminDb for all customer-facing proposal actions — RLS withRls() returns empty without auth session
+- [Phase 12-07]: PROJ-28 trigger uses adminDb variant of populateMaterials since customer has no auth session on approval
+- [Phase 12-07]: react-signature-canvas loaded via next/dynamic ssr:false for proposal e-signature draw mode
 - [Phase 12-10]: Sub assignments display inline per phase (not a separate list) — office sees assignments in scheduling context
 - [Phase 12-06]: PROPOSAL_TOKEN_SECRET and CHANGE_ORDER_TOKEN_SECRET are separate from QUOTE_TOKEN_SECRET — prevents cross-type token confusion attacks
 - [Phase 12-06]: CHANGE_ORDER_TOKEN_SECRET defined in Plan 06 (not Plan 13) to keep token utilities co-located in lib/projects/
@@ -450,6 +454,9 @@ Recent decisions affecting current work:
 - [Phase 12-projects-renovations]: completePhase uses adminDb (not withRls) because project_phases UPDATE is owner+office-only RLS but tech completing their assigned phase is an expected operational field action
 - [Phase 12-projects-renovations]: flagIssue creates office alert via adminDb — does NOT auto-create a change order per user decision; office decides whether a CO is needed
 - [Phase 12-projects-renovations]: Dexie projectTaskDrafts key is {projectId}:{phaseId} composite for O(1) timer state lookup; timer state (timerRunning/timerStartedAt/timerAccumulatedMs) survives app close/reopen
+- [Phase 12-projects-renovations]: adminDb for all customer-facing proposal actions — RLS withRls() returns empty without auth session
+- [Phase 12-projects-renovations]: PROJ-28 trigger uses adminDb variant of populateMaterials since customer has no auth session on approval
+- [Phase 12-projects-renovations]: react-signature-canvas loaded via next/dynamic ssr:false for proposal e-signature draw mode
 
 ### Pending Todos
 
