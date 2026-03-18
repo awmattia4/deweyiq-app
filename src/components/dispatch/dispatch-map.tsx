@@ -7,6 +7,7 @@ import { MapPinIcon } from "lucide-react"
 import type { DispatchData, DispatchStop, DispatchTech } from "@/actions/dispatch"
 import type { TechPosition } from "@/hooks/use-tech-positions"
 import { useTechPositions } from "@/hooks/use-tech-positions"
+import { getRouteDirections } from "@/actions/optimize"
 import { TechPositionMarker } from "./tech-position-marker"
 import { StopMarker } from "./stop-marker"
 import { StopPopup } from "./stop-popup"
@@ -18,23 +19,15 @@ type MaplibreMap = import("maplibre-gl").Map
 // ─── Route line helpers ────────────────────────────────────────────────────────
 
 /**
- * Draws or updates a GeoJSON route line for a single tech through their
- * remaining (non-complete, non-skipped) stops.
- *
- * If techPosition is available, the line starts from the tech's current GPS position.
- * Otherwise it starts from the first remaining stop.
+ * Build the waypoint coordinates for a tech's remaining stops.
+ * Includes tech GPS position or home base as the first point.
  */
-function updateRouteLine(
-  map: MaplibreMap,
+function buildStraightLineCoords(
   techId: string,
   stops: DispatchStop[],
-  techColor: string,
   techPosition: TechPosition | undefined,
   homeBase: { lat: number; lng: number } | null
-) {
-  const layerId = `route-line-${techId}`
-  const sourceId = `route-source-${techId}`
-
+): [number, number][] {
   const remainingStops = stops
     .filter(
       (s) =>
@@ -47,13 +40,8 @@ function updateRouteLine(
     )
     .sort((a, b) => a.sortIndex - b.sortIndex)
 
-  if (remainingStops.length === 0) {
-    if (map.getLayer(layerId)) map.removeLayer(layerId)
-    if (map.getSource(sourceId)) map.removeSource(sourceId)
-    return
-  }
+  if (remainingStops.length === 0) return []
 
-  // Build coordinate array: tech position (or home base) → stops
   const coordinates: [number, number][] = []
   if (techPosition) {
     coordinates.push([techPosition.lng, techPosition.lat])
@@ -64,7 +52,26 @@ function updateRouteLine(
     coordinates.push([stop.lng!, stop.lat!])
   }
 
-  if (coordinates.length < 2) return
+  return coordinates
+}
+
+/**
+ * Draw or update a route line on the map for a given tech.
+ */
+function setRouteLine(
+  map: MaplibreMap,
+  techId: string,
+  coordinates: [number, number][],
+  techColor: string
+) {
+  const layerId = `route-line-${techId}`
+  const sourceId = `route-source-${techId}`
+
+  if (coordinates.length < 2) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+    return
+  }
 
   const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
     type: "Feature",
@@ -132,10 +139,14 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
   const [mapReady, setMapReady] = useState(false)
   const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
 
+  // ORS geometry per tech — keyed by techId
+  const [orsGeometries, setOrsGeometries] = useState<Record<string, [number, number][]>>({})
+  const orsRequestRef = useRef(0)
+
   // Live tech positions via Supabase Broadcast
   const techPositions = useTechPositions(orgId)
 
-  // Stable references via useMemo — prevents route line effect from thrashing on every render
+  // Stable references via useMemo
   const techMap = useMemo(
     () => new Map<string, DispatchTech>(initialData.techs.map((t) => [t.id, t])),
     [initialData.techs]
@@ -264,7 +275,43 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Init once
 
-  // ── Route lines — update when positions or selection changes ─────────────
+  // ── Fetch ORS directions per tech (debounced, with 5s timeout via server action) ──
+  useEffect(() => {
+    const requestId = ++orsRequestRef.current
+
+    async function fetchOrsForTechs() {
+      const results: Record<string, [number, number][]> = {}
+
+      await Promise.all(
+        visibleTechIds.map(async (techId) => {
+          const coords = buildStraightLineCoords(
+            techId,
+            visibleStops,
+            techPositions[techId],
+            initialData.homeBase
+          )
+          if (coords.length < 2) return
+
+          const result = await getRouteDirections(coords)
+          if (orsRequestRef.current !== requestId) return
+
+          if (result.success && result.geometry.length > 0) {
+            results[techId] = result.geometry
+          }
+        })
+      )
+
+      if (orsRequestRef.current === requestId) {
+        setOrsGeometries(results)
+      }
+    }
+
+    // Debounce 500ms
+    const timer = setTimeout(fetchOrsForTechs, 500)
+    return () => clearTimeout(timer)
+  }, [visibleTechIds, visibleStops, techPositions, initialData.homeBase])
+
+  // ── Route lines — draw straight lines immediately, upgrade to ORS when ready ──
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
@@ -272,8 +319,20 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
     for (const techId of visibleTechIds) {
       const tech = techMap.get(techId)
       if (!tech) continue
-      const position = techPositions[techId]
-      updateRouteLine(map, techId, visibleStops, tech.color, position, initialData.homeBase)
+
+      // Use ORS geometry if available, otherwise straight lines
+      const orsGeo = orsGeometries[techId]
+      if (orsGeo && orsGeo.length > 0) {
+        setRouteLine(map, techId, orsGeo, tech.color)
+      } else {
+        const straightCoords = buildStraightLineCoords(
+          techId,
+          visibleStops,
+          techPositions[techId],
+          initialData.homeBase
+        )
+        setRouteLine(map, techId, straightCoords, tech.color)
+      }
     }
 
     // Clean up route lines for hidden techs (when filter changes)
@@ -287,7 +346,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         }
       }
     }
-  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap])
+  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries])
 
   // ── Close popup on map click ──────────────────────────────────────────────
   const handleMapClick = useCallback(() => {

@@ -369,8 +369,8 @@ export function RouteMap({ stops, selectedStopId, onSelectStop, homeBase, classN
 
       // ── Update route line ──────────────────────────────────────────────────
       // Show ORS road-following geometry when available.
-      // Only fall back to straight lines if ORS failed (not while loading),
-      // so we don't flash a straight-line before ORS resolves.
+      // Fall back to straight lines only if ORS fails/times out (5s timeout on API).
+      // No line shown while ORS is loading — avoids flashing straight lines before ORS resolves.
       const orsGeo = orsGeometry
       let lineCoords: [number, number][] | null = null
       if (orsGeo && orsGeo.length > 0) {

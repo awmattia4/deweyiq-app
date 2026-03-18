@@ -815,6 +815,9 @@ export async function getRouteDirections(
   }
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+
     const response = await fetch(
       "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
       {
@@ -824,8 +827,10 @@ export async function getRouteDirections(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ coordinates }),
+        signal: controller.signal,
       }
     )
+    clearTimeout(timeout)
 
     if (!response.ok) {
       if (response.status === 429) {

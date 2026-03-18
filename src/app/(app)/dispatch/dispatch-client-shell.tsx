@@ -74,7 +74,7 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
 
       {/* ── Dispatch map — fills remaining height ────────────────────────── */}
       {hasStops ? (
-        <div className="flex-1 min-h-0 relative">
+        <div className="relative" style={{ flex: "1 1 0%", minHeight: 0, overflow: "hidden" }}>
           <DispatchMap
             initialData={initialData}
             orgId={orgId}
