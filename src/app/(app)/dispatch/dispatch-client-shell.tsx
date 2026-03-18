@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { MapPinIcon } from "lucide-react"
 import type { DispatchData } from "@/actions/dispatch"
 import { TechFilter } from "@/components/dispatch/tech-filter"
 import { EtaOverlay } from "@/components/dispatch/eta-overlay"
 
-// DispatchMap MUST be loaded client-side only — MapLibre accesses window on import.
 const DispatchMap = dynamic(
   () =>
     import("@/components/dispatch/dispatch-map").then((m) => m.DispatchMap),
@@ -33,42 +32,49 @@ interface DispatchClientShellProps {
 
 export function DispatchClientShell({ initialData, orgId }: DispatchClientShellProps) {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [mapHeight, setMapHeight] = useState<number>(0)
 
   const hasStops = initialData.stops.length > 0
 
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto auto 1fr",
-        height: "calc(100dvh - 5.5rem)",
-        minHeight: 0,
-      }}
-    >
-      {/* ── Page header ───────────────────────────────────────────────────── */}
-      <div className="px-4 pt-4 pb-2">
-        <h1 className="text-2xl font-bold tracking-tight">Dispatch</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {hasStops
-            ? `${initialData.stops.length} stop${initialData.stops.length !== 1 ? "s" : ""} across ${initialData.techs.length} tech${initialData.techs.length !== 1 ? "s" : ""} today`
-            : "No stops scheduled for today"}
-        </p>
-      </div>
+  // Measure the header + filter area and compute remaining height for the map
+  useEffect(() => {
+    function measure() {
+      if (!headerRef.current) return
+      const headerBottom = headerRef.current.getBoundingClientRect().bottom
+      setMapHeight(window.innerHeight - headerBottom)
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
 
-      {/* ── Tech filter bar ───────────────────────────────────────────────── */}
-      <div className="border-b border-border/40">
+  return (
+    <>
+      {/* Header + filter — measured via ref */}
+      <div ref={headerRef}>
+        <div className="px-4 pt-4 pb-2">
+          <h1 className="text-2xl font-bold tracking-tight">Dispatch</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {hasStops
+              ? `${initialData.stops.length} stop${initialData.stops.length !== 1 ? "s" : ""} across ${initialData.techs.length} tech${initialData.techs.length !== 1 ? "s" : ""} today`
+              : "No stops scheduled for today"}
+          </p>
+        </div>
         {initialData.techs.length > 0 && (
-          <TechFilter
-            techs={initialData.techs}
-            selectedTechId={selectedTechId}
-            onSelectTech={setSelectedTechId}
-          />
+          <div className="border-b border-border/40">
+            <TechFilter
+              techs={initialData.techs}
+              selectedTechId={selectedTechId}
+              onSelectTech={setSelectedTechId}
+            />
+          </div>
         )}
       </div>
 
-      {/* ── Dispatch map — fills remaining grid row ────────────────────────── */}
-      {hasStops ? (
-        <div className="relative overflow-hidden">
+      {/* Map — explicit pixel height from JS measurement */}
+      {hasStops && mapHeight > 0 ? (
+        <div className="relative" style={{ height: mapHeight }}>
           <DispatchMap
             initialData={initialData}
             orgId={orgId}
@@ -80,8 +86,8 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
             </div>
           )}
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center gap-4 px-4">
+      ) : !hasStops ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
           <div className="rounded-full bg-muted/20 p-6">
             <MapPinIcon className="h-12 w-12 text-muted-foreground/30" />
           </div>
@@ -92,7 +98,7 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
             </p>
           </div>
         </div>
-      )}
-    </div>
+      ) : null}
+    </>
   )
 }
