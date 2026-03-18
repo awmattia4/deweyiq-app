@@ -9,19 +9,167 @@ import type { TechPosition } from "@/hooks/use-tech-positions"
 import { useTechPositions } from "@/hooks/use-tech-positions"
 import { getRouteDirections } from "@/actions/optimize"
 import { TechPositionMarker } from "./tech-position-marker"
-import { StopMarker } from "./stop-marker"
-import { StopPopup } from "./stop-popup"
 
 // MapLibre types — resolved lazily
 type MaplibreGl = typeof import("maplibre-gl")
 type MaplibreMap = import("maplibre-gl").Map
 
+// ─── Co-located stop grouping (matches route-map.tsx) ─────────────────────────
+
+interface ColocatedGroup {
+  primaryId: string
+  indices: number[]
+  allIds: Set<string>
+}
+
+function groupColocatedStops(
+  stops: Array<{ id: string; lat: number | null; lng: number | null }>,
+  indexMap: Map<string, number>
+): Map<string, ColocatedGroup> {
+  const coordGroups = new Map<string, string[]>()
+  for (const s of stops) {
+    if (s.lat == null || s.lng == null) continue
+    const key = `${s.lat},${s.lng}`
+    const group = coordGroups.get(key) ?? []
+    group.push(s.id)
+    coordGroups.set(key, group)
+  }
+
+  const result = new Map<string, ColocatedGroup>()
+  for (const ids of coordGroups.values()) {
+    if (ids.length < 2) continue
+    const primaryId = ids[0]
+    const indices = ids.map((id) => indexMap.get(id) ?? 0).sort((a, b) => a - b)
+    result.set(primaryId, { primaryId, indices, allIds: new Set(ids) })
+  }
+  return result
+}
+
+// ─── Imperative marker creation (matches route-map.tsx, color-coded by tech) ──
+
+function createStopMarkerEl(
+  index: number,
+  status: string,
+  techColor: string,
+  isInProgress: boolean
+): HTMLElement {
+  const isComplete = status === "complete" || status === "skipped"
+  const isHoliday = status === "holiday"
+
+  const el = document.createElement("div")
+  el.style.cssText = `
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: system-ui, sans-serif;
+    cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    position: relative;
+    user-select: none;
+  `
+
+  if (isComplete || isHoliday) {
+    el.style.backgroundColor = "#374151"
+    el.style.color = "#9ca3af"
+    el.style.borderColor = "#4b5563"
+  } else {
+    el.style.backgroundColor = techColor
+    el.style.color = "white"
+    el.style.borderColor = "white"
+  }
+
+  const label = document.createElement("span")
+  if (status === "skipped") {
+    label.textContent = "✕"
+  } else if (isHoliday) {
+    label.textContent = "✦"
+  } else {
+    label.textContent = String(index)
+  }
+  el.appendChild(label)
+
+  // Pulse ring for in-progress stops
+  if (isInProgress) {
+    const pulse = document.createElement("div")
+    pulse.style.cssText = `
+      position: absolute;
+      top: -5px; left: -5px;
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: 2px solid ${techColor};
+      opacity: 0;
+      animation: tech-marker-pulse 1.5s ease-out infinite;
+      pointer-events: none;
+    `
+    el.appendChild(pulse)
+  }
+
+  return el
+}
+
+function createCombinedMarkerEl(
+  indices: number[],
+  status: string,
+  techColor: string
+): HTMLElement {
+  const isComplete = status === "complete" || status === "skipped"
+  const isHoliday = status === "holiday"
+
+  const el = document.createElement("div")
+  el.style.cssText = `
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: system-ui, sans-serif;
+    cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    user-select: none;
+  `
+
+  if (isComplete || isHoliday) {
+    el.style.backgroundColor = "#374151"
+    el.style.color = "#9ca3af"
+    el.style.borderColor = "#4b5563"
+  } else {
+    el.style.backgroundColor = techColor
+    el.style.color = "white"
+    el.style.borderColor = "white"
+  }
+
+  el.textContent = indices.join(" · ")
+  return el
+}
+
+function createHomeBaseMarkerEl(): HTMLElement {
+  const el = document.createElement("div")
+  el.style.cssText = `
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; cursor: default;
+    border: 2px solid #4ade80;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    background-color: #166534; color: #4ade80;
+  `
+  el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`
+  el.title = "Home Base"
+  return el
+}
+
 // ─── Route line helpers ────────────────────────────────────────────────────────
 
-/**
- * Build the waypoint coordinates for a tech's remaining stops.
- * Includes tech GPS position or home base as the first point.
- */
 function buildStraightLineCoords(
   techId: string,
   stops: DispatchStop[],
@@ -51,13 +199,9 @@ function buildStraightLineCoords(
   for (const stop of remainingStops) {
     coordinates.push([stop.lng!, stop.lat!])
   }
-
   return coordinates
 }
 
-/**
- * Draw or update a route line on the map for a given tech.
- */
 function setRouteLine(
   map: MaplibreMap,
   techId: string,
@@ -87,40 +231,10 @@ function setRouteLine(
       id: layerId,
       type: "line",
       source: sourceId,
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": techColor,
-        "line-width": 3,
-        "line-opacity": 0.8,
-      },
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": techColor, "line-width": 3, "line-opacity": 0.8 },
     })
   }
-}
-
-// ─── Home base marker helper ─────────────────────────────────────────────────
-
-function createHomeBaseMarkerEl(): HTMLElement {
-  const el = document.createElement("div")
-  el.style.cssText = `
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    cursor: default;
-    border: 2px solid #4ade80;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    background-color: #166534;
-    color: #4ade80;
-  `
-  el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`
-  el.title = "Home Base"
-  return el
 }
 
 // ─── DispatchMapInner ──────────────────────────────────────────────────────────
@@ -130,18 +244,23 @@ interface DispatchMapInnerProps {
   orgId: string
   selectedTechId: string | null
   mapHeight?: number
+  onSelectStop?: (stop: DispatchStop | null) => void
 }
 
-function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: DispatchMapInnerProps) {
+function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, onSelectStop }: DispatchMapInnerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
   const maplibreRef = useRef<MaplibreGl | null>(null)
   const homeBaseMarkerRef = useRef<unknown>(null)
+  const markersRef = useRef<Record<string, { marker: unknown; el: HTMLElement }>>({})
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [mapReady, setMapReady] = useState(false)
-  const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
+  const onSelectRef = useRef(onSelectStop)
 
-  // ORS geometry per tech — keyed by techId
+  // Keep callback ref current
+  useEffect(() => { onSelectRef.current = onSelectStop }, [onSelectStop])
+
+  // ORS geometry per tech
   const [orsGeometries, setOrsGeometries] = useState<Record<string, [number, number][]>>({})
   const [orsFailed, setOrsFailed] = useState(false)
   const orsRequestRef = useRef(0)
@@ -171,6 +290,10 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
     [selectedTechId, initialData.techs]
   )
 
+  // Stable ref for visibleStops to avoid stale closures in updateMarkers
+  const visibleStopsRef = useRef(visibleStops)
+  useEffect(() => { visibleStopsRef.current = visibleStops }, [visibleStops])
+
   // ── Map initialization ────────────────────────────────────────────────────
   useEffect(() => {
     const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY
@@ -184,7 +307,6 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
 
       maplibreRef.current = mgl
 
-      // Inject pulse animation CSS once
       if (!document.getElementById("dispatch-map-styles")) {
         const style = document.createElement("style")
         style.id = "dispatch-map-styles"
@@ -197,11 +319,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
         document.head.appendChild(style)
       }
 
-      // Compute initial bounds from stops + home base
-      const stopsWithCoords = initialData.stops.filter(
-        (s) => s.lat !== null && s.lng !== null
-      )
-
+      const stopsWithCoords = initialData.stops.filter((s) => s.lat !== null && s.lng !== null)
       const allLngs: number[] = stopsWithCoords.map((s) => s.lng!)
       const allLats: number[] = stopsWithCoords.map((s) => s.lat!)
       if (initialData.homeBase) {
@@ -227,31 +345,20 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
         attributionControl: false,
       })
 
-      map.addControl(
-        new mgl.AttributionControl({ compact: true }),
-        "bottom-right"
-      )
+      map.addControl(new mgl.AttributionControl({ compact: true }), "bottom-right")
 
       map.on("load", () => {
         if (cancelled) return
         mapRef.current = map
-
-        // Force map to recalculate its container size — critical when
-        // loaded via next/dynamic where the container may resize after init.
         map.resize()
 
-        // Fit bounds including home base
         if (allLngs.length > 1) {
           map.fitBounds(
-            [
-              [Math.min(...allLngs), Math.min(...allLats)],
-              [Math.max(...allLngs), Math.max(...allLats)],
-            ],
+            [[Math.min(...allLngs), Math.min(...allLats)], [Math.max(...allLngs), Math.max(...allLats)]],
             { padding: 60, maxZoom: 14, duration: 0 }
           )
         }
 
-        // Add home base marker
         if (initialData.homeBase) {
           const hbEl = createHomeBaseMarkerEl()
           const hbMarker = new mgl.Marker({ element: hbEl })
@@ -263,11 +370,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
         setMapReady(true)
       })
 
-      // ResizeObserver — call map.resize() whenever the container changes size
-      // (layout shifts from dynamic import, window resize, sidebar toggle, etc.)
-      const ro = new ResizeObserver(() => {
-        if (mapRef.current) mapRef.current.resize()
-      })
+      const ro = new ResizeObserver(() => { if (mapRef.current) mapRef.current.resize() })
       ro.observe(mapContainerRef.current)
       resizeObserverRef.current = ro
     }
@@ -281,17 +384,83 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
         ;(homeBaseMarkerRef.current as import("maplibre-gl").Marker).remove()
         homeBaseMarkerRef.current = null
       }
-      if (mapRef.current) {
-        mapRef.current.remove()
-        mapRef.current = null
+      for (const { marker } of Object.values(markersRef.current)) {
+        ;(marker as import("maplibre-gl").Marker).remove()
       }
+      markersRef.current = {}
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
       maplibreRef.current = null
       setMapReady(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Init once
+  }, [])
 
-  // ── Fetch ORS directions per tech (debounced, with 5s timeout via server action) ──
+  // ── Imperative marker sync (matches route-map pattern) ─────────────────────
+  const updateMarkers = useCallback(() => {
+    const map = mapRef.current
+    const mgl = maplibreRef.current
+    if (!map || !mgl) return
+
+    const currentStops = visibleStopsRef.current
+    const stopsWithCoords = currentStops.filter((s) => s.lat != null && s.lng != null)
+
+    // Build index map and co-located groups
+    const indexMap = new Map(stopsWithCoords.map((s, idx) => [s.id, idx + 1]))
+    const colocatedGroups = groupColocatedStops(stopsWithCoords, indexMap)
+
+    const secondaryIds = new Set<string>()
+    for (const group of colocatedGroups.values()) {
+      for (const id of group.allIds) {
+        if (id !== group.primaryId) secondaryIds.add(id)
+      }
+    }
+
+    // Remove markers for stops no longer visible
+    const newStopIds = new Set(currentStops.map((s) => s.id))
+    for (const id of Object.keys(markersRef.current)) {
+      if (!newStopIds.has(id) || secondaryIds.has(id)) {
+        ;(markersRef.current[id].marker as import("maplibre-gl").Marker).remove()
+        delete markersRef.current[id]
+      }
+    }
+
+    stopsWithCoords.forEach((stop) => {
+      if (secondaryIds.has(stop.id)) return
+
+      const tech = stop.techId ? techMap.get(stop.techId) : undefined
+      const techColor = tech?.color ?? "#60a5fa"
+      const displayIndex = indexMap.get(stop.id) ?? 1
+      const group = colocatedGroups.get(stop.id)
+
+      // Remove existing marker before re-adding (handles sortNumber/status changes)
+      if (markersRef.current[stop.id]) {
+        ;(markersRef.current[stop.id].marker as import("maplibre-gl").Marker).remove()
+        delete markersRef.current[stop.id]
+      }
+
+      const el = group
+        ? createCombinedMarkerEl(group.indices, stop.status, techColor)
+        : createStopMarkerEl(displayIndex, stop.status, techColor, stop.status === "in_progress")
+
+      el.addEventListener("click", (e) => {
+        e.stopPropagation()
+        onSelectRef.current?.(stop)
+      })
+
+      const marker = new mgl.Marker({ element: el, anchor: "center" })
+        .setLngLat([stop.lng!, stop.lat!])
+        .addTo(map)
+      markersRef.current[stop.id] = { marker, el }
+    })
+  }, [techMap])
+
+  // Run marker sync when stops/map change
+  useEffect(() => {
+    if (!mapReady) return
+    updateMarkers()
+  }, [mapReady, visibleStops, updateMarkers])
+
+  // ── Fetch ORS directions per tech ──────────────────────────────────────────
   useEffect(() => {
     const requestId = ++orsRequestRef.current
     setOrsFailed(false)
@@ -302,17 +471,10 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
 
       await Promise.all(
         visibleTechIds.map(async (techId) => {
-          const coords = buildStraightLineCoords(
-            techId,
-            visibleStops,
-            techPositions[techId],
-            initialData.homeBase
-          )
+          const coords = buildStraightLineCoords(techId, visibleStops, techPositions[techId], initialData.homeBase)
           if (coords.length < 2) return
-
           const result = await getRouteDirections(coords)
           if (orsRequestRef.current !== requestId) return
-
           if (result.success && result.geometry.length > 0) {
             results[techId] = result.geometry
             anySuccess = true
@@ -326,12 +488,11 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
       }
     }
 
-    // Debounce 500ms
     const timer = setTimeout(fetchOrsForTechs, 500)
     return () => clearTimeout(timer)
   }, [visibleTechIds, visibleStops, techPositions, initialData.homeBase])
 
-  // ── Route lines — ORS when available, straight-line fallback only after ORS fails ──
+  // ── Route lines ────────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
@@ -342,24 +503,14 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
 
       const orsGeo = orsGeometries[techId]
       if (orsGeo && orsGeo.length > 0) {
-        // ORS road-following geometry
         setRouteLine(map, techId, orsGeo, tech.color)
       } else if (orsFailed) {
-        // ORS failed/timed out — fall back to straight lines
-        const straightCoords = buildStraightLineCoords(
-          techId,
-          visibleStops,
-          techPositions[techId],
-          initialData.homeBase
-        )
-        setRouteLine(map, techId, straightCoords, tech.color)
+        setRouteLine(map, techId, buildStraightLineCoords(techId, visibleStops, techPositions[techId], initialData.homeBase), tech.color)
       } else {
-        // Still loading — show no line yet
         setRouteLine(map, techId, [], tech.color)
       }
     }
 
-    // Clean up route lines for hidden techs (when filter changes)
     if (selectedTechId) {
       for (const tech of initialData.techs) {
         if (tech.id !== selectedTechId) {
@@ -373,20 +524,13 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
   }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries, orsFailed])
 
   // ── Close popup on map click ──────────────────────────────────────────────
-  const handleMapClick = useCallback(() => {
-    setSelectedStop(null)
-  }, [])
-
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
-    map.on("click", handleMapClick)
-    return () => {
-      map.off("click", handleMapClick)
-    }
-  }, [mapReady, handleMapClick])
-
-  // ─────────────────────────────────────────────────────────────────────────────
+    const handler = () => onSelectRef.current?.(null)
+    map.on("click", handler)
+    return () => { map.off("click", handler) }
+  }, [mapReady])
 
   const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY
 
@@ -397,11 +541,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
         <div>
           <p className="text-sm font-medium">Map unavailable</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Set{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
-              NEXT_PUBLIC_MAPTILER_KEY
-            </code>{" "}
-            to enable the dispatch map.
+            Set <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">NEXT_PUBLIC_MAPTILER_KEY</code> to enable.
           </p>
         </div>
       </div>
@@ -410,68 +550,36 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: Dis
 
   return (
     <div style={{ width: "100%", height: mapHeight ?? "100%" }}>
-      {/* Map canvas */}
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Markers — rendered via React but attached to map imperatively */}
-      {mapReady && mapRef.current && maplibreRef.current && (
-        <>
-          {/* Tech position markers */}
-          {visibleTechIds.map((techId) => {
-            const position = techPositions[techId]
-            const tech = techMap.get(techId)
-            if (!position || !tech) return null
-            return (
-              <TechPositionMarker
-                key={techId}
-                map={mapRef.current!}
-                position={position}
-                techName={tech.name}
-                color={tech.color}
-                maplibregl={maplibreRef.current!}
-              />
-            )
-          })}
-
-          {/* Stop markers */}
-          {visibleStops.map((stop, idx) => {
-            if (stop.lat === null || stop.lng === null) return null
-            const tech = stop.techId ? techMap.get(stop.techId) : undefined
-            const techColor = tech?.color ?? "#60a5fa"
-            return (
-              <StopMarker
-                key={stop.id}
-                map={mapRef.current!}
-                stop={stop}
-                techColor={techColor}
-                sortNumber={idx + 1}
-                onClick={setSelectedStop}
-                maplibregl={maplibreRef.current!}
-              />
-            )
-          })}
-        </>
-      )}
-
-      {/* Stop detail popup */}
-      {selectedStop && (
-        <StopPopup
-          stop={selectedStop}
-          tech={selectedStop.techId ? techMap.get(selectedStop.techId) : undefined}
-          onClose={() => setSelectedStop(null)}
-        />
-      )}
+      {/* Tech position markers (live GPS) — still React-managed since they update frequently */}
+      {mapReady && mapRef.current && maplibreRef.current && visibleTechIds.map((techId) => {
+        const position = techPositions[techId]
+        const tech = techMap.get(techId)
+        if (!position || !tech) return null
+        return (
+          <TechPositionMarker
+            key={techId}
+            map={mapRef.current!}
+            position={position}
+            techName={tech.name}
+            color={tech.color}
+            maplibregl={maplibreRef.current!}
+          />
+        )
+      })}
     </div>
   )
 }
 
-// ─── DispatchMap ───────────────────────────────────────────────────────────────
+// ─── DispatchMap (public export) ───────────────────────────────────────────────
 
 interface DispatchMapProps {
   initialData: DispatchData
   orgId: string
   selectedTechId: string | null
   mapHeight?: number
+  onSelectStop?: (stop: DispatchStop | null) => void
 }
 
 export function DispatchMap(props: DispatchMapProps) {

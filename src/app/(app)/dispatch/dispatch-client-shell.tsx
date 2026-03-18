@@ -3,9 +3,10 @@
 import { useRef, useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { MapPinIcon } from "lucide-react"
-import type { DispatchData } from "@/actions/dispatch"
+import type { DispatchData, DispatchStop } from "@/actions/dispatch"
 import { TechFilter } from "@/components/dispatch/tech-filter"
 import { EtaOverlay } from "@/components/dispatch/eta-overlay"
+import { DispatchStopList } from "@/components/dispatch/dispatch-stop-list"
 
 const DispatchMap = dynamic(
   () =>
@@ -32,22 +33,27 @@ interface DispatchClientShellProps {
 
 export function DispatchClientShell({ initialData, orgId }: DispatchClientShellProps) {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null)
+  const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
   const headerRef = useRef<HTMLDivElement>(null)
-  const [mapHeight, setMapHeight] = useState<number>(0)
+  const [availableHeight, setAvailableHeight] = useState<number>(0)
 
   const hasStops = initialData.stops.length > 0
 
-  // Measure the header + filter area and compute remaining height for the map
+  // Measure header + filter, compute remaining height
   useEffect(() => {
     function measure() {
       if (!headerRef.current) return
       const headerBottom = headerRef.current.getBoundingClientRect().bottom
-      setMapHeight(window.innerHeight - headerBottom)
+      setAvailableHeight(window.innerHeight - headerBottom)
     }
     measure()
     window.addEventListener("resize", measure)
     return () => window.removeEventListener("resize", measure)
   }, [])
+
+  // Split: 55% map, 45% stop list
+  const mapHeight = Math.round(availableHeight * 0.55)
+  const listHeight = availableHeight - mapHeight
 
   return (
     <>
@@ -72,23 +78,38 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
         )}
       </div>
 
-      {/* Map — explicit pixel height from JS measurement */}
-      {hasStops && mapHeight > 0 ? (
-        <div style={{ height: mapHeight, position: "relative" }}>
-          <DispatchMap
-            initialData={initialData}
-            orgId={orgId}
-            selectedTechId={selectedTechId}
-            mapHeight={mapHeight}
-          />
-          {selectedTechId && (
-            <div className="absolute top-3 right-3 z-10 pointer-events-auto">
-              <EtaOverlay techId={selectedTechId} orgId={orgId} />
-            </div>
-          )}
-        </div>
+      {/* Map + Stop list */}
+      {hasStops && availableHeight > 0 ? (
+        <>
+          {/* Map section */}
+          <div style={{ height: mapHeight, position: "relative" }}>
+            <DispatchMap
+              initialData={initialData}
+              orgId={orgId}
+              selectedTechId={selectedTechId}
+              mapHeight={mapHeight}
+              onSelectStop={setSelectedStop}
+            />
+            {selectedTechId && (
+              <div className="absolute top-3 right-3 z-10 pointer-events-auto">
+                <EtaOverlay techId={selectedTechId} orgId={orgId} />
+              </div>
+            )}
+          </div>
+
+          {/* Stop list section */}
+          <div style={{ height: listHeight }} className="border-t border-border/40 bg-background">
+            <DispatchStopList
+              stops={initialData.stops}
+              techs={initialData.techs}
+              selectedTechId={selectedTechId}
+              selectedStopId={selectedStop?.id ?? null}
+              onSelectStop={setSelectedStop}
+            />
+          </div>
+        </>
       ) : !hasStops ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 py-12">
           <div className="rounded-full bg-muted/20 p-6">
             <MapPinIcon className="h-12 w-12 text-muted-foreground/30" />
           </div>
