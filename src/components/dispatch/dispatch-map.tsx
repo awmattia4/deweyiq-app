@@ -247,7 +247,8 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
   const homeBaseMarkerRef = useRef<unknown>(null)
   const markersRef = useRef<Record<string, { marker: unknown; el: HTMLElement }>>({})
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
-  const [mapReady, setMapReady] = useState(false)
+  const mapReadyRef = useRef(false)
+  const [mapReadyState, setMapReadyState] = useState(false) // for React renders (tech position markers, overlays)
   const onSelectRef = useRef(onSelectStop)
 
   // Keep callback ref current
@@ -361,11 +362,12 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
           homeBaseMarkerRef.current = hbMarker
         }
 
-        // Wait for map to fully settle (resize + fitBounds + tile render)
-        // before creating markers. The 'idle' event fires once per settle.
-        map.once("idle", () => {
-          if (!cancelled) setMapReady(true)
-        })
+        // Mark ready and create markers synchronously — matching route-map
+        // pattern. Going through React state (setMapReady → re-render → useEffect)
+        // introduces an async gap that breaks marker positioning.
+        mapReadyRef.current = true
+        updateMarkers()
+        setMapReadyState(true) // triggers React render for overlays/tech position markers
       })
 
       const ro = new ResizeObserver(() => { if (mapRef.current) mapRef.current.resize() })
@@ -388,7 +390,8 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
       markersRef.current = {}
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
       maplibreRef.current = null
-      setMapReady(false)
+      mapReadyRef.current = false
+      setMapReadyState(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -454,14 +457,14 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
 
   // Run marker sync when stops/map change
   useEffect(() => {
-    if (!mapReady) return
+    if (!mapReadyRef.current) return
     updateMarkers()
-  }, [mapReady, visibleStops, updateMarkers])
+  }, [visibleStops, updateMarkers])
 
   // ── Fly to selected stop + highlight marker ────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReady) return
+    if (!map || !mapReadyRef.current) return
 
     // Reset all marker scales
     for (const { el } of Object.values(markersRef.current)) {
@@ -479,7 +482,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
         entry.el.style.zIndex = "10"
       }
     }
-  }, [selectedStop, mapReady])
+  }, [selectedStop])
 
   // ── Fetch ORS directions per tech ──────────────────────────────────────────
   useEffect(() => {
@@ -520,7 +523,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
   // ── Route lines ────────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReady) return
+    if (!map || !mapReadyRef.current) return
 
     for (const techId of visibleTechIds) {
       const tech = techMap.get(techId)
@@ -546,16 +549,16 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
         }
       }
     }
-  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries, orsFailed])
+  }, [techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries, orsFailed])
 
   // ── Close popup on map click ──────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !mapReady) return
+    if (!map || !mapReadyRef.current) return
     const handler = () => onSelectRef.current?.(null)
     map.on("click", handler)
     return () => { map.off("click", handler) }
-  }, [mapReady])
+  }, [mapReadyState])
 
   const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY
 
@@ -578,7 +581,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
       {/* Tech position markers (live GPS) — still React-managed since they update frequently */}
-      {mapReady && mapRef.current && maplibreRef.current && visibleTechIds.map((techId) => {
+      {mapReadyState && mapRef.current && maplibreRef.current && visibleTechIds.map((techId) => {
         const position = techPositions[techId]
         const tech = techMap.get(techId)
         if (!position || !tech) return null

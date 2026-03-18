@@ -1,9 +1,10 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
+import { useRef, useState, useEffect, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { MapPinIcon } from "lucide-react"
+import { MapPinIcon, RefreshCwIcon } from "lucide-react"
 import type { DispatchData, DispatchStop } from "@/actions/dispatch"
+import { getDispatchData } from "@/actions/dispatch"
 import { TechFilter } from "@/components/dispatch/tech-filter"
 import { EtaOverlay } from "@/components/dispatch/eta-overlay"
 import { DispatchStopList } from "@/components/dispatch/dispatch-stop-list"
@@ -32,12 +33,34 @@ interface DispatchClientShellProps {
 }
 
 export function DispatchClientShell({ initialData, orgId }: DispatchClientShellProps) {
+  const [data, setData] = useState<DispatchData>(initialData)
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null)
   const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const [availableHeight, setAvailableHeight] = useState<number>(0)
 
-  const hasStops = initialData.stops.length > 0
+  const hasStops = data.stops.length > 0
+  const hasTechs = data.techs.length > 0
+
+  // Refresh dispatch data from server
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      const fresh = await getDispatchData()
+      setData(fresh)
+    } catch {
+      // silently fail — stale data is better than no data
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [])
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(refresh, 30_000)
+    return () => clearInterval(interval)
+  }, [refresh])
 
   // Measure header + filter, compute remaining height
   useEffect(() => {
@@ -63,14 +86,14 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
           <h1 className="text-2xl font-bold tracking-tight">Dispatch</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {hasStops
-              ? `${initialData.stops.length} stop${initialData.stops.length !== 1 ? "s" : ""} across ${initialData.techs.length} tech${initialData.techs.length !== 1 ? "s" : ""} today`
+              ? `${data.stops.length} stop${data.stops.length !== 1 ? "s" : ""} across ${data.techs.length} tech${data.techs.length !== 1 ? "s" : ""} today`
               : "No stops scheduled for today"}
           </p>
         </div>
-        {initialData.techs.length > 0 && (
+        {hasTechs && (
           <div className="border-b border-border/40">
             <TechFilter
-              techs={initialData.techs}
+              techs={data.techs}
               selectedTechId={selectedTechId}
               onSelectTech={setSelectedTechId}
             />
@@ -84,7 +107,7 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
           {/* Map section */}
           <div style={{ height: mapHeight, position: "relative" }}>
             <DispatchMap
-              initialData={initialData}
+              initialData={data}
               orgId={orgId}
               selectedTechId={selectedTechId}
               mapHeight={mapHeight}
@@ -101,8 +124,8 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
           {/* Stop list section */}
           <div style={{ height: listHeight }} className="border-t border-border/40 bg-background">
             <DispatchStopList
-              stops={initialData.stops}
-              techs={initialData.techs}
+              stops={data.stops}
+              techs={data.techs}
               selectedTechId={selectedTechId}
               selectedStopId={selectedStop?.id ?? null}
               onSelectStop={setSelectedStop}
