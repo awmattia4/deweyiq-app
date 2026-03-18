@@ -74,11 +74,12 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
 
       {/* Map — explicit pixel height from JS measurement */}
       {hasStops && mapHeight > 0 ? (
-        <div className="relative" style={{ height: mapHeight }}>
+        <div style={{ height: mapHeight, position: "relative" }}>
           <DispatchMap
             initialData={initialData}
             orgId={orgId}
             selectedTechId={selectedTechId}
+            mapHeight={mapHeight}
           />
           {selectedTechId && (
             <div className="absolute top-3 right-3 z-10 pointer-events-auto">

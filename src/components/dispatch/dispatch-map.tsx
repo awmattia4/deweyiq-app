@@ -129,9 +129,10 @@ interface DispatchMapInnerProps {
   initialData: DispatchData
   orgId: string
   selectedTechId: string | null
+  mapHeight?: number
 }
 
-function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInnerProps) {
+function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight }: DispatchMapInnerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
   const maplibreRef = useRef<MaplibreGl | null>(null)
@@ -408,9 +409,9 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
   }
 
   return (
-    <div className="absolute inset-0">
+    <div style={{ width: "100%", height: mapHeight ?? "100%" }}>
       {/* Map canvas */}
-      <div ref={mapContainerRef} className="absolute inset-0" />
+      <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
       {/* Markers — rendered via React but attached to map imperatively */}
       {mapReady && mapRef.current && maplibreRef.current && (
@@ -470,6 +471,7 @@ interface DispatchMapProps {
   initialData: DispatchData
   orgId: string
   selectedTechId: string | null
+  mapHeight?: number
 }
 
 export function DispatchMap(props: DispatchMapProps) {
