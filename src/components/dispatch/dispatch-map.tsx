@@ -170,40 +170,27 @@ function createHomeBaseMarkerEl(): HTMLElement {
 
 // ─── Route line helpers ────────────────────────────────────────────────────────
 
-function buildStraightLineCoords(
+/**
+ * Build route coords for ALL stops of a tech (home → all stops → home).
+ * Matches the schedule map behavior — shows the full route including completed stops.
+ */
+function buildAllStopCoords(
   techId: string,
   stops: DispatchStop[],
-  techPosition: TechPosition | undefined,
   homeBase: { lat: number; lng: number } | null
 ): [number, number][] {
-  const remainingStops = stops
-    .filter(
-      (s) =>
-        s.techId === techId &&
-        s.status !== "complete" &&
-        s.status !== "skipped" &&
-        s.status !== "holiday" &&
-        s.lat !== null &&
-        s.lng !== null
-    )
+  const techStops = stops
+    .filter((s) => s.techId === techId && s.lat !== null && s.lng !== null)
     .sort((a, b) => a.sortIndex - b.sortIndex)
 
-  if (remainingStops.length === 0) return []
+  if (techStops.length === 0) return []
 
   const coordinates: [number, number][] = []
-  // Start from tech GPS position or home base
-  if (techPosition) {
-    coordinates.push([techPosition.lng, techPosition.lat])
-  } else if (homeBase) {
-    coordinates.push([homeBase.lng, homeBase.lat])
-  }
-  for (const stop of remainingStops) {
+  if (homeBase) coordinates.push([homeBase.lng, homeBase.lat])
+  for (const stop of techStops) {
     coordinates.push([stop.lng!, stop.lat!])
   }
-  // Return to home base after last stop
-  if (homeBase) {
-    coordinates.push([homeBase.lng, homeBase.lat])
-  }
+  if (homeBase) coordinates.push([homeBase.lng, homeBase.lat])
   return coordinates
 }
 
@@ -266,8 +253,9 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
   // Keep callback ref current
   useEffect(() => { onSelectRef.current = onSelectStop }, [onSelectStop])
 
-  // ORS geometry per tech
+  // ORS geometry + drive time per tech
   const [orsGeometries, setOrsGeometries] = useState<Record<string, [number, number][]>>({})
+  const [driveMinutes, setDriveMinutes] = useState<Record<string, number>>({})
   const [orsFailed, setOrsFailed] = useState(false)
   const orsRequestRef = useRef(0)
 
@@ -495,24 +483,28 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
     setOrsFailed(false)
 
     async function fetchOrsForTechs() {
-      const results: Record<string, [number, number][]> = {}
+      const geoResults: Record<string, [number, number][]> = {}
+      const timeResults: Record<string, number> = {}
       let anySuccess = false
 
       await Promise.all(
         visibleTechIds.map(async (techId) => {
-          const coords = buildStraightLineCoords(techId, visibleStops, techPositions[techId], initialData.homeBase)
+          // Use ALL stops for the route (matching schedule map behavior)
+          const coords = buildAllStopCoords(techId, visibleStops, initialData.homeBase)
           if (coords.length < 2) return
           const result = await getRouteDirections(coords)
           if (orsRequestRef.current !== requestId) return
           if (result.success && result.geometry.length > 0) {
-            results[techId] = result.geometry
+            geoResults[techId] = result.geometry
+            timeResults[techId] = result.durationMinutes
             anySuccess = true
           }
         })
       )
 
       if (orsRequestRef.current === requestId) {
-        setOrsGeometries(results)
+        setOrsGeometries(geoResults)
+        setDriveMinutes(timeResults)
         if (!anySuccess) setOrsFailed(true)
       }
     }
@@ -534,7 +526,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
       if (orsGeo && orsGeo.length > 0) {
         setRouteLine(map, techId, orsGeo, tech.color)
       } else if (orsFailed) {
-        setRouteLine(map, techId, buildStraightLineCoords(techId, visibleStops, techPositions[techId], initialData.homeBase), tech.color)
+        setRouteLine(map, techId, buildAllStopCoords(techId, visibleStops, initialData.homeBase), tech.color)
       } else {
         setRouteLine(map, techId, [], tech.color)
       }
@@ -578,7 +570,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
   }
 
   return (
-    <div style={{ width: "100%", height: mapHeight ?? "100%" }}>
+    <div style={{ width: "100%", height: mapHeight ?? "100%", position: "relative" }}>
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
       {/* Tech position markers (live GPS) — still React-managed since they update frequently */}
@@ -597,6 +589,30 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
           />
         )
       })}
+
+      {/* Drive time overlay — per tech */}
+      {Object.keys(driveMinutes).length > 0 && (
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 pointer-events-none">
+          {visibleTechIds.map((techId) => {
+            const mins = driveMinutes[techId]
+            if (mins == null) return null
+            const tech = techMap.get(techId)
+            return (
+              <div
+                key={techId}
+                className="flex items-center gap-1.5 rounded-md bg-background/85 backdrop-blur-sm border border-border/60 px-2.5 py-1.5 shadow-lg"
+              >
+                {!selectedTechId && tech && (
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: tech.color }} />
+                )}
+                <svg className="h-3.5 w-3.5 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+                <span className="text-xs font-semibold text-foreground">{mins} min</span>
+                <span className="text-[10px] text-muted-foreground">total drive</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
