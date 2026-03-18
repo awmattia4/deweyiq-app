@@ -142,6 +142,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
 
   // ORS geometry per tech — keyed by techId
   const [orsGeometries, setOrsGeometries] = useState<Record<string, [number, number][]>>({})
+  const [orsFailed, setOrsFailed] = useState(false)
   const orsRequestRef = useRef(0)
 
   // Live tech positions via Supabase Broadcast
@@ -292,9 +293,11 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
   // ── Fetch ORS directions per tech (debounced, with 5s timeout via server action) ──
   useEffect(() => {
     const requestId = ++orsRequestRef.current
+    setOrsFailed(false)
 
     async function fetchOrsForTechs() {
       const results: Record<string, [number, number][]> = {}
+      let anySuccess = false
 
       await Promise.all(
         visibleTechIds.map(async (techId) => {
@@ -311,12 +314,14 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
 
           if (result.success && result.geometry.length > 0) {
             results[techId] = result.geometry
+            anySuccess = true
           }
         })
       )
 
       if (orsRequestRef.current === requestId) {
         setOrsGeometries(results)
+        if (!anySuccess) setOrsFailed(true)
       }
     }
 
@@ -325,7 +330,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
     return () => clearTimeout(timer)
   }, [visibleTechIds, visibleStops, techPositions, initialData.homeBase])
 
-  // ── Route lines — draw straight lines immediately, upgrade to ORS when ready ──
+  // ── Route lines — ORS when available, straight-line fallback only after ORS fails ──
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReady) return
@@ -334,11 +339,12 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
       const tech = techMap.get(techId)
       if (!tech) continue
 
-      // Use ORS geometry if available, otherwise straight lines
       const orsGeo = orsGeometries[techId]
       if (orsGeo && orsGeo.length > 0) {
+        // ORS road-following geometry
         setRouteLine(map, techId, orsGeo, tech.color)
-      } else {
+      } else if (orsFailed) {
+        // ORS failed/timed out — fall back to straight lines
         const straightCoords = buildStraightLineCoords(
           techId,
           visibleStops,
@@ -346,6 +352,9 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
           initialData.homeBase
         )
         setRouteLine(map, techId, straightCoords, tech.color)
+      } else {
+        // Still loading — show no line yet
+        setRouteLine(map, techId, [], tech.color)
       }
     }
 
@@ -360,7 +369,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         }
       }
     }
-  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries])
+  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap, orsGeometries, orsFailed])
 
   // ── Close popup on map click ──────────────────────────────────────────────
   const handleMapClick = useCallback(() => {

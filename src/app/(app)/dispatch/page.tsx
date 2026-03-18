@@ -36,11 +36,9 @@ export default async function DispatchPage() {
   const dispatchData = await getDispatchData()
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100dvh - 4rem)" }}>
-      <DispatchClientShell
-        initialData={dispatchData}
-        orgId={user.org_id}
-      />
-    </div>
+    <DispatchClientShell
+      initialData={dispatchData}
+      orgId={user.org_id}
+    />
   )
 }

@@ -38,8 +38,8 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
 
   return (
     <div
-      className="h-full"
-      style={{ display: "grid", gridTemplateRows: "auto auto 1fr" }}
+      className="min-h-0"
+      style={{ display: "grid", gridTemplateRows: "auto auto 1fr", flex: "1 1 0%" }}
     >
       {/* ── Page header ───────────────────────────────────────────────────── */}
       <div className="px-4 pt-4 pb-2">
