@@ -136,6 +136,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
   const mapRef = useRef<MaplibreMap | null>(null)
   const maplibreRef = useRef<MaplibreGl | null>(null)
   const homeBaseMarkerRef = useRef<unknown>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
 
@@ -233,6 +234,10 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         if (cancelled) return
         mapRef.current = map
 
+        // Force map to recalculate its container size — critical when
+        // loaded via next/dynamic where the container may resize after init.
+        map.resize()
+
         // Fit bounds including home base
         if (allLngs.length > 1) {
           map.fitBounds(
@@ -255,12 +260,21 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
 
         setMapReady(true)
       })
+
+      // ResizeObserver — call map.resize() whenever the container changes size
+      // (layout shifts from dynamic import, window resize, sidebar toggle, etc.)
+      const ro = new ResizeObserver(() => {
+        if (mapRef.current) mapRef.current.resize()
+      })
+      ro.observe(mapContainerRef.current)
+      resizeObserverRef.current = ro
     }
 
     void initMap()
 
     return () => {
       cancelled = true
+      resizeObserverRef.current?.disconnect()
       if (homeBaseMarkerRef.current) {
         ;(homeBaseMarkerRef.current as import("maplibre-gl").Marker).remove()
         homeBaseMarkerRef.current = null

@@ -14,7 +14,7 @@ const DispatchMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3 text-center px-4">
           <div className="rounded-full bg-muted/30 p-4 animate-pulse">
             <MapPinIcon className="h-8 w-8 text-muted-foreground/40" />
@@ -31,56 +31,45 @@ interface DispatchClientShellProps {
   orgId: string
 }
 
-/**
- * DispatchClientShell — client wrapper that owns TechFilter selection state.
- *
- * Sits between the server-side DispatchPage and the client-side DispatchMap.
- * Holds `selectedTechId` state so TechFilter and DispatchMap can communicate.
- *
- * Layout:
- * - Page header "Dispatch" at the top
- * - TechFilter bar below the header
- * - Full-bleed DispatchMap filling remaining viewport height
- */
 export function DispatchClientShell({ initialData, orgId }: DispatchClientShellProps) {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null)
 
   const hasStops = initialData.stops.length > 0
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="h-full"
+      style={{ display: "grid", gridTemplateRows: "auto auto 1fr" }}
+    >
       {/* ── Page header ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dispatch</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {hasStops
-              ? `${initialData.stops.length} stop${initialData.stops.length !== 1 ? "s" : ""} across ${initialData.techs.length} tech${initialData.techs.length !== 1 ? "s" : ""} today`
-              : "No stops scheduled for today"}
-          </p>
-        </div>
+      <div className="px-4 pt-4 pb-2">
+        <h1 className="text-2xl font-bold tracking-tight">Dispatch</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {hasStops
+            ? `${initialData.stops.length} stop${initialData.stops.length !== 1 ? "s" : ""} across ${initialData.techs.length} tech${initialData.techs.length !== 1 ? "s" : ""} today`
+            : "No stops scheduled for today"}
+        </p>
       </div>
 
       {/* ── Tech filter bar ───────────────────────────────────────────────── */}
-      {initialData.techs.length > 0 && (
-        <div className="flex-shrink-0 border-b border-border/40">
+      <div className="border-b border-border/40">
+        {initialData.techs.length > 0 && (
           <TechFilter
             techs={initialData.techs}
             selectedTechId={selectedTechId}
             onSelectTech={setSelectedTechId}
           />
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ── Dispatch map — fills remaining height ────────────────────────── */}
+      {/* ── Dispatch map — fills remaining grid row ────────────────────────── */}
       {hasStops ? (
-        <div className="relative" style={{ flex: "1 1 0%", minHeight: 0, overflow: "hidden" }}>
+        <div className="relative overflow-hidden">
           <DispatchMap
             initialData={initialData}
             orgId={orgId}
             selectedTechId={selectedTechId}
           />
-          {/* ETA overlay — shown when a specific tech is selected */}
           {selectedTechId && (
             <div className="absolute top-3 right-3 z-10 pointer-events-auto">
               <EtaOverlay techId={selectedTechId} orgId={orgId} />
@@ -88,8 +77,7 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
           )}
         </div>
       ) : (
-        /* Empty state when no stops today */
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4">
+        <div className="flex flex-col items-center justify-center gap-4 px-4">
           <div className="rounded-full bg-muted/20 p-6">
             <MapPinIcon className="h-12 w-12 text-muted-foreground/30" />
           </div>
