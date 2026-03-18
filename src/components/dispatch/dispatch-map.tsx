@@ -326,7 +326,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
   }
 
   return (
-    <div className="relative w-full h-full" style={{ minHeight: 0 }}>
+    <div className="absolute inset-0">
       {/* Map canvas */}
       <div ref={mapContainerRef} className="absolute inset-0" />
 
