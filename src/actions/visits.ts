@@ -131,6 +131,7 @@ export interface SkipStopInput {
   customerId: string
   poolId: string
   skipReason: string
+  routeStopId?: string | null
 }
 
 // Map DB chemical_type strings to dosing engine ChemicalKey values
@@ -703,6 +704,27 @@ export async function completeStop(
         })
     })
 
+    // ── 9b. Update route_stops.status to "complete" ─────────────────────────
+    // The dispatch page reads from route_stops.status, not service_visits.
+    // Without this, the dispatch page shows "scheduled" even after completion.
+    // Look up the route_stop by pool + tech + today's date.
+    try {
+      const today = now.toISOString().split("T")[0]
+      await adminDb
+        .update(routeStops)
+        .set({ status: "complete", updated_at: now })
+        .where(
+          and(
+            eq(routeStops.org_id, token.org_id as string),
+            eq(routeStops.pool_id, input.poolId),
+            eq(routeStops.tech_id, techId),
+            eq(routeStops.scheduled_date, today)
+          )
+        )
+    } catch (rsErr) {
+      console.error("[completeStop] route_stops status update failed (non-blocking):", rsErr)
+    }
+
     // ── 10. If tech overrode warnings, generate an incomplete_data alert ────
     // This is best-effort — alert generation failure must never block completion.
     if (input.overrideWarnings && (missingChemistry.length > 0 || missingChecklist.length > 0)) {
@@ -941,6 +963,18 @@ export async function skipStop(
           },
         })
     })
+
+    // Update route_stops.status to "skipped" so dispatch page reflects it
+    if (input.routeStopId) {
+      try {
+        await adminDb
+          .update(routeStops)
+          .set({ status: "skipped", updated_at: now })
+          .where(eq(routeStops.id, input.routeStopId))
+      } catch (rsErr) {
+        console.error("[skipStop] route_stops status update failed (non-blocking):", rsErr)
+      }
+    }
 
     // ── NOTIF-06: Notify owner+office of skipped stop (fire-and-forget) ──────
     const techId = token.sub
