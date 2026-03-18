@@ -361,7 +361,14 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
           homeBaseMarkerRef.current = hbMarker
         }
 
-        setMapReady(true)
+        // Wait for resize + fitBounds to fully settle before allowing
+        // marker creation — without this, markers are positioned relative
+        // to the pre-resize viewport and appear in the wrong place.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!cancelled) setMapReady(true)
+          })
+        })
       })
 
       const ro = new ResizeObserver(() => { if (mapRef.current) mapRef.current.resize() })
