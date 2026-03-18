@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { routeStops, customers, pools, profiles } from "@/lib/db/schema"
+import { routeStops, customers, pools, profiles, orgSettings } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ import { and, eq, asc } from "drizzle-orm"
 export interface DispatchTech {
   id: string
   name: string
-  /** OKLCH color string for this tech's markers and route line */
+  /** Hex color string for this tech's markers and route line */
   color: string
 }
 
@@ -46,13 +47,14 @@ export interface DispatchStop {
 export interface DispatchData {
   techs: DispatchTech[]
   stops: DispatchStop[]
+  homeBase: { lat: number; lng: number } | null
 }
 
 // ─── Color palette ─────────────────────────────────────────────────────────────
 
 /**
- * 10 visually distinct OKLCH colors for tech map markers.
- * Chosen for contrast on both light and dark map backgrounds.
+ * 10 visually distinct hex colors for tech map markers.
+ * MUST be hex — MapLibre WebGL paint properties cannot parse oklch().
  * Cycles if there are more than 10 techs (unusual for a pool company).
  */
 const TECH_COLORS = [
@@ -83,17 +85,17 @@ const TECH_COLORS = [
  */
 export async function getDispatchData(): Promise<DispatchData> {
   const token = await getRlsToken()
-  if (!token) return { techs: [], stops: [] }
+  if (!token) return { techs: [], stops: [], homeBase: null }
 
   const orgId = token["org_id"] as string | undefined
   const userRole = token["user_role"] as string | undefined
 
-  if (!orgId) return { techs: [], stops: [] }
+  if (!orgId) return { techs: [], stops: [], homeBase: null }
   if (!userRole || !["owner", "office"].includes(userRole)) {
-    return { techs: [], stops: [] }
+    return { techs: [], stops: [], homeBase: null }
   }
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = toLocalDateString()
 
   try {
     return await withRls(token, async (db) => {
@@ -117,7 +119,7 @@ export async function getDispatchData(): Promise<DispatchData> {
         )
         .orderBy(asc(routeStops.sort_index))
 
-      if (stopRows.length === 0) return { techs: [], stops: [] }
+      if (stopRows.length === 0) return { techs: [], stops: [], homeBase: null }
 
       // ── Fetch all customers in org ──────────────────────────────────────────
       const customerRows = await db
@@ -190,10 +192,26 @@ export async function getDispatchData(): Promise<DispatchData> {
         }
       })
 
-      return { techs, stops }
+      // ── Fetch home base from org settings ────────────────────────────────
+      const homeBaseRows = await db
+        .select({
+          lat: orgSettings.home_base_lat,
+          lng: orgSettings.home_base_lng,
+        })
+        .from(orgSettings)
+        .where(eq(orgSettings.org_id, orgId))
+        .limit(1)
+
+      const hb = homeBaseRows[0]
+      const homeBase =
+        hb?.lat != null && hb?.lng != null
+          ? { lat: hb.lat, lng: hb.lng }
+          : null
+
+      return { techs, stops, homeBase }
     })
   } catch (error) {
     console.error("[getDispatchData] Error:", error)
-    return { techs: [], stops: [] }
+    return { techs: [], stops: [], homeBase: null }
   }
 }

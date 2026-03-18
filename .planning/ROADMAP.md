@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 9: Reporting & Team Analytics** - Owner dashboards, technician scorecards, chemical profitability, and financial reporting (completed 2026-03-14)
 - [x] **Phase 10: Smart Features & AI** - AI route optimization, predictive chemistry alerts, and automated workload balancing (completed 2026-03-15)
 - [x] **Phase 11: Payroll, Team Management & Full Accounting** - Native payroll (direct deposit, checks, tax filing, W-2/1099), time tracking, PTO, certifications, full double-entry accounting, bank reconciliation via Plaid, payment reconciliation, financial statements — complete QuickBooks replacement (completed 2026-03-16)
-- [ ] **Phase 12: Projects & Renovations** - Full project management for new pool construction, renovations, and remodels — lead pipeline, site surveys, multi-tier proposals, deposits, progress billing, permits, subcontractors, material procurement, change orders, inspections, warranties, and a dedicated tech project mode with task checklists, time tracking, and photo documentation
+- [x] **Phase 12: Projects & Renovations** - Full project management for new pool construction, renovations, and remodels — lead pipeline, site surveys, multi-tier proposals, deposits, progress billing, permits, subcontractors, material procurement, change orders, inspections, warranties, and a dedicated tech project mode with task checklists, time tracking, and photo documentation (completed 2026-03-17)
 - [ ] **Phase 13: Truck Inventory & Shopping Lists** - Per-tech truck inventory with auto-decrement, shopping lists with full procurement lifecycle, purchasing dashboard, chemical usage tracking, and "What to Bring" pre-route summaries
 - [ ] **Phase 14: Service Agreements & Contracts** - Recurring service agreements with e-signature, auto-schedule/billing setup, agreement lifecycle (pause/resume/cancel/renew), customer portal access, and compliance tracking
 - [ ] **Phase 15: Intelligent Billing Automation** - Per-customer per-visit rates, smart pricing suggestions, bulk shop fee application, billing anomaly detection, and invoice generation preview
@@ -268,7 +268,7 @@ Plans:
 - [ ] 10-17-PLAN.md — PWA install prompt and Web Push notifications
 
 ### Phase 11: Payroll, Team Management & Full Accounting
-**Goal**: DeweyIQ collects time data (clock-in/out, per-stop geofence timing, breaks, mileage) and pushes to QBO for payroll; provides full double-entry accounting with simplified owner view and accountant mode; integrates Plaid bank feeds with smart reconciliation; tracks expenses with receipt capture; manages PTO, certifications, and employee scheduling; and extends billing with payment plans, customer credits, and collections — all without requiring the owner to understand accounting terminology
+**Goal**: DeweyIQ collects time data (clock-in/out, per-stop geofence timing, breaks, mileage) and pushes to QBO for payroll; provides full double-entry accounting with simplified owner view and accountant mode; tracks expenses with receipt capture; manages PTO, certifications, and employee scheduling; and extends billing with payment plans, customer credits, and collections — all without requiring the owner to understand accounting terminology. Bank feeds and reconciliation deferred to QBO (Plaid cut to reduce cost/complexity)
 **Depends on**: Phase 9 (tech scorecards, per-stop metrics, **tech pay/commission tracking and payroll export** — review and extend what Phase 9 built, don't rebuild), Phase 7 (billing/payments, Stripe Connect or QBO integration), Phase 3 (field tech route timestamps)
 **Requirements**: TEAM-01, TEAM-02, TEAM-03, TEAM-04, TEAM-05, TEAM-06, TEAM-07, TEAM-08, TEAM-09, TEAM-10, TEAM-11, TEAM-12, TEAM-13, TEAM-14, PAYRL-01, PAYRL-02, PAYRL-03, PAYRL-04, PAYRL-05, PAYRL-06, PAYRL-07, PAYRL-08, PAYRL-09, PAYRL-10, PAYRL-11, PAYRL-12, PAYRL-13, PAYRL-14, PAYRL-15, ACCT-01, ACCT-02, ACCT-03, ACCT-04, ACCT-05, ACCT-06, ACCT-07, ACCT-08, ACCT-09, ACCT-10, ACCT-11, ACCT-12, ACCT-13, ACCT-14, ACCT-15, PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, PAY-06, PAY-07
 **Success Criteria** (what must be TRUE):
@@ -279,7 +279,7 @@ Plans:
   5. System auto-files quarterly payroll taxes (Form 941, state equivalents) and generates year-end W-2s for employees and 1099-NECs for contractors
   6. The owner has a full chart of accounts pre-seeded for pool service — every invoice, payment, payroll run, and expense auto-creates balanced double-entry journal entries
   7. The owner can generate P&L, Balance Sheet, and Cash Flow statements for any date range with period comparison — replacing QuickBooks financial reports entirely
-  8. The owner can connect bank accounts via Plaid, auto-import transactions daily, and reconcile against book entries
+  8. ~~The owner can connect bank accounts via Plaid, auto-import transactions daily, and reconcile against book entries~~ **CUT** — bank feeds and reconciliation handled by QBO instead. Plaid dependency removed to reduce cost and complexity. See Phase 15 note.
   9. Payment transactions from Stripe Connect or QBO Payments auto-reconcile to accounting entries with per-transaction fee tracking
   10. The owner can track expenses with receipt photos, manage accounts payable with vendor bills, and log mileage — all categorized against the chart of accounts
   11. The owner can manage PTO balances with accrual rules, request/approval workflow, employee certifications with expiration alerts, and break compliance tracking
@@ -416,6 +416,17 @@ Plans:
   7. Each customer's profile shows their next auto-invoice date, billing frequency, and last invoice summary — making recurring billing status visible at a glance
   8. Office staff can record cash and check payments against any invoice (WO, recurring service, or project) — with payment method selection, check number tracking, receipt date, and optional receipt photo; the customer payment page also offers a "Paying by Cash or Check" option that notifies the office to expect manual payment instead of processing online
   9. Full QBO bidirectional sync covers ALL entity types — customers, invoices, payments, parts/items catalog, expenses, and chart of accounts — not just the basic three; parts imported from QBO populate the existing CatalogItem table
+  10. Payout schedule configuration — pool company owner can set their Stripe payout frequency from Settings → Billing → Payments: daily (default), weekly (pick a day), or monthly (pick a date). Uses the Stripe Connect Account API to update the connected account's `settings.payouts.schedule`. Clear display of current schedule and next expected payout date
+  11. **Plaid removal** — Complete cleanup of Plaid integration. Bank feeds and reconciliation are handled by QBO instead. Already deleted: `src/lib/plaid/client.ts`, `src/actions/bank-feeds.ts`, `src/components/settings/plaid-connect.tsx`, `src/components/accounting/bank-feed.tsx`, `src/app/api/webhooks/plaid/route.ts`, and all imports/references in `settings-tabs.tsx`, `settings/page.tsx`, `financial-dashboard.tsx`, `pnl-report.tsx`. **Still remaining to clean up:**
+      - `src/actions/reconciliation.ts` — bank reconciliation server actions (imported by `accounting/page.tsx` and `reconcile-panel.tsx`)
+      - `src/lib/accounting/reconciliation.ts` — reconciliation matching algorithm
+      - `src/components/accounting/reconcile-panel.tsx` — reconciliation UI panel
+      - `src/lib/db/schema/bank-accounts.ts` — schema for `bank_accounts` and `bank_transactions` tables (drop tables via migration)
+      - `src/app/(app)/accounting/page.tsx` — remove `getBankAccountsForReconciliation` import and prop passing
+      - `src/lib/stripe/webhook-handlers.ts` — remove Plaid-related comments (lines 809-812)
+      - `src/lib/db/schema/expenses.ts` — remove Plaid reference in comment
+      - `src/components/accounting/financial-dashboard.tsx` — remove unused `bankAccounts` prop from interface
+      - Drop `bank_accounts` and `bank_transactions` tables via Drizzle migration
 **Plans**: TBD
 
 Plans:
@@ -447,6 +458,9 @@ Plans:
   - No overdue/balance indicator visible in the field app — tech/owner can't see if customer owes money while on-site
   - Owner can't create/send estimates from the field app — must go back to office to use quote builder
   - Chemistry color indicators jump straight from green to red at range boundaries — no yellow warning zone at 7.2/7.8 pH or 60-80/120-140 alkalinity
+  - **Tab styling inconsistency across pages**: Schedule page tabs look good (preferred style), but Settings, Accounting, Reports, and other pages use a different/worse tab style. All tabs app-wide must use the same component and styling as the Schedule page tabs
+  - **Settings page tabs not mobile-friendly**: Settings tab list doesn't scroll or wrap properly on mobile — tabs get cut off or overflow. Needs horizontal scroll or a dropdown/accordion pattern on small screens
+  - **Overall design consistency audit**: Every page must feel like it belongs to the same app. Audit ALL pages for consistent card styles, section headers, spacing, button patterns, tab components, form layouts, and visual rhythm. Fix any page that looks "off" compared to the rest
 **Success Criteria** (what must be TRUE):
 
   *Interactive States:*
@@ -460,6 +474,9 @@ Plans:
   6. Typography is consistent across all pages — same font sizes, weights, line heights, and tracking for equivalent elements (h1, h2, body, captions, labels)
   7. Color usage exclusively uses design system tokens — no hardcoded hex/rgb/oklch values outside globals.css — status colors, accent colors, and semantic colors are defined once and reused everywhere
   8. All cards, dialogs, sheets, and panels use the same border radius, shadow, and padding patterns
+  9a. **All tabs use the same component and style** — the Schedule page tab style is the reference. Every page with tabs (Settings, Accounting, Reports, Customers, Billing, etc.) uses the identical tab component, sizing, active/inactive states, and spacing. No page has a different-looking tab bar
+  9b. **Settings tabs are mobile-friendly** — on small screens, the tab list is horizontally scrollable (with scroll indicators) or collapses to a dropdown/select pattern. No tabs are cut off or inaccessible on mobile
+  9c. **Cross-page design consistency verified** — a full audit confirms every page uses the same card styles, section headers, spacing rhythm, button variants, form layouts, empty states, and interactive patterns. No page looks like it belongs to a different app
 
   *Loading & Empty States:*
   9. Every data-loading view has a skeleton loader or spinner that matches the layout it will populate — no layout shift when data arrives
@@ -520,6 +537,9 @@ Plans:
   39. Email subject lines are clear and contextual — not generic ("Invoice from PoolCo") but specific ("Invoice #1042 for March Pool Service — Blue Wave Pools")
   40. SMS messages are concise, professional, and include the company name — no raw URLs without context, no truncated messages
 
+  *Developer Artifact Cleanup:*
+  85. Zero references to "Phase X", "coming soon", "will be available", "not yet", "future", "placeholder", or "stub" in any user-facing UI — titles, tooltips, aria-labels, toast messages, empty states, disabled buttons. Code comments are fine but nothing a user can see or inspect should hint at phased development. Every button either works or doesn't exist. Every section either has real data or is hidden entirely. The app must feel like a finished product, not a work in progress. Known instances: routes page map button says "Map view coming in Phase 4" (Phase 4 is built — wire it up or remove), invoice PDF has "placeholder for Phase 7" comment in rendered output
+
   *Performance & Polish:*
   41. No Cumulative Layout Shift on any page — elements don't jump around as content loads
   42. Page transitions are smooth — no flash of unstyled content, no jarring route changes
@@ -537,6 +557,10 @@ Plans:
 
   *Work Order Enhancements:*
   48. Work orders support file attachments (blueprints, plans, specs, manuals, diagrams) uploaded to Supabase Storage — techs see these attachments on their stop view so they know exactly what to do for specialized work (plumbing, equipment installs, etc.)
+  80. Work orders support multiple assigned techs — office can assign a crew (2+ techs) to a single WO when the job requires it (e.g. equipment installs, heavy repairs, pool openings). Each assigned tech sees the WO on their route, can log their own time/notes/photos independently, and the WO tracks all contributors. Schema changes from single `assigned_tech_id` to a `work_order_assignments` join table
+
+  *Invoice Hosted View:*
+  81. The customer-facing `/pay/[token]` invoice page includes a "Download PDF" button — customer can view the invoice details and download a clean branded PDF without being forced into a payment flow. If the invoice is already paid, the page shows "Paid" status with the PDF download still available as a receipt
 
   *Calendar Schedule View:*
   49. All roles (owner, office, tech) have a calendar view of their route/schedule — monthly calendar showing stop counts per day, color-coded by status (scheduled, complete, skipped), with click-to-drill into any day's full route list. Owner/office see all techs' schedules overlaid or filterable by tech. Techs see only their own stops. Provides a big-picture view of workload density, coverage gaps, and schedule patterns that the current day-by-day list view doesn't surface
@@ -581,6 +605,39 @@ Plans:
   75. Sidebar navigation, page access, and UI elements (buttons, sections, tabs) respect the role's permissions — users only see pages and actions they have access to, no disabled/grayed-out items for things they can't do (hidden, not disabled)
   76. RLS policies and server actions enforce permissions server-side — not just UI hiding. A user without "Billing: process payments" permission gets denied at the API level, not just missing the button
   77. When assigning a team member, owner picks from the list of custom roles (or built-in roles) — the role's permissions apply immediately and the user's sidebar/access updates on next page load
+
+  *SMS Compliance & Rate Limiting:*
+  78. SMS opt-out handling is fully wired — Twilio's Advanced Opt-Out (STOP/UNSUBSCRIBE/CANCEL) is enabled and verified, opted-out numbers are synced to the app (webhook or Twilio API check before send), and the system never sends SMS to a customer who has opted out. Customer's opt-out status is visible on their profile. Legally required under TCPA/CTIA guidelines
+  79. Internal SMS safety guardrails (completely invisible — no UI, no settings, no indication limits exist) — per-number throttle (max 4 SMS per number per hour for non-transactional messages), internal cost circuit breaker that alerts us (platform admin, not the customer) if an org's SMS spend looks anomalous so we can investigate bugs, and broadcast messages queued in batches to avoid carrier filtering. Limits exist purely to catch runaway bugs — normal usage never hits them. SMS is unlimited, period
+
+  *Stripe Embedded Onboarding:*
+  82. Stripe Connect onboarding uses embedded components (`ConnectAccountOnboarding` from `@stripe/react-connect-js`) so the pool company completes KYC/identity verification without leaving DeweyIQ — styled to match the app's dark-first design system. Replaces the current Stripe-hosted redirect flow from Phase 7. The embedded flow creates a connected Stripe account for the pool company automatically — they never need to visit stripe.com or know they have a "Stripe account." Fields are pre-filled from their DeweyIQ org profile (company name, address, email, phone) so they only enter what's new (EIN/SSN, bank account for payouts, ID verification). Before onboarding starts, a clear fee disclosure screen shows: "Stripe charges 2.9% + $0.30 per card payment and 0.8% per ACH payment (capped at $5). These fees are deducted from each payment before it reaches your bank — DeweyIQ does not add any additional fees." Fee info also permanently visible in Settings → Payments after setup. Every edge case handled:
+      - Owner starts onboarding but closes the app mid-way → resumes exactly where they left off on next visit (Stripe persists onboarding state)
+      - Stripe requests additional documents (ID verification, bank statement) → in-app notification + banner "Stripe needs more info" with one-tap return to the embedded onboarding component
+      - Onboarding completes → webhook confirms `account.updated` with `charges_enabled: true` → Settings → Payments immediately reflects "Connected" status with no page refresh needed
+      - Owner's Stripe account gets restricted after onboarding (disputes, compliance) → app detects `requirements.currently_due` via webhook and shows actionable banner "Action needed on your payment account" linking back to embedded remediation flow
+      - Owner wants to disconnect Stripe → confirmation dialog explains impact (AutoPay stops, pending payouts still process, customers can't pay online), disconnect action revokes OAuth and clears connected account ID
+      - Multiple failed identity verification attempts → clear error messaging from Stripe's embedded UI, not raw API errors
+      - Owner tries to process payments before onboarding is complete → blocked with "Finish setting up payments first" prompt linking to the onboarding component
+      - Owner already has an existing Stripe account → embedded flow detects and offers to link it instead of creating a new one
+      - "Powered by Stripe" badge visible on the onboarding flow, Settings → Payments page, and every customer-facing payment page (/pay/[token]) — makes it clear Stripe is the payment processor, not DeweyIQ. Links to Stripe's terms of service and Stripe's privacy policy are shown during onboarding and accessible from Settings → Payments. The owner's agreement is with Stripe for payment processing — Coastal Bay Digital LLC / DeweyIQ is not a party to the payment processing relationship and bears no liability for payment disputes, chargebacks, or fund holds
+
+  *Offline Verification:*
+  83. Full offline capability audit and verification — every field tech workflow confirmed working without connectivity, every edge case handled:
+      - Route view loads from Dexie cache with full customer/pool/equipment/checklist data
+      - Chemistry logging saves locally with LSI calculation and dosing recommendations (all computed client-side, no server needed)
+      - Checklist completion persists with per-task notes
+      - Photos store as compressed blobs in IndexedDB and queue for Supabase Storage upload on reconnect — verified working with 50+ photos queued (stress test)
+      - Stop completion queues the server action including all chemistry, checklist, photos, and notes — entire stop payload preserved
+      - Clock in/out and break start/end persist locally and sync
+      - Internal notes save locally
+      - App killed mid-stop (force close, phone dies, battery dies) → on reopen, draft is intact in Dexie with all entered data, tech resumes where they left off
+      - Signal drops mid-sync (partial upload) → sync queue retries with exponential backoff, no duplicate writes, no partial data on server
+      - Tech works offline all day (rural area, no signal) → entire day's work (10+ completed stops with chemistry, photos, checklists) syncs successfully when they return to connectivity
+      - Conflict resolution: if office edits a customer record while tech is offline and tech syncs stale data, server-side timestamp comparison prevents overwriting newer data — last-write-wins with server as authority for non-stop data, tech's stop data always wins (they were there)
+      - Storage pressure: if device runs low on IndexedDB space, the app warns the tech before it becomes a problem — "Storage low, connect to sync" banner
+      - Multiple tabs/windows: Dexie changes propagate across tabs so the tech doesn't see stale data if they have the app open in multiple browser tabs
+  84. Offline data prefetch is verified — when a tech opens the app with connectivity, today's full route (customers, pools, equipment, checklists, previous chemistry readings, stop details, work order attachments) downloads to Dexie so the entire day's work is available offline before they leave the shop. Prefetch shows a progress indicator and confirms "Route data ready — you're good to go offline" before the tech heads out
 **Plans**: TBD
 
 Plans:
@@ -679,51 +736,57 @@ Plans:
 **Requirements**: TBD
 **Success Criteria** (what must be TRUE):
 
-  *Vercel Deployment:*
-  1. Next.js app deployed to Vercel Pro, connected to GitHub repo with automatic deployments on push to main
-  2. Custom domain configured with SSL, DNS propagated, www redirect working
-  3. All environment variables set in Vercel via CLI (`vercel env add`) — pulled from production credentials, not dev/test keys. Note: `RESEND_API_KEY` must be set in **both** Vercel env vars (for Next.js server actions) and Supabase secrets (for Edge Functions) — same key, two locations
-  4. Preview deployments working on PR branches for future development
+  *Staging Environment:*
+  1. Staging environment live at `staging.deweyiq.com` — separate Supabase project (free tier), Stripe test keys, Twilio test number, Resend sandbox — mirrors production architecture but with zero real money/data
+  2. Staging auto-deploys from a `staging` branch on Vercel — every merge to staging is instantly testable
+  3. Full end-to-end testing on staging before any production deploy: sign up → onboard → add customer → build route → complete stops → generate invoice → pay → QBO sync → customer portal — all verified working with test data
+  4. Staging serves as the safe testing ground for all pre-launch QA — no risk of touching real data or live services
+
+  *Vercel Production Deployment:*
+  5. Next.js app deployed to Vercel Pro, connected to GitHub repo with automatic deployments on push to main
+  6. Custom domain configured with SSL, DNS propagated, www redirect working
+  7. All environment variables set in Vercel via CLI (`vercel env add`) — pulled from production credentials, not dev/test keys. Note: `RESEND_API_KEY` must be set in **both** Vercel env vars (for Next.js server actions) and Supabase secrets (for Edge Functions) — same key, two locations
+  8. Preview deployments working on PR branches for future development
 
   *Stripe Live Mode:*
-  5. Stripe account identity verification complete (business info, bank account for payouts)
-  6. Live API keys (`pk_live_`, `sk_live_`) set in Vercel env vars, replacing test keys
-  7. Stripe products/prices created in live mode matching the 3 tiers (Starter $99/$990, Pro $199/$1990, Enterprise $349/$3490)
-  8. Production webhook endpoint configured in Stripe pointing to the live Vercel URL
-  9. Stripe Connect onboarding tested end-to-end in live mode (pool company connects their own Stripe account)
+  9. Stripe account identity verification complete (business info, bank account for payouts)
+  10. Live API keys (`pk_live_`, `sk_live_`) set in Vercel env vars, replacing test keys
+  11. Stripe products/prices created in live mode matching the 3 tiers (Starter $99/$990, Pro $199/$1990, Enterprise $349/$3490)
+  12. Production webhook endpoint configured in Stripe pointing to the live Vercel URL
+  13. Stripe Connect onboarding tested end-to-end in live mode (pool company connects their own Stripe account)
 
   *Twilio Production:*
-  10. Production Twilio phone number purchased and configured
-  11. Supabase secrets updated with live Twilio credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`)
-  12. SMS sending verified — pre-arrival, invoice, quote, and weather delay messages all deliver successfully
+  14. Production Twilio phone number purchased and configured
+  15. Supabase secrets updated with live Twilio credentials (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`)
+  16. SMS sending verified — pre-arrival, invoice, quote, and weather delay messages all deliver successfully
 
   *Supabase Production:*
-  13. Supabase project on Pro plan with spend cap raised/disabled for production traffic
-  14. Auth redirect URLs updated to production domain (login, OAuth callbacks, magic links, password reset)
-  15. Edge functions deployed and pointing to production secrets
-  16. RLS policies verified — no NULL USING/WITH CHECK conditions (the known drizzle-kit push pitfall)
-  17. Database backups enabled and verified (point-in-time recovery)
+  17. Supabase project on Pro plan with spend cap raised/disabled for production traffic
+  18. Auth redirect URLs updated to production domain (login, OAuth callbacks, magic links, password reset)
+  19. Edge functions deployed and pointing to production secrets
+  20. RLS policies verified — no NULL USING/WITH CHECK conditions (the known drizzle-kit push pitfall)
+  21. Database backups enabled and verified (point-in-time recovery)
 
   *Monitoring & Alerting:*
-  18. Vercel analytics enabled for Web Vitals monitoring (LCP, CLS, FID)
-  19. Error tracking configured (Sentry or Vercel's built-in) — server action failures, client errors, and unhandled exceptions all captured
-  20. Supabase spend alerts configured at 50%, 75%, 90% of budget thresholds
-  21. Stripe webhook failure alerts enabled
-  22. Uptime monitoring configured (ping production URL every 5 min, alert on downtime)
+  22. Vercel analytics enabled for Web Vitals monitoring (LCP, CLS, FID)
+  23. Error tracking configured (Sentry or Vercel's built-in) — server action failures, client errors, and unhandled exceptions all captured
+  24. Supabase spend alerts configured at 50%, 75%, 90% of budget thresholds
+  25. Stripe webhook failure alerts enabled
+  26. Uptime monitoring configured (ping production URL every 5 min, alert on downtime)
 
   *Production Smoke Test:*
-  23. Complete end-to-end test with real data: sign up → onboard → add customer → add pool → create schedule → run route → complete stops → generate invoice → send invoice → collect payment → view reports — every feature touched
-  24. PWA install and offline mode verified on real iOS and Android devices
-  25. Email delivery verified (service reports, invoices, quotes) — check spam score, rendering across Gmail/Outlook/Apple Mail
-  26. SMS delivery verified on real phone numbers
-  27. Customer portal tested from a real customer's perspective (magic link login, view history, pay invoice, send message)
-  28. Performance verified — production load times under 2s on 4G mobile connection
+  27. Complete end-to-end test with real data: sign up → onboard → add customer → add pool → create schedule → run route → complete stops → generate invoice → send invoice → collect payment → view reports — every feature touched
+  28. PWA install and offline mode verified on real iOS and Android devices
+  29. Email delivery verified (service reports, invoices, quotes) — check spam score, rendering across Gmail/Outlook/Apple Mail
+  30. SMS delivery verified on real phone numbers
+  31. Customer portal tested from a real customer's perspective (magic link login, view history, pay invoice, send message)
+  32. Performance verified — production load times under 2s on 4G mobile connection
 
   *Security & Compliance:*
-  29. All API keys and secrets are production-grade (no test/dev keys left anywhere)
-  30. HTTPS enforced on all routes, no mixed content warnings
-  31. CSP headers configured, XSS protection verified
-  32. Legal pages (ToS, Privacy Policy, etc.) live and linked from footer
+  33. All API keys and secrets are production-grade (no test/dev keys left anywhere)
+  34. HTTPS enforced on all routes, no mixed content warnings
+  35. CSP headers configured, XSS protection verified
+  36. Legal pages (ToS, Privacy Policy, etc.) live and linked from footer
 **Plans**: TBD
 
 Plans:

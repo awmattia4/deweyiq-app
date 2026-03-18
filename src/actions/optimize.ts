@@ -499,10 +499,36 @@ export async function optimizeRoute(
       }
     }
 
-    // 6. Calculate current drive time — use ORS directions for real road time
-    const currentCoords: [number, number][] = rawStops
+    // 6. Fetch home base from org settings — needed for both VROOM request AND
+    //    drive time calculation so the two are measured on the same basis.
+    let homeBaseLngLat: [number, number] | null = null
+
+    const homeBase = await withRls(token, (db) =>
+      db
+        .select({
+          home_base_lat: orgSettings.home_base_lat,
+          home_base_lng: orgSettings.home_base_lng,
+        })
+        .from(orgSettings)
+        .where(eq(orgSettings.org_id, orgId))
+        .limit(1)
+    )
+
+    if (homeBase[0]?.home_base_lat != null && homeBase[0]?.home_base_lng != null) {
+      homeBaseLngLat = [homeBase[0].home_base_lng, homeBase[0].home_base_lat]
+    }
+
+    // 7. Calculate current drive time — use ORS directions for real road time.
+    //    CRITICAL: Include home base as start/end so the displayed drive time
+    //    matches what VROOM optimizes for (home → stops → home).
+    const stopCoords: [number, number][] = rawStops
       .filter((s) => s.lat !== null && s.lng !== null)
       .map((s) => [s.lng!, s.lat!])
+    const currentCoords: [number, number][] = []
+    if (homeBaseLngLat) currentCoords.push(homeBaseLngLat)
+    currentCoords.push(...stopCoords)
+    if (homeBaseLngLat) currentCoords.push(homeBaseLngLat)
+
     let currentDriveTimeMinutes: number
     if (currentCoords.length >= 2) {
       const currentRoute = await getRouteDirections(currentCoords)
@@ -534,7 +560,7 @@ export async function optimizeRoute(
       }
     }
 
-    // 7. Build ORS optimization request for unlocked stops only.
+    // 8. Build ORS optimization request for unlocked stops only.
     // Feed per-stop service durations as VROOM `service` field (seconds)
     // so VROOM accounts for dwell time when computing the optimal order.
     const jobs = unlockedWithCoords.map((stop, idx) => {
@@ -552,25 +578,9 @@ export async function optimizeRoute(
       }
     })
 
-    // Fetch home base from org settings for vehicle start/end
-    let startLocation: [number, number] = [unlockedWithCoords[0].lng, unlockedWithCoords[0].lat]
-    let endLocation: [number, number] | undefined
-
-    const homeBase = await withRls(token, (db) =>
-      db
-        .select({
-          home_base_lat: orgSettings.home_base_lat,
-          home_base_lng: orgSettings.home_base_lng,
-        })
-        .from(orgSettings)
-        .where(eq(orgSettings.org_id, orgId))
-        .limit(1)
-    )
-
-    if (homeBase[0]?.home_base_lat != null && homeBase[0]?.home_base_lng != null) {
-      startLocation = [homeBase[0].home_base_lng, homeBase[0].home_base_lat]
-      endLocation = [homeBase[0].home_base_lng, homeBase[0].home_base_lat]
-    }
+    // Use home base (fetched above) as vehicle start/end for VROOM
+    const startLocation: [number, number] = homeBaseLngLat ?? [unlockedWithCoords[0].lng, unlockedWithCoords[0].lat]
+    const endLocation: [number, number] | undefined = homeBaseLngLat ?? undefined
 
     const orsResponse = await fetch("https://api.openrouteservice.org/optimization", {
       method: "POST",
@@ -643,10 +653,16 @@ export async function optimizeRoute(
     // Filter out any remaining nulls (shouldn't happen, but defensive)
     const finalOrder = mergedOrder.filter((s): s is StopForOptimization => s !== null)
 
-    // 10. Get optimized drive time — use ORS directions for real road time
-    const optimizedCoords: [number, number][] = finalOrder
+    // 10. Get optimized drive time — use ORS directions for real road time.
+    //     Include home base legs to match how VROOM optimized (home → stops → home).
+    const optimizedStopCoords: [number, number][] = finalOrder
       .filter((s) => s.lat !== null && s.lng !== null)
       .map((s) => [s.lng!, s.lat!])
+    const optimizedCoords: [number, number][] = []
+    if (homeBaseLngLat) optimizedCoords.push(homeBaseLngLat)
+    optimizedCoords.push(...optimizedStopCoords)
+    if (homeBaseLngLat) optimizedCoords.push(homeBaseLngLat)
+
     let optimizedDriveTimeMinutes: number
     if (optimizedCoords.length >= 2) {
       const optimizedRoute = await getRouteDirections(optimizedCoords)

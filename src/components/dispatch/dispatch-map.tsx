@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import type { DispatchData, DispatchStop, DispatchTech } from "@/actions/dispatch"
 import type { TechPosition } from "@/hooks/use-tech-positions"
@@ -23,15 +23,14 @@ type MaplibreMap = import("maplibre-gl").Map
  *
  * If techPosition is available, the line starts from the tech's current GPS position.
  * Otherwise it starts from the first remaining stop.
- *
- * Per user decision: completed stops are grayed out, their segments dashed.
  */
 function updateRouteLine(
   map: MaplibreMap,
   techId: string,
   stops: DispatchStop[],
   techColor: string,
-  techPosition: TechPosition | undefined
+  techPosition: TechPosition | undefined,
+  homeBase: { lat: number; lng: number } | null
 ) {
   const layerId = `route-line-${techId}`
   const sourceId = `route-source-${techId}`
@@ -49,20 +48,23 @@ function updateRouteLine(
     .sort((a, b) => a.sortIndex - b.sortIndex)
 
   if (remainingStops.length === 0) {
-    // No remaining stops — remove line if it exists
     if (map.getLayer(layerId)) map.removeLayer(layerId)
     if (map.getSource(sourceId)) map.removeSource(sourceId)
     return
   }
 
-  // Build coordinate array: tech position first (if available), then remaining stops
+  // Build coordinate array: tech position (or home base) → stops
   const coordinates: [number, number][] = []
   if (techPosition) {
     coordinates.push([techPosition.lng, techPosition.lat])
+  } else if (homeBase) {
+    coordinates.push([homeBase.lng, homeBase.lat])
   }
   for (const stop of remainingStops) {
     coordinates.push([stop.lng!, stop.lat!])
   }
+
+  if (coordinates.length < 2) return
 
   const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
     type: "Feature",
@@ -78,14 +80,40 @@ function updateRouteLine(
       id: layerId,
       type: "line",
       source: sourceId,
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
       paint: {
         "line-color": techColor,
-        "line-width": 2.5,
-        "line-dasharray": [3, 2],
-        "line-opacity": 0.75,
+        "line-width": 3,
+        "line-opacity": 0.8,
       },
     })
   }
+}
+
+// ─── Home base marker helper ─────────────────────────────────────────────────
+
+function createHomeBaseMarkerEl(): HTMLElement {
+  const el = document.createElement("div")
+  el.style.cssText = `
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: default;
+    border: 2px solid #4ade80;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    background-color: #166534;
+    color: #4ade80;
+  `
+  el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`
+  el.title = "Home Base"
+  return el
 }
 
 // ─── DispatchMapInner ──────────────────────────────────────────────────────────
@@ -96,43 +124,38 @@ interface DispatchMapInnerProps {
   selectedTechId: string | null
 }
 
-/**
- * DispatchMapInner — the actual MapLibre map with all markers and route lines.
- *
- * This component is rendered inside DispatchMap which is loaded via next/dynamic
- * with ssr: false. MapLibre accesses window on import — never SSR this.
- *
- * Tech position markers are colored pulsing pins from useTechPositions (Supabase Broadcast).
- * Stop markers are numbered, color-coded by tech. Completed stops are grayed out.
- * Route lines are drawn through remaining stops per tech.
- * Clicking a stop marker opens StopPopup.
- *
- * Fit bounds: on initial load, zooms to show all stops with coordinates.
- * selectedTechId: when set, only that tech's stops and position are shown.
- */
 function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInnerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
   const maplibreRef = useRef<MaplibreGl | null>(null)
+  const homeBaseMarkerRef = useRef<unknown>(null)
   const [mapReady, setMapReady] = useState(false)
   const [selectedStop, setSelectedStop] = useState<DispatchStop | null>(null)
 
   // Live tech positions via Supabase Broadcast
   const techPositions = useTechPositions(orgId)
 
-  // Map of techId → DispatchTech for quick lookup
-  const techMap = new Map<string, DispatchTech>(
-    initialData.techs.map((t) => [t.id, t])
+  // Stable references via useMemo — prevents route line effect from thrashing on every render
+  const techMap = useMemo(
+    () => new Map<string, DispatchTech>(initialData.techs.map((t) => [t.id, t])),
+    [initialData.techs]
   )
 
-  // Filter stops and techs based on selectedTechId
-  const visibleStops = selectedTechId
-    ? initialData.stops.filter((s) => s.techId === selectedTechId)
-    : initialData.stops
+  const visibleStops = useMemo(
+    () =>
+      selectedTechId
+        ? initialData.stops.filter((s) => s.techId === selectedTechId)
+        : initialData.stops,
+    [selectedTechId, initialData.stops]
+  )
 
-  const visibleTechIds = selectedTechId
-    ? [selectedTechId]
-    : initialData.techs.map((t) => t.id)
+  const visibleTechIds = useMemo(
+    () =>
+      selectedTechId
+        ? [selectedTechId]
+        : initialData.techs.map((t) => t.id),
+    [selectedTechId, initialData.techs]
+  )
 
   // ── Map initialization ────────────────────────────────────────────────────
   useEffect(() => {
@@ -160,19 +183,25 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         document.head.appendChild(style)
       }
 
-      // Compute initial center from stops with coordinates
+      // Compute initial bounds from stops + home base
       const stopsWithCoords = initialData.stops.filter(
         (s) => s.lat !== null && s.lng !== null
       )
 
+      const allLngs: number[] = stopsWithCoords.map((s) => s.lng!)
+      const allLats: number[] = stopsWithCoords.map((s) => s.lat!)
+      if (initialData.homeBase) {
+        allLngs.push(initialData.homeBase.lng)
+        allLats.push(initialData.homeBase.lat)
+      }
+
       let center: [number, number] = [-96, 39]
       let zoom = 5
-      if (stopsWithCoords.length > 0) {
-        const avgLng =
-          stopsWithCoords.reduce((sum, s) => sum + s.lng!, 0) / stopsWithCoords.length
-        const avgLat =
-          stopsWithCoords.reduce((sum, s) => sum + s.lat!, 0) / stopsWithCoords.length
-        center = [avgLng, avgLat]
+      if (allLngs.length > 0) {
+        center = [
+          allLngs.reduce((a, b) => a + b, 0) / allLngs.length,
+          allLats.reduce((a, b) => a + b, 0) / allLats.length,
+        ]
         zoom = 11
       }
 
@@ -193,17 +222,24 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         if (cancelled) return
         mapRef.current = map
 
-        // Fit to show all stops on initial load
-        if (stopsWithCoords.length > 1) {
-          const lngs = stopsWithCoords.map((s) => s.lng!)
-          const lats = stopsWithCoords.map((s) => s.lat!)
+        // Fit bounds including home base
+        if (allLngs.length > 1) {
           map.fitBounds(
             [
-              [Math.min(...lngs), Math.min(...lats)],
-              [Math.max(...lngs), Math.max(...lats)],
+              [Math.min(...allLngs), Math.min(...allLats)],
+              [Math.max(...allLngs), Math.max(...allLats)],
             ],
             { padding: 60, maxZoom: 14, duration: 0 }
           )
+        }
+
+        // Add home base marker
+        if (initialData.homeBase) {
+          const hbEl = createHomeBaseMarkerEl()
+          const hbMarker = new mgl.Marker({ element: hbEl })
+            .setLngLat([initialData.homeBase.lng, initialData.homeBase.lat])
+            .addTo(map)
+          homeBaseMarkerRef.current = hbMarker
         }
 
         setMapReady(true)
@@ -214,6 +250,10 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
 
     return () => {
       cancelled = true
+      if (homeBaseMarkerRef.current) {
+        ;(homeBaseMarkerRef.current as import("maplibre-gl").Marker).remove()
+        homeBaseMarkerRef.current = null
+      }
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
@@ -233,7 +273,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
       const tech = techMap.get(techId)
       if (!tech) continue
       const position = techPositions[techId]
-      updateRouteLine(map, techId, visibleStops, tech.color, position)
+      updateRouteLine(map, techId, visibleStops, tech.color, position, initialData.homeBase)
     }
 
     // Clean up route lines for hidden techs (when filter changes)
@@ -247,7 +287,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
         }
       }
     }
-  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, techMap])
+  }, [mapReady, techPositions, visibleStops, visibleTechIds, selectedTechId, initialData.techs, initialData.homeBase, techMap])
 
   // ── Close popup on map click ──────────────────────────────────────────────
   const handleMapClick = useCallback(() => {
@@ -350,14 +390,6 @@ interface DispatchMapProps {
   selectedTechId: string | null
 }
 
-/**
- * DispatchMap — public export wrapping DispatchMapInner.
- *
- * This component MUST be imported via next/dynamic with { ssr: false }
- * by the dispatch page. MapLibre accesses window on import.
- *
- * Props are passed through to DispatchMapInner.
- */
 export function DispatchMap(props: DispatchMapProps) {
   return <DispatchMapInner {...props} />
 }

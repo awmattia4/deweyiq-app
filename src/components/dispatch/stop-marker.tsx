@@ -135,7 +135,7 @@ export function StopMarker({
       markerRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, maplibregl, stop.id, stop.status])
+  }, [map, maplibregl, stop.id, stop.status, sortNumber, techColor])
 
   return null
 }
