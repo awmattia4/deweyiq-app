@@ -17,7 +17,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { withRls, adminDb } from "@/lib/db"
+import { withRls, getRlsToken, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   invoices,
@@ -121,12 +121,6 @@ export interface InvoiceSummary {
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // Totals calculation helper

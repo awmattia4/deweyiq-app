@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { withRls, adminDb } from "@/lib/db"
+import { withRls, adminDb, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { orgSettings, orgs, checklistTasks, checklistTemplates, profiles } from "@/lib/db/schema"
 import { eq, and, isNull, isNotNull, asc, ne } from "drizzle-orm"
@@ -160,13 +160,6 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
 // ---------------------------------------------------------------------------
 // Auth helper
 // ---------------------------------------------------------------------------
-
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // getOrgSettings

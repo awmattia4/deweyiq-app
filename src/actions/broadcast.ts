@@ -24,7 +24,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { adminDb } from "@/lib/db"
+import { adminDb, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { customers, profiles, routeStops, orgSettings, orgs } from "@/lib/db/schema"
 import { eq, and, inArray, gte } from "drizzle-orm"
@@ -80,12 +80,6 @@ interface CustomerRow {
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // getSegmentCustomers — internal helper to fetch customers for a segment

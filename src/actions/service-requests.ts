@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
-import { withRls, adminDb } from "@/lib/db"
+import { withRls, getRlsToken, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   serviceRequests,
@@ -83,12 +83,6 @@ function createAdminClient() {
   })
 }
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // createRequestPhotoUploadUrl

@@ -13,7 +13,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { expenses, profiles } from "@/lib/db/schema"
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/db/schema/expenses"
@@ -24,12 +24,6 @@ import { createExpenseJournalEntry } from "@/lib/accounting/journal"
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // Category to Chart of Accounts mapping

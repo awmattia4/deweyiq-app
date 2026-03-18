@@ -30,6 +30,16 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
+function isSnoozed(): boolean {
+  try {
+    const snoozedAt = localStorage.getItem(SNOOZE_KEY)
+    if (!snoozedAt) return false
+    return Date.now() - parseInt(snoozedAt, 10) < SNOOZE_DURATION_MS
+  } catch {
+    return false
+  }
+}
+
 export function PwaInstallPrompt() {
   const [show, setShow] = useState(false)
   const [isIos, setIsIos] = useState(false)
@@ -43,11 +53,7 @@ export function PwaInstallPrompt() {
     if (window.matchMedia("(display-mode: standalone)").matches) return
 
     // 2. Snoozed within 7 days — don't show
-    const snoozedAt = localStorage.getItem(SNOOZE_KEY)
-    if (snoozedAt) {
-      const elapsed = Date.now() - parseInt(snoozedAt, 10)
-      if (elapsed < SNOOZE_DURATION_MS) return
-    }
+    if (isSnoozed()) return
 
     // 3. iOS detection
     const iosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -62,6 +68,8 @@ export function PwaInstallPrompt() {
     // 4. Non-iOS: listen for the browser's native install prompt
     const handler = (e: Event) => {
       e.preventDefault()
+      // Re-check snooze — event can fire after a previous dismissal
+      if (isSnoozed()) return
       setDeferredPrompt(e as BeforeInstallPromptEvent)
       setShow(true)
     }
@@ -89,8 +97,10 @@ export function PwaInstallPrompt() {
     setShow(false)
   }
 
-  // Don't render anything before hydration or when not needed
+  // Don't render anything before hydration, when not needed, or when snoozed
   if (!mounted || !show) return null
+  // Belt-and-suspenders: re-check snooze at render time in case state got stale
+  if (typeof window !== "undefined" && isSnoozed()) return null
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm rounded-xl border border-border bg-card p-4 shadow-xl">

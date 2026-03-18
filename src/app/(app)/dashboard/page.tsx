@@ -3,10 +3,9 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { getCurrentUser } from "@/actions/auth"
 import { getAlertCountByType, getPredictiveAlerts } from "@/actions/alerts"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import { profiles, orgs, routeStops } from "@/lib/db/schema"
 import { eq, count, and } from "drizzle-orm"
-import { createClient } from "@/lib/supabase/server"
 import {
   Card,
   CardContent,
@@ -58,11 +57,9 @@ export default async function DashboardPage() {
   let todayCompletedCount = 0
 
   try {
-    const supabase = await createClient()
-    const { data: claimsData } = await supabase.auth.getClaims()
+    const token = await getRlsToken()
 
-    if (claimsData?.claims) {
-      const token = claimsData.claims as Parameters<typeof withRls>[0]
+    if (token) {
       const today = new Date().toISOString().split("T")[0]
 
       const [teamResult, orgResult, stopsResult] = await Promise.all([

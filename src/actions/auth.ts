@@ -26,34 +26,24 @@ export type AuthUser = {
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-
-  if (!claimsData?.claims) {
-    return null
-  }
-
-  const claims = claimsData.claims
-
-  // sub is the user's UUID (auth.users.id)
-  const id = claims["sub"] as string | undefined
-  if (!id) return null
-
-  // Get email from user object (not in JWT claims by default in Supabase)
   const { data: { user } } = await supabase.auth.getUser()
-  const email = user?.email ?? (claims["email"] as string | undefined) ?? ""
 
-  const role = claims["user_role"] as AuthUser["role"] | undefined
-  const org_id = claims["org_id"] as string | undefined
-  const full_name = (user?.user_metadata?.["full_name"] as string | undefined) ?? ""
+  if (!user) return null
+
+  const appMeta = user.app_metadata ?? {}
+
+  const role = (appMeta.role ?? appMeta.user_role) as AuthUser["role"] | undefined
+  const org_id = appMeta.org_id as string | undefined
+  const full_name = (user.user_metadata?.["full_name"] as string | undefined) ?? ""
 
   if (!role || !org_id) {
-    // JWT missing required claims — user may not have been processed by trigger yet
+    // Missing required claims — user may not have been processed by trigger yet
     return null
   }
 
   return {
-    id,
-    email,
+    id: user.id,
+    email: user.email ?? "",
     role,
     org_id,
     full_name,

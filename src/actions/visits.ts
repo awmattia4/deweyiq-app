@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { adminDb } from "@/lib/db"
 import {
@@ -151,12 +151,6 @@ const CHEMICAL_TYPE_MAP: Record<string, ChemicalKey | null> = {
 // Helper: get RLS token
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // getStopContext

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { adminDb, withRls } from "@/lib/db"
+import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { alerts, routeStops, serviceVisits, customers, pools, orgSettings, chemicalProducts, invoices } from "@/lib/db/schema"
 import { and, eq, isNull, lt, or, sql, inArray, not, desc } from "drizzle-orm"
@@ -18,12 +18,6 @@ import type { SanitizerType } from "@/lib/chemistry/targets"
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ─── Chemistry decline thresholds (per-visit slope) ───────────────────────────
 

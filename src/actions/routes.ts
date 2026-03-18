@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeDays, routeStops, customers, pools, serviceVisits } from "@/lib/db/schema"
 import { and, eq, desc, asc, isNotNull } from "drizzle-orm"
@@ -49,12 +49,6 @@ export interface RouteStop {
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ─── Core query helper ────────────────────────────────────────────────────────
 

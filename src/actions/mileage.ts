@@ -15,7 +15,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { adminDb, withRls } from "@/lib/db"
+import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { mileageLogs, timeEntries, timeEntryStops, routeStops, profiles, orgSettings } from "@/lib/db/schema"
 import { and, asc, between, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
@@ -57,12 +57,6 @@ async function getOrgMileageRates(orgId: string): Promise<{ irsRate: number; roa
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // calculateRouteMileage

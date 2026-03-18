@@ -99,10 +99,12 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Validate JWT signature via getClaims() — does not trust cookie blindly.
-  // getSession() would trust cookie without cryptographic verification.
-  const { data: claimsData } = await supabase.auth.getClaims()
-  const isAuthenticated = claimsData !== null && claimsData.claims !== null
+  // Use getSession() to check auth state from cookies.
+  // getUser() makes an API call that can fail in edge middleware.
+  // getSession() reads the JWT from cookies — sufficient for routing decisions.
+  // Page-level auth should use getUser() for security-critical operations.
+  const { data: { session } } = await supabase.auth.getSession()
+  const isAuthenticated = !!session?.user
 
   const { pathname } = request.nextUrl
 
@@ -146,7 +148,7 @@ export async function updateSession(request: NextRequest) {
 
   // ─── Authenticated users ───────────────────────────────────────────────────
 
-  const user_role = claimsData?.claims?.["user_role"] as
+  const user_role = session?.user?.app_metadata?.role as
     | "owner"
     | "office"
     | "tech"

@@ -20,7 +20,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   chartOfAccounts,
@@ -35,12 +35,6 @@ import { toLocalDateString } from "@/lib/date-utils"
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // Shared types

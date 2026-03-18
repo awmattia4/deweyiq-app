@@ -14,7 +14,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
-import { adminDb, withRls } from "@/lib/db"
+import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   bankTransactions,
@@ -35,12 +35,6 @@ import { ensureChartOfAccounts } from "@/lib/accounting/journal"
 
 // ─── Auth helpers ──────────────────────────────────────────────────────────────
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 async function getOwnerToken(): Promise<
   { token: SupabaseToken; orgId: string; userId: string } | { error: string }

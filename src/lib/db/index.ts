@@ -5,11 +5,17 @@ import type { ExtractTablesWithRelations } from "drizzle-orm"
 import postgres from "postgres"
 import { sql } from "drizzle-orm"
 import * as schema from "./schema"
+import { createClient } from "@/lib/supabase/server"
 
 // CRITICAL: prepare: false required for Supabase transaction-mode pooler (Supavisor).
 // The pooler does not support prepared statements. Direct connection (port 5432)
 // supports them, but the app always connects through the pooler for scalability.
-const client = postgres(process.env.DATABASE_URL!, { prepare: false })
+const client = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max: 20,
+  idle_timeout: 20,
+  connect_timeout: 10,
+})
 
 export const adminDb = drizzle({ client, schema })
 
@@ -49,6 +55,41 @@ type DrizzleTx = PgTransaction<
   typeof schema,
   ExtractTablesWithRelations<typeof schema>
 >
+
+/**
+ * getRlsToken — reliably gets RLS token from the current session.
+ *
+ * Tries getClaims() first (local JWT decode), falls back to getUser()
+ * which reads app_metadata via API call. Works across local and hosted
+ * Supabase environments.
+ */
+export async function getRlsToken(): Promise<SupabaseToken | null> {
+  const supabase = await createClient()
+
+  // Try getClaims first (fast, local decode)
+  const { data: claimsData } = await supabase.auth.getClaims()
+  if (claimsData?.claims) {
+    const c = claimsData.claims
+    // Ensure org_id and user_role exist (custom access token hook)
+    if (c["org_id"] && c["user_role"]) {
+      return c as SupabaseToken
+    }
+  }
+
+  // Fallback: getUser() and build token from app_metadata
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const meta = user.app_metadata ?? {}
+  return {
+    sub: user.id,
+    org_id: meta.org_id,
+    user_role: meta.role ?? meta.user_role,
+    role: "authenticated",
+    email: user.email,
+    aud: "authenticated",
+  }
+}
 
 export async function withRls<T>(
   token: SupabaseToken,

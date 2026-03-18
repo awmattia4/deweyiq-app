@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeStops, customers, profiles } from "@/lib/db/schema"
 import { and, eq, isNull, inArray } from "drizzle-orm"
@@ -27,12 +27,6 @@ interface SendPreArrivalResult {
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ─── sendPreArrivalNotifications ──────────────────────────────────────────────
 

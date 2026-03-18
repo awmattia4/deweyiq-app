@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { adminDb, withRls } from "@/lib/db"
+import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { equipmentReadings, equipment, pools, customers, alerts } from "@/lib/db/schema"
 import { eq, and, desc, inArray } from "drizzle-orm"
@@ -11,12 +11,6 @@ import type { AlertType, AlertSeverity } from "@/lib/alerts/constants"
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // Equipment metric types

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
-import { adminDb, withRls } from "@/lib/db"
+import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import {
   weatherRescheduleProposals,
@@ -67,12 +67,6 @@ export interface ManualWeatherCheckResult {
 // Auth helpers
 // ---------------------------------------------------------------------------
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ---------------------------------------------------------------------------
 // Core: check weather for an org and create proposals

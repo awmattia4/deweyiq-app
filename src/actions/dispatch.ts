@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { withRls } from "@/lib/db"
+import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeStops, customers, pools, profiles } from "@/lib/db/schema"
 import { and, eq, asc } from "drizzle-orm"
@@ -56,26 +56,20 @@ export interface DispatchData {
  * Cycles if there are more than 10 techs (unusual for a pool company).
  */
 const TECH_COLORS = [
-  "oklch(0.65 0.22 250)",  // blue
-  "oklch(0.65 0.22 140)",  // green
-  "oklch(0.65 0.22 30)",   // orange
-  "oklch(0.65 0.22 320)",  // purple
-  "oklch(0.65 0.22 180)",  // teal
-  "oklch(0.65 0.22 60)",   // yellow-green
-  "oklch(0.65 0.22 0)",    // red
-  "oklch(0.65 0.22 280)",  // violet
-  "oklch(0.65 0.22 200)",  // cyan
-  "oklch(0.65 0.22 90)",   // yellow
+  "#3b82f6",  // blue
+  "#22c55e",  // green
+  "#f97316",  // orange
+  "#a855f7",  // purple
+  "#14b8a6",  // teal
+  "#84cc16",  // yellow-green
+  "#ef4444",  // red
+  "#8b5cf6",  // violet
+  "#06b6d4",  // cyan
+  "#eab308",  // yellow
 ]
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-async function getRlsToken(): Promise<SupabaseToken | null> {
-  const supabase = await createClient()
-  const { data: claimsData } = await supabase.auth.getClaims()
-  if (!claimsData?.claims) return null
-  return claimsData.claims as SupabaseToken
-}
 
 // ─── Server actions ─────────────────────────────────────────────────────────────
 

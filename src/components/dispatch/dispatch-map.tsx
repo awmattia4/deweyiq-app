@@ -1,5 +1,7 @@
 "use client"
 
+import "maplibre-gl/dist/maplibre-gl.css"
+
 import { useCallback, useEffect, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import type { DispatchData, DispatchStop, DispatchTech } from "@/actions/dispatch"
@@ -312,7 +314,7 @@ function DispatchMapInner({ initialData, orgId, selectedTechId }: DispatchMapInn
           {visibleStops.map((stop, idx) => {
             if (stop.lat === null || stop.lng === null) return null
             const tech = stop.techId ? techMap.get(stop.techId) : undefined
-            const techColor = tech?.color ?? "oklch(0.6 0.1 250)"
+            const techColor = tech?.color ?? "#60a5fa"
             return (
               <StopMarker
                 key={stop.id}

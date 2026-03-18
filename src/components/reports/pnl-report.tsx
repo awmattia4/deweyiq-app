@@ -449,9 +449,6 @@ export function PnlReport({
             </table>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          Bank reconciliation available in Phase 11 (Plaid integration).
-        </p>
       </div>
     </div>
   )
