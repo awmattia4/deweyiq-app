@@ -191,6 +191,7 @@ function buildStraightLineCoords(
   if (remainingStops.length === 0) return []
 
   const coordinates: [number, number][] = []
+  // Start from tech GPS position or home base
   if (techPosition) {
     coordinates.push([techPosition.lng, techPosition.lat])
   } else if (homeBase) {
@@ -198,6 +199,10 @@ function buildStraightLineCoords(
   }
   for (const stop of remainingStops) {
     coordinates.push([stop.lng!, stop.lat!])
+  }
+  // Return to home base after last stop
+  if (homeBase) {
+    coordinates.push([homeBase.lng, homeBase.lat])
   }
   return coordinates
 }
