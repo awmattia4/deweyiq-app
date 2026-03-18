@@ -361,13 +361,10 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
           homeBaseMarkerRef.current = hbMarker
         }
 
-        // Wait for resize + fitBounds to fully settle before allowing
-        // marker creation — without this, markers are positioned relative
-        // to the pre-resize viewport and appear in the wrong place.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (!cancelled) setMapReady(true)
-          })
+        // Wait for map to fully settle (resize + fitBounds + tile render)
+        // before creating markers. The 'idle' event fires once per settle.
+        map.once("idle", () => {
+          if (!cancelled) setMapReady(true)
         })
       })
 
