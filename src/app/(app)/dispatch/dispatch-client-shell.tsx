@@ -56,10 +56,17 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
     }
   }, [])
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 30 seconds + on page focus (tab switch)
   useEffect(() => {
     const interval = setInterval(refresh, 30_000)
-    return () => clearInterval(interval)
+    const onFocus = () => refresh()
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") onFocus()
+    })
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onFocus)
+    }
   }, [refresh])
 
   // Measure header + filter, compute remaining height
