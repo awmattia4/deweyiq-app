@@ -88,6 +88,7 @@ export function DispatchClientShell({ initialData, orgId }: DispatchClientShellP
               orgId={orgId}
               selectedTechId={selectedTechId}
               mapHeight={mapHeight}
+              selectedStop={selectedStop}
               onSelectStop={setSelectedStop}
             />
             {selectedTechId && (

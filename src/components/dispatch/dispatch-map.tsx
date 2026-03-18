@@ -244,10 +244,11 @@ interface DispatchMapInnerProps {
   orgId: string
   selectedTechId: string | null
   mapHeight?: number
+  selectedStop?: DispatchStop | null
   onSelectStop?: (stop: DispatchStop | null) => void
 }
 
-function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, onSelectStop }: DispatchMapInnerProps) {
+function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selectedStop, onSelectStop }: DispatchMapInnerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
   const maplibreRef = useRef<MaplibreGl | null>(null)
@@ -460,6 +461,29 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, onSel
     updateMarkers()
   }, [mapReady, visibleStops, updateMarkers])
 
+  // ── Fly to selected stop + highlight marker ────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+
+    // Reset all marker scales
+    for (const { el } of Object.values(markersRef.current)) {
+      el.style.transform = "scale(1)"
+      el.style.zIndex = "0"
+    }
+
+    if (selectedStop?.lat != null && selectedStop?.lng != null) {
+      map.flyTo({ center: [selectedStop.lng, selectedStop.lat], zoom: Math.max(map.getZoom(), 13), duration: 600 })
+
+      // Highlight the selected marker
+      const entry = markersRef.current[selectedStop.id]
+      if (entry) {
+        entry.el.style.transform = "scale(1.35)"
+        entry.el.style.zIndex = "10"
+      }
+    }
+  }, [selectedStop, mapReady])
+
   // ── Fetch ORS directions per tech ──────────────────────────────────────────
   useEffect(() => {
     const requestId = ++orsRequestRef.current
@@ -579,6 +603,7 @@ interface DispatchMapProps {
   orgId: string
   selectedTechId: string | null
   mapHeight?: number
+  selectedStop?: DispatchStop | null
   onSelectStop?: (stop: DispatchStop | null) => void
 }
 
