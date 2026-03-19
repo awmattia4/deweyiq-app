@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TabsContent } from "@/components/ui/tabs"
+import { ResponsiveTabs } from "@/components/ui/mobile-tab-select"
 import { ArAgingView } from "@/components/reports/ar-aging-view"
 import { RevenueReport } from "@/components/reports/revenue-report"
 import { PnlReport } from "@/components/reports/pnl-report"
@@ -106,24 +107,23 @@ export default async function ReportsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
 
-      <Tabs defaultValue="ar-aging" className="w-full">
-        {/* Scrollable tab list */}
-        <TabsList className="flex w-full overflow-x-auto">
-          <TabsTrigger value="ar-aging" className="whitespace-nowrap">AR Aging</TabsTrigger>
-          <TabsTrigger value="revenue" className="whitespace-nowrap">Revenue</TabsTrigger>
-          <TabsTrigger value="pnl" className="whitespace-nowrap">P&L</TabsTrigger>
-          <TabsTrigger value="expenses" className="whitespace-nowrap">Expenses</TabsTrigger>
-          <TabsTrigger value="mileage" className="whitespace-nowrap">Mileage</TabsTrigger>
-          <TabsTrigger value="revenue-dashboard" className="whitespace-nowrap">Revenue Dashboard</TabsTrigger>
-          <TabsTrigger value="operations" className="whitespace-nowrap">Operations</TabsTrigger>
-          <TabsTrigger value="team" className="whitespace-nowrap">Team</TabsTrigger>
-          {isOwner && (
-            <TabsTrigger value="projects" className="whitespace-nowrap">Projects</TabsTrigger>
-          )}
-          {isOwner && (
-            <TabsTrigger value="profitability" className="whitespace-nowrap">Profitability</TabsTrigger>
-          )}
-        </TabsList>
+      <ResponsiveTabs
+        defaultValue="ar-aging"
+        className="w-full"
+        tabsListClassName="hidden sm:inline-flex sm:flex sm:w-full sm:overflow-x-auto"
+        tabs={[
+          { value: "ar-aging", label: "AR Aging" },
+          { value: "revenue", label: "Revenue" },
+          { value: "pnl", label: "P&L" },
+          { value: "expenses", label: "Expenses" },
+          { value: "mileage", label: "Mileage" },
+          { value: "revenue-dashboard", label: "Revenue Dashboard" },
+          { value: "operations", label: "Operations" },
+          { value: "team", label: "Team" },
+          ...(isOwner ? [{ value: "projects", label: "Projects" }] : []),
+          ...(isOwner ? [{ value: "profitability", label: "Profitability" }] : []),
+        ]}
+      >
 
         <TabsContent value="ar-aging" className="mt-6">
           <ArAgingView data={arAging} isOwner={isOwner} />
@@ -222,7 +222,7 @@ export default async function ReportsPage() {
             />
           </TabsContent>
         )}
-      </Tabs>
+      </ResponsiveTabs>
     </div>
   )
 }

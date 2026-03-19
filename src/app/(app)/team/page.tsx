@@ -6,7 +6,8 @@ import { profiles } from "@/lib/db/schema"
 import { eq, asc } from "drizzle-orm"
 import { createClient } from "@/lib/supabase/server"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TabsContent } from "@/components/ui/tabs"
+import { ResponsiveTabs } from "@/components/ui/mobile-tab-select"
 import { InviteDialog } from "@/components/team/invite-dialog"
 import { PtoManager } from "@/components/team/pto-manager"
 import { EmployeeDocs } from "@/components/team/employee-docs"
@@ -135,21 +136,19 @@ export default async function TeamPage() {
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
-      <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
-        <TabsList className="self-start">
-          {isOwner && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
-          {!isTech && <TabsTrigger value="members">Members</TabsTrigger>}
-          <TabsTrigger value="pto">PTO</TabsTrigger>
-          {(isOwner || isOffice) && (
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          )}
-          {(isOwner || isOffice) && (
-            <TabsTrigger value="schedules">Schedules</TabsTrigger>
-          )}
-          {isOwner && (
-            <TabsTrigger value="timesheets">Timesheets</TabsTrigger>
-          )}
-        </TabsList>
+      <ResponsiveTabs
+        defaultValue={defaultTab}
+        className="flex flex-col gap-4"
+        tabsListClassName="hidden sm:inline-flex self-start"
+        tabs={[
+          ...(isOwner ? [{ value: "dashboard", label: "Dashboard" }] : []),
+          ...(!isTech ? [{ value: "members", label: "Members" }] : []),
+          { value: "pto", label: "PTO" },
+          ...(isOwner || isOffice ? [{ value: "documents", label: "Documents" }] : []),
+          ...(isOwner || isOffice ? [{ value: "schedules", label: "Schedules" }] : []),
+          ...(isOwner ? [{ value: "timesheets", label: "Timesheets" }] : []),
+        ]}
+      >
 
         {/* ── Members tab (owner/office only) ───────────────────────────────── */}
         {!isTech && (
@@ -258,7 +257,7 @@ export default async function TeamPage() {
             />
           </TabsContent>
         )}
-      </Tabs>
+      </ResponsiveTabs>
     </div>
   )
 }

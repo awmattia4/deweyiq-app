@@ -167,7 +167,7 @@ export function PeriodClose() {
       {showCreateForm && (
         <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
           <h4 className="text-sm font-semibold">New Accounting Period</h4>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Start Date</Label>
               <Input

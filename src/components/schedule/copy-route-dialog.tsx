@@ -4,6 +4,7 @@ import { useState } from "react"
 import { CopyIcon, CalendarIcon, UserIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { toLocalDateString } from "@/lib/date-utils"
 import { copyRoute } from "@/actions/schedule"
 import {
   Dialog,
@@ -52,7 +53,7 @@ function getDateForWeekday(targetDay: number, referenceDate: string): string {
   // Add targetDay (0=Mon through 4=Fri)
   const targetDate = new Date(monday)
   targetDate.setDate(monday.getDate() + targetDay)
-  return targetDate.toISOString().split("T")[0]
+  return toLocalDateString(targetDate)
 }
 
 /** Parse YYYY-MM-DD into a readable string like "Monday, Mar 8" */

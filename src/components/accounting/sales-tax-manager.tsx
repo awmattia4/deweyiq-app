@@ -280,7 +280,7 @@ export function SalesTaxManager() {
           <div className="flex items-center justify-between py-2 border-b border-border mb-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Default Rate</span>
-              <Badge variant="secondary" className="text-xs">fallback</Badge>
+              <Badge variant="secondary" className="text-xs">Default</Badge>
             </div>
             <Badge variant="outline" className="font-mono text-xs">
               {formatPct(defaultRate)}

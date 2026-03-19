@@ -38,7 +38,7 @@ function dayIndexToDateServer(dayIndex: number): string {
   monday.setHours(0, 0, 0, 0)
   const target = new Date(monday)
   target.setDate(monday.getDate() + dayIndex)
-  return target.toISOString().split("T")[0]
+  return toLocalDateString(target)
 }
 
 function getTodayDayIndexServer(): number {

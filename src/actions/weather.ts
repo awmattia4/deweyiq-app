@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 import { adminDb, withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
+import { toLocalDateString } from "@/lib/date-utils"
 import {
   weatherRescheduleProposals,
   routeStops,
@@ -141,7 +142,7 @@ export async function checkWeatherForOrg(
 
   const currentDate = new Date(checkStart)
   while (currentDate <= checkEnd) {
-    const dateStr = currentDate.toISOString().split("T")[0]
+    const dateStr = toLocalDateString(currentDate)
     daysChecked++
 
     // Find the forecast day index for this date

@@ -16,6 +16,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { toLocalDateString } from "@/lib/date-utils"
 import { withRls, getRlsToken, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings, chemicalProducts, pools } from "@/lib/db/schema"
@@ -135,8 +136,8 @@ export async function getRevenueDashboard(
       const prevStartDate = new Date(prevEndDate)
       prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1)
 
-      const prevStartStr = prevStartDate.toISOString().split("T")[0]
-      const prevEndStr = prevEndDate.toISOString().split("T")[0]
+      const prevStartStr = toLocalDateString(prevStartDate)
+      const prevEndStr = toLocalDateString(prevEndDate)
 
       const [prevTotalsRow] = await db
         .select({

@@ -100,6 +100,11 @@ interface StopListProps {
    * Phase 10-02: techs get a heads-up before arriving at a trending pool.
    */
   predictiveAlerts?: Record<string, StopPredictiveAlert>
+  /**
+   * When true, drag-to-reorder is disabled. Used for owner/office roles
+   * viewing the routes page — reordering belongs on the Schedule page.
+   */
+  disableReorder?: boolean
 }
 
 /**
@@ -126,16 +131,16 @@ interface StopListProps {
  * Phase 10-07: weather prop passed through to each stop card for weather badges.
  * Phase 10-02: predictiveAlerts prop passed through to each stop card for alert badges.
  */
-export function StopList({ initialStops, weather, predictiveAlerts = {} }: StopListProps) {
+export function StopList({ initialStops, weather, predictiveAlerts = {}, disableReorder = false }: StopListProps) {
   const [stops, setStops] = useState<RouteStop[]>(initialStops)
 
-  // Sensor configuration
+  // Sensor configuration — increased delay/tolerance for better scroll vs drag
+  // discrimination on mobile (400ms hold + 10px tolerance)
   const sensors = useSensors(
-    // Touch: 250ms hold before drag activates + 5px tolerance (prevents scroll conflict)
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 250,
-        tolerance: 5,
+        delay: 400,
+        tolerance: 10,
       },
     }),
     // Mouse: 10px distance before drag activates (desktop fallback)
@@ -205,13 +210,31 @@ export function StopList({ initialStops, weather, predictiveAlerts = {} }: StopL
     )
   }
 
-  // Show drag handles only when there is more than 1 remaining (non-complete) stop
+  // Show drag handles only when reorder is enabled and there is more than 1 remaining stop
   const remainingCount = stops.filter(
     (s) => s.stopStatus !== "complete" && s.stopStatus !== "skipped"
   ).length
-  const showDragHandles = remainingCount > 1
+  const showDragHandles = !disableReorder && remainingCount > 1
 
   const stopIds = stops.map((s) => `stop-${s.stopIndex}`)
+
+  // When reorder is disabled (owner/office viewing routes page), render a
+  // plain list without DnD context — no drag sensors, no sortable wrappers.
+  if (disableReorder) {
+    return (
+      <div className="flex flex-col gap-2.5" role="list" aria-label="Today's stops">
+        {stops.map((stop) => (
+          <StopCard
+            key={`stop-${stop.stopIndex}-${stop.customerId}`}
+            stop={stop}
+            showDragHandle={false}
+            weather={weather}
+            predictiveAlert={predictiveAlerts[stop.poolId] ?? null}
+          />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <DndContext

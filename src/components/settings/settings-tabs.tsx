@@ -5,6 +5,13 @@ import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ProfileForm } from "@/components/settings/profile-form"
 import { MapsPreferenceSetting } from "@/components/settings/maps-preference"
 import { NotificationSettings } from "@/components/settings/notification-settings"
@@ -200,7 +207,23 @@ export function SettingsTabs({
       {/* ── Tab bar ─────────────────────────────────────────────────────── */}
       {tabs.length > 1 && (
         <div className="sticky top-0 z-10 -mx-1 px-1 pt-1 pb-2 bg-background/95 backdrop-blur-sm border-b border-border/40">
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1 w-fit">
+          {/* Mobile: dropdown select */}
+          <div className="sm:hidden">
+            <Select value={activeTab} onValueChange={(v) => switchTab(v as TabId)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {tabs.map((tab) => (
+                  <SelectItem key={tab.id} value={tab.id}>
+                    {tab.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Desktop: tab bar */}
+          <div className="hidden sm:flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1 w-fit">
             {tabs.map((tab) => (
               <button
                 key={tab.id}

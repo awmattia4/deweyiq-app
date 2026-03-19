@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ClipboardList, PencilIcon, CheckIcon, XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toLocalDateString } from "@/lib/date-utils"
 import { FlagBadge } from "@/components/field/internal-notes"
 import { updateInternalNotes } from "@/actions/visits"
 import { toast } from "sonner"
@@ -153,7 +154,7 @@ function formatVisitDate(isoDate: string): string {
 
 function getDateKey(isoDate: string): string {
   const date = new Date(isoDate)
-  return date.toISOString().split("T")[0]
+  return toLocalDateString(date)
 }
 
 // ─── Internal Notes Edit Section (office/owner only) ──────────────────────────

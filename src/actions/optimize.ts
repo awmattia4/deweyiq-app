@@ -6,6 +6,7 @@ import { withRls, getRlsToken, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeStops, serviceVisits, customers, pools, orgSettings, workOrders } from "@/lib/db/schema"
 import { and, eq, inArray, isNotNull, desc } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ async function fetchHistoricalServiceDurations(
     const visitMap = new Map<string, Date>()
     for (const visit of visitRows) {
       if (!visit.poolId || !visit.completedAt) continue
-      const dateKey = visit.visitedAt.toISOString().split("T")[0] ?? ""
+      const dateKey = toLocalDateString(visit.visitedAt)
       const key = `${visit.poolId}:${dateKey}`
       // Keep the most recent visit for that pool+date (visits already ordered desc)
       if (!visitMap.has(key)) {

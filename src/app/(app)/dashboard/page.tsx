@@ -6,6 +6,7 @@ import { getAlertCountByType, getPredictiveAlerts } from "@/actions/alerts"
 import { withRls, getRlsToken } from "@/lib/db"
 import { profiles, orgs, routeStops } from "@/lib/db/schema"
 import { eq, count, and } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 import {
   Card,
   CardContent,
@@ -60,7 +61,7 @@ export default async function DashboardPage() {
     const token = await getRlsToken()
 
     if (token) {
-      const today = new Date().toISOString().split("T")[0]
+      const today = toLocalDateString()
 
       const [teamResult, orgResult, stopsResult] = await Promise.all([
         // Count all profiles in the org (includes the current user)

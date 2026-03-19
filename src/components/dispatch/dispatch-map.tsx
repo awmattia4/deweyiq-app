@@ -466,19 +466,25 @@ function DispatchMapInner({ initialData, orgId, selectedTechId, mapHeight, selec
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
 
-    // Reset all marker scales
+    // Reset all markers to default size (do NOT use style.transform — MapLibre
+    // uses CSS transform: translate() to position markers, so overwriting it
+    // causes markers to drift on zoom/pan)
     for (const { el } of Object.values(markersRef.current)) {
-      el.style.transform = "scale(1)"
-      el.style.zIndex = "0"
+      el.style.width = "28px"
+      el.style.height = "28px"
+      el.style.fontSize = "11px"
+      el.style.zIndex = ""
     }
 
     if (selectedStop?.lat != null && selectedStop?.lng != null) {
       map.flyTo({ center: [selectedStop.lng, selectedStop.lat], zoom: Math.max(map.getZoom(), 13), duration: 600 })
 
-      // Highlight the selected marker
+      // Highlight the selected marker by increasing size (not transform)
       const entry = markersRef.current[selectedStop.id]
       if (entry) {
-        entry.el.style.transform = "scale(1.35)"
+        entry.el.style.width = "36px"
+        entry.el.style.height = "36px"
+        entry.el.style.fontSize = "13px"
         entry.el.style.zIndex = "10"
       }
     }

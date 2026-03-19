@@ -77,6 +77,7 @@ function formatDate(dateStr: string): string {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  all: "All",
   unpaid: "Unpaid",
   overdue: "Overdue",
   scheduled: "Scheduled",

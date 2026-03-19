@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { SupabaseToken } from "@/lib/db"
 import { fetchStopsForTech } from "@/actions/routes"
+import { toLocalDateString } from "@/lib/date-utils"
 
 /**
  * GET /api/routes/today
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   // 3. Fetch stops via shared helper (reads route_stops with route_days fallback)
-  const today = new Date().toISOString().split("T")[0] // "YYYY-MM-DD"
+  const today = toLocalDateString() // "YYYY-MM-DD"
 
   try {
     const stops = await fetchStopsForTech(claims, orgId, techId, today)

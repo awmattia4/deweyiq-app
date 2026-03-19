@@ -30,6 +30,7 @@ import { customers, profiles, routeStops, orgSettings, orgs } from "@/lib/db/sch
 import { eq, and, inArray, gte } from "drizzle-orm"
 import { resolveTemplate } from "@/lib/notifications/template-engine"
 import { Resend } from "resend"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,7 +129,7 @@ async function getSegmentCustomers(
     // Two-query pattern (MEMORY.md — no correlated subqueries)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0]
+    const thirtyDaysAgoStr = toLocalDateString(thirtyDaysAgo)
 
     const stopRows = await adminDb
       .select({ customer_id: routeStops.customer_id })

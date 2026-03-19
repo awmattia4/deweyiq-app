@@ -709,7 +709,7 @@ export async function completeStop(
     // Without this, the dispatch page shows "scheduled" even after completion.
     // Look up the route_stop by pool + tech + today's date.
     try {
-      const today = now.toISOString().split("T")[0]
+      const today = toLocalDateString(now)
       await adminDb
         .update(routeStops)
         .set({ status: "complete", updated_at: now })

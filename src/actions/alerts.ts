@@ -508,7 +508,7 @@ async function _generateUnprofitablePoolAlerts(orgId: string): Promise<void> {
   // Fetch last 30 days of visits with dosing_amounts
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-  const startDate = thirtyDaysAgo.toISOString().split("T")[0]
+  const startDate = toLocalDateString(thirtyDaysAgo)
 
   const visitRows = await adminDb
     .select({

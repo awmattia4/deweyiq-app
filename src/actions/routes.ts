@@ -5,6 +5,7 @@ import { withRls, getRlsToken } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
 import { routeDays, routeStops, customers, pools, serviceVisits } from "@/lib/db/schema"
 import { and, eq, desc, asc, isNotNull } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ export async function fetchStopsForTech(
         })
       }
       if (visit.pool_id && !todayVisitStatusMap.has(visit.pool_id)) {
-        const visitDate = visit.visited_at.toISOString().split("T")[0]
+        const visitDate = toLocalDateString(visit.visited_at)
         if (visitDate === date && visit.status) {
           todayVisitStatusMap.set(visit.pool_id, visit.status)
         }
@@ -263,7 +264,7 @@ export async function getTodayStops(techId?: string): Promise<RouteStop[]> {
     effectiveTechId = techId ?? userId
   }
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = toLocalDateString()
 
   try {
     return await fetchStopsForTech(claims, orgId, effectiveTechId, today)
@@ -403,7 +404,7 @@ export async function getRouteStartedStatus(): Promise<boolean> {
 
   if (!orgId || !userId) return false
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = toLocalDateString()
 
   try {
     const rows = await withRls(claims, async (db) => {

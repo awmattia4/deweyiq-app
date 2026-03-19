@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createHoliday, deleteHoliday, type Holiday } from "@/actions/schedule"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── US holiday suggestions ───────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ function getMemorialDay(year: number): string {
   const dayOfWeek = may31.getDay()
   const lastMonday = new Date(may31)
   lastMonday.setDate(31 - ((dayOfWeek + 6) % 7))
-  return lastMonday.toISOString().split("T")[0]
+  return toLocalDateString(lastMonday)
 }
 
 /** First Monday of September */
@@ -38,7 +39,7 @@ function getLaborDay(year: number): string {
   const dayOfWeek = sep1.getDay()
   const firstMonday = new Date(sep1)
   firstMonday.setDate(1 + ((8 - dayOfWeek) % 7))
-  return firstMonday.toISOString().split("T")[0]
+  return toLocalDateString(firstMonday)
 }
 
 /** Fourth Thursday of November */
@@ -48,7 +49,7 @@ function getThanksgiving(year: number): string {
   // First Thursday: 1 + ((4 - dayOfWeek + 7) % 7)
   const firstThursday = 1 + ((4 - dayOfWeek + 7) % 7)
   const fourthThursday = firstThursday + 21
-  return new Date(year, 10, fourthThursday).toISOString().split("T")[0]
+  return toLocalDateString(new Date(year, 10, fourthThursday))
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

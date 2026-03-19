@@ -155,7 +155,7 @@ export default async function RoutesPage() {
       )}
 
       {/* ── Stop list ────────────────────────────────────────────────────── */}
-      <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} />
+      <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} disableReorder={user.role !== "tech"} />
 
       {/* ── Tech context footer ──────────────────────────────────────────── */}
       {user.role === "tech" && (

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { toLocalDateString } from "@/lib/date-utils"
 import type { WorkloadMetrics, AutoScheduleProposal } from "@/actions/schedule"
 import { getWorkloadBalance, autoScheduleWeek, applyAutoSchedule } from "@/actions/schedule"
 
@@ -183,7 +184,7 @@ export function WorkloadBalancer({
     return Array.from({ length: 5 }, (_, i) => {
       const d = new Date(monday)
       d.setDate(monday.getDate() + i)
-      return d.toISOString().split("T")[0]!
+      return toLocalDateString(d)
     })
   })()
 

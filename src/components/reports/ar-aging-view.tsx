@@ -5,6 +5,7 @@ import Link from "next/link"
 import { DownloadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { toLocalDateString } from "@/lib/date-utils"
 import type { ArAgingResult } from "@/actions/reports"
 import { exportFinancialCsv } from "@/actions/reports"
 
@@ -48,7 +49,7 @@ export function ArAgingView({ data, isOwner }: ArAgingViewProps) {
     startTransition(async () => {
       const result = await exportFinancialCsv("ar_aging")
       if (result.success && result.csv) {
-        downloadCsv(result.csv, `ar-aging-${new Date().toISOString().split("T")[0]}.csv`)
+        downloadCsv(result.csv, `ar-aging-${toLocalDateString()}.csv`)
       }
     })
   }

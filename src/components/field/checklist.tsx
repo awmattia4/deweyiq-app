@@ -43,10 +43,6 @@ function TaskRow({ task, completed, notes, onToggle, onNotesChange, readOnly = f
   const handleToggle = (checked: boolean | "indeterminate") => {
     const isChecked = checked === true
     onToggle(isChecked)
-    // Auto-open notes field when unchecking a completed task (exception note flow)
-    if (!isChecked) {
-      setNotesOpen(true)
-    }
   }
 
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
