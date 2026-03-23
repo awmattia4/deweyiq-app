@@ -2118,6 +2118,78 @@ export async function autoScheduleWeek(weekStartDate: string): Promise<{
     const techMap = new Map(profileRows.map((p) => [p.id, p.full_name ?? "Unknown"]))
     const techIds = profileRows.map((p) => p.id)
 
+    // ── Fetch availability constraints for the week ────────────────────────
+    const [holidayRows, ptoRows, blockedDateRows, availabilityRows] = await withRls(token, async (db) => {
+      const [hols, ptos, blocked, avail] = await Promise.all([
+        db.select({ date: holidays.date }).from(holidays)
+          .where(and(eq(holidays.org_id, orgId), gte(holidays.date, weekStartDate), lte(holidays.date, weekEnd))),
+        techIds.length > 0
+          ? db.select({ tech_id: ptoRequests.tech_id, start_date: ptoRequests.start_date, end_date: ptoRequests.end_date })
+              .from(ptoRequests)
+              .where(and(
+                eq(ptoRequests.org_id, orgId),
+                eq(ptoRequests.status, "approved"),
+                lte(ptoRequests.start_date, weekEnd),
+                gte(ptoRequests.end_date, weekStartDate)
+              ))
+          : Promise.resolve([] as { tech_id: string; start_date: string; end_date: string }[]),
+        techIds.length > 0
+          ? db.select({ tech_id: employeeBlockedDates.tech_id, blocked_date: employeeBlockedDates.blocked_date })
+              .from(employeeBlockedDates)
+              .where(and(
+                eq(employeeBlockedDates.org_id, orgId),
+                gte(employeeBlockedDates.blocked_date, weekStartDate),
+                lte(employeeBlockedDates.blocked_date, weekEnd)
+              ))
+          : Promise.resolve([] as { tech_id: string; blocked_date: string }[]),
+        techIds.length > 0
+          ? db.select({ tech_id: employeeAvailability.tech_id, day_of_week: employeeAvailability.day_of_week })
+              .from(employeeAvailability)
+              .where(and(eq(employeeAvailability.org_id, orgId), inArray(employeeAvailability.tech_id, techIds)))
+          : Promise.resolve([] as { tech_id: string; day_of_week: number }[]),
+      ])
+      return [hols, ptos, blocked, avail] as const
+    })
+
+    // Build fast lookup structures
+    const holidaySet = new Set(holidayRows.map((h) => h.date))
+
+    // tech+date → blocked (PTO or blocked date)
+    const techDateBlocked = new Set<string>()
+    for (const pto of ptoRows) {
+      const cursor = new Date(pto.start_date + "T12:00:00")
+      const end = new Date(pto.end_date + "T12:00:00")
+      while (cursor <= end) {
+        techDateBlocked.add(`${pto.tech_id}:${toLocalDateString(cursor)}`)
+        cursor.setDate(cursor.getDate() + 1)
+      }
+    }
+    for (const bd of blockedDateRows) {
+      techDateBlocked.add(`${bd.tech_id}:${bd.blocked_date}`)
+    }
+
+    // tech → set of available day-of-week numbers (empty set = no schedule configured = available all days)
+    const techAvailDays = new Map<string, Set<number>>()
+    for (const a of availabilityRows) {
+      if (!techAvailDays.has(a.tech_id)) techAvailDays.set(a.tech_id, new Set())
+      techAvailDays.get(a.tech_id)!.add(a.day_of_week)
+    }
+
+    /** Check if a tech is available on a specific date */
+    function isTechAvailable(techId: string, day: string): boolean {
+      // Company holiday
+      if (holidaySet.has(day)) return false
+      // PTO or blocked date
+      if (techDateBlocked.has(`${techId}:${day}`)) return false
+      // Weekly availability (if configured)
+      const availDays = techAvailDays.get(techId)
+      if (availDays && availDays.size > 0) {
+        const dow = new Date(day + "T12:00:00").getDay()
+        if (!availDays.has(dow)) return false
+      }
+      return true
+    }
+
     const existingKey = (cid: string, pid: string | null) => `${cid}:${pid ?? "null"}`
     const existingStopMap = new Map(
       existingStops.map((s) => [existingKey(s.customer_id, s.pool_id), s])
@@ -2152,11 +2224,16 @@ export async function autoScheduleWeek(weekStartDate: string): Promise<{
           // Already in DB with a tech — keep as-is
           assignedFirings.push({ rule, firedDate: dateStr, techId: existing.tech_id, day: dateStr })
         } else if (rule.tech_id) {
-          // Rule has preferred tech
+          // Rule has preferred tech — but check if they're available
           const prefDay = rule.preferred_day_of_week != null
             ? (weekDates[rule.preferred_day_of_week === 0 ? 0 : Math.min(rule.preferred_day_of_week - 1, 4)] ?? dateStr)
             : dateStr
-          assignedFirings.push({ rule, firedDate: prefDay, techId: rule.tech_id, day: prefDay })
+          if (isTechAvailable(rule.tech_id, prefDay)) {
+            assignedFirings.push({ rule, firedDate: prefDay, techId: rule.tech_id, day: prefDay })
+          } else {
+            // Preferred tech unavailable — fall through to greedy assignment
+            unassignedFirings.push({ rule, firedDate: dateStr, day: dateStr })
+          }
         } else {
           unassignedFirings.push({ rule, firedDate: dateStr, day: dateStr })
         }
@@ -2220,6 +2297,9 @@ export async function autoScheduleWeek(weekStartDate: string): Promise<{
           : weekDates
 
         for (const day of daysToCheck) {
+          // Skip unavailable tech+day combos (holiday, PTO, blocked date, day off)
+          if (!isTechAvailable(tid, day)) continue
+
           const dayStops = techDayCoords.get(tid)?.get(day) ?? []
           const loadCount = dayStops.length
 
