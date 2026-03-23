@@ -30,13 +30,13 @@ export function ProjectTab({ projects, briefing, today }: ProjectTabProps) {
 
       {/* Project assignments */}
       {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 p-10 text-center gap-3">
-          <HardHatIcon className="h-10 w-10 text-muted-foreground/40" />
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
-              No project assignments today
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-12 text-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <HardHatIcon className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-1 max-w-sm">
+            <p className="font-medium text-sm">No project assignments today</p>
+            <p className="text-sm text-muted-foreground">
               When you&apos;re assigned to a project phase, it will appear here.
             </p>
           </div>
