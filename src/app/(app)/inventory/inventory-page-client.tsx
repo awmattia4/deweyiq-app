@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { TruckInventoryItem } from "@/actions/truck-inventory"
 import type { ShoppingListItem } from "@/actions/shopping-lists"
 import type { PurchasingDashboardData, SpendingInsightsData } from "@/actions/purchasing"
@@ -209,18 +208,24 @@ export function InventoryPageClient({
       </div>
 
       {/* Desktop: tab bar */}
-      <TabsList className="hidden sm:inline-flex flex-wrap h-auto gap-1 p-1">
+      <div className="hidden sm:flex border-b border-border" role="tablist">
         {tabs.map((tab) => (
-          <TabsTrigger
+          <button
             key={tab.id}
-            value={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => handleTabChange(tab.id)}
-            data-state={activeTab === tab.id ? "active" : "inactive"}
+            className={cn(
+              "shrink-0 px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer -mb-px border-b-2 whitespace-nowrap",
+              activeTab === tab.id
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
           >
             {tab.label}
-          </TabsTrigger>
+          </button>
         ))}
-      </TabsList>
+      </div>
 
       {/* Tab content */}
       <div>
