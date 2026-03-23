@@ -424,10 +424,17 @@ export async function createLogoUploadUrl(
   const orgId = rlsToken.org_id as string
   if (!orgId) return { error: "No org found" }
 
-  const supabase = await createClient()
+  // Use service role client to bypass storage RLS policies.
+  // Auth check is already done above (owner only).
+  const { createClient: createAdminClient } = await import("@supabase/supabase-js")
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   const path = `${orgId}/logo/${fileName}`
 
-  const { data, error } = await supabase.storage
+  const { data, error } = await adminSupabase.storage
     .from("company-assets")
     .createSignedUploadUrl(path, { upsert: true })
 
@@ -463,11 +470,15 @@ export async function createFaviconUploadUrl(
   const orgId = rlsToken.org_id as string
   if (!orgId) return { error: "No org found" }
 
-  const supabase = await createClient()
+  const { createClient: createAdminClient } = await import("@supabase/supabase-js")
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const ext = fileName.split(".").pop() ?? "png"
   const path = `${orgId}/portal/favicon.${ext}`
 
-  const { data, error } = await supabase.storage
+  const { data, error } = await adminSupabase.storage
     .from("company-assets")
     .createSignedUploadUrl(path, { upsert: true })
 

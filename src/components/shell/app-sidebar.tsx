@@ -281,22 +281,23 @@ export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl, orgId }:
           {/* Company branding — prominent */}
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             {orgLogoUrl ? (
-              <img
-                src={orgLogoUrl}
-                alt={orgName ?? "Company logo"}
-                className="h-8 w-8 shrink-0 rounded-md object-contain group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6"
-                onError={(e) => {
-                  // Hide broken image and show initials fallback
-                  e.currentTarget.style.display = "none"
-                  const fallback = e.currentTarget.nextElementSibling
-                  if (fallback) (fallback as HTMLElement).style.display = "flex"
-                }}
-              />
-              <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6">
-                <span className="text-sm font-bold text-primary-foreground">
-                  {(orgName ?? "C")[0].toUpperCase()}
-                </span>
-              </div>
+              <>
+                <img
+                  src={orgLogoUrl}
+                  alt={orgName ?? "Company logo"}
+                  className="h-8 w-8 shrink-0 rounded-md object-contain group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none"
+                    const fallback = e.currentTarget.nextElementSibling
+                    if (fallback) (fallback as HTMLElement).style.display = "flex"
+                  }}
+                />
+                <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6">
+                  <span className="text-sm font-bold text-primary-foreground">
+                    {(orgName ?? "C")[0].toUpperCase()}
+                  </span>
+                </div>
+              </>
             ) : (
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary">
                 <span className="text-sm font-bold text-primary-foreground">
