@@ -123,6 +123,7 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 | Phase 12-projects-renovations P13 | 10 | 2 tasks | 9 files |
 | Phase 12 P15 | 28 | 2 tasks | 9 files |
 | Phase 12-projects-renovations P16 | 16 | 2 tasks | 18 files |
+| Phase 13-truck-inventory-shopping-lists P01 | 13 | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -466,6 +467,8 @@ Recent decisions affecting current work:
 - [Phase 12]: customerSignOffPunchList uses dynamic import for cross-action calls to prevent circular module dependencies
 - [Phase 12-projects-renovations]: Portal data layer uses adminDb with validateCustomerOwnsProject() ownership guard — portal customers use magic-link auth without staff JWT claims
 - [Phase 12-projects-renovations]: project_id added to portal_messages as nullable column (no FK constraint) for project-scoped messaging (PROJ-88)
+- [Phase 13-truck-inventory-shopping-lists]: Used adminDb in decrementTruckInventoryFromDosing (not withRls) for explicit org/tech ID params
+- [Phase 13-truck-inventory-shopping-lists]: Dynamic import for truck-inventory in visits.ts to avoid circular module dependency
 
 ### Pending Todos
 
