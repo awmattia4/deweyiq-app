@@ -125,6 +125,7 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 | Phase 12-projects-renovations P16 | 16 | 2 tasks | 18 files |
 | Phase 13-truck-inventory-shopping-lists P01 | 13 | 2 tasks | 17 files |
 | Phase 13-truck-inventory-shopping-lists P02 | 17 | 2 tasks | 13 files |
+| Phase 13 P03 | 20 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -474,6 +475,9 @@ Recent decisions affecting current work:
 - [Phase 12-projects-renovations]: project_id added to portal_messages as nullable column (no FK constraint) for project-scoped messaging (PROJ-88)
 - [Phase 13-truck-inventory-shopping-lists]: Used adminDb in decrementTruckInventoryFromDosing (not withRls) for explicit org/tech ID params
 - [Phase 13-truck-inventory-shopping-lists]: Dynamic import for truck-inventory in visits.ts to avoid circular module dependency
+- [Phase 13]: Used adminDb for PO number increment — avoids RLS re-auth overhead for org_settings counter update
+- [Phase 13]: QBO item CRUD cast to any — node-quickbooks JS methods exist at runtime but have no TypeScript declarations for Item type
+- [Phase 13]: Dynamic import of syncQboItemToDeweyIq in handleQboWebhook to break potential circular dependency
 
 ### Pending Todos
 
