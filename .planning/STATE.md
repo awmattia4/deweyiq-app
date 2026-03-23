@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** A pool tech can run their entire day from one app with minimal friction — while office and customers stay in the loop automatically.
-**Current focus:** Phase 12 COMPLETE — Projects & Renovations
+**Current focus:** Phase 13 IN PROGRESS — Truck Inventory & Shopping Lists
 
 ## Current Position
 
-Phase: 12 of 18 (Projects & Renovations) — COMPLETE
-Plan: 16/16 complete + QA verified
-Status: Phase 12 complete — all 16 plans executed, comprehensive QA review performed (24 files fixed), build passes. Full project lifecycle implemented: lead pipeline, site surveys, multi-tier proposals with deposit collection, permitting, material procurement, subcontractor management, Gantt timeline, field tech project mode, change orders, progress billing, inspections, punch lists, warranty management, dashboard/reporting, and customer portal.
-Last activity: 2026-03-17 — Phase 12 QA fixes committed (d006532)
+Phase: 13 of 18 (Truck Inventory & Shopping Lists) — IN PROGRESS
+Plan: 2/3 complete
+Status: Phase 13 Plan 02 complete — shopping list system with full lifecycle, tech field UIs (truck inventory + shopping list), Prep tab on routes page, /inventory page, Settings Inventory tab with template management. Plans 01 and 02 done. Plan 03 (Purchasing dashboard) remaining.
+Last activity: 2026-03-23 — Phase 13 Plan 02 committed (0a97fab)
 
 Progress: [████████████] 67% (12 of 18 phases complete)
 
@@ -124,6 +124,7 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 | Phase 12 P15 | 28 | 2 tasks | 9 files |
 | Phase 12-projects-renovations P16 | 16 | 2 tasks | 18 files |
 | Phase 13-truck-inventory-shopping-lists P01 | 13 | 2 tasks | 17 files |
+| Phase 13-truck-inventory-shopping-lists P02 | 17 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,10 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 13-02]: Shopping list lifecycle transitions are sequential only — no skipping steps; transitionShoppingListItem validates against VALID_TRANSITIONS map
+- [Phase 13-02]: getWhatToBring uses JS-side aggregation of dosing history to avoid correlated subqueries inside withRls (MEMORY.md compliance)
+- [Phase 13-02]: Forecast items appear in dedicated predicted section separate from confirmed missing/low/stocked — clearly labeled as estimates
+- [Phase 13-02]: PrepData fetch wrapped in .catch(() => null) on routes page — inventory failure never blocks route rendering
 - [Phase 12-07]: adminDb for all customer-facing proposal actions — RLS withRls() returns empty without auth session
 - [Phase 12-07]: PROJ-28 trigger uses adminDb variant of populateMaterials since customer has no auth session on approval
 - [Phase 12-07]: react-signature-canvas loaded via next/dynamic ssr:false for proposal e-signature draw mode
