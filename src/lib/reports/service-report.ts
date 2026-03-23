@@ -39,6 +39,8 @@ export interface ServiceReportData {
   photoStoragePaths: string[]
   /** Whether to include photos in this report */
   includePhotos: boolean
+  /** Dosing amounts — chemicals applied during the visit */
+  dosingAmounts?: Array<{ chemical: string; amount: number; unit: string }> | null
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +163,7 @@ export function generateServiceReport(data: ServiceReportData): string {
     notes,
     photoStoragePaths,
     includePhotos,
+    dosingAmounts,
   } = data
 
   // ── Brand colors (dark-first palette adapted for email — use slightly lighter bg) ──
@@ -318,6 +321,26 @@ export function generateServiceReport(data: ServiceReportData): string {
         </tbody>
       </table>
     </div>
+
+    <!-- Chemicals Applied -->
+    ${dosingAmounts && dosingAmounts.length > 0 ? `
+    <div style="background:${surface};border:1px solid ${border};border-radius:12px;overflow:hidden;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#162032;">
+            <th style="padding:12px 16px;text-align:left;color:${textMuted};font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid ${border};">Chemical</th>
+            <th style="padding:12px 16px;text-align:right;color:${textMuted};font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid ${border};">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dosingAmounts.map((dose) => `
+          <tr>
+            <td style="padding:10px 16px;border-bottom:1px solid ${border};color:${text};font-size:13px;">${escHtml(dose.chemical)}</td>
+            <td style="padding:10px 16px;border-bottom:1px solid ${border};color:${text};font-size:13px;font-weight:600;text-align:right;">${escHtml(String(dose.amount))} <span style="color:${textMuted};font-weight:400;font-size:11px;">${escHtml(dose.unit)}</span></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
 
     <!-- Checklist -->
     <div style="background:${surface};border:1px solid ${border};border-radius:12px;overflow:hidden;margin-bottom:20px;">

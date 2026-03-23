@@ -121,7 +121,7 @@ export function WeatherCheckTrigger({ weekStartDate }: WeatherCheckTriggerProps)
           <div
             role="dialog"
             aria-label="Weather check"
-            className="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border border-border bg-card p-4 shadow-lg"
+            className="fixed inset-x-4 top-1/3 z-50 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-72 rounded-lg border border-border bg-card p-4 shadow-lg"
           >
             {/* Header */}
             <div className="mb-3 flex items-center justify-between">

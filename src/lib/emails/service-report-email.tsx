@@ -38,6 +38,7 @@ export interface ServiceReportEmailProps {
   serviceDate: string
   poolName: string
   chemistry: Record<string, number | null>
+  dosingAmounts?: Array<{ chemical: string; amount: number; unit: string }> | null
   checklist?: Array<{ task: string; completed: boolean }>
   photoUrls?: string[]
   reportUrl: string
@@ -101,6 +102,7 @@ export function ServiceReportEmail({
   checklist,
   photoUrls,
   reportUrl,
+  dosingAmounts,
   includeChemistry = true,
   includeChecklist = true,
   includePhotos = true,
@@ -302,6 +304,79 @@ export function ServiceReportEmail({
                           {unit}
                         </span>
                       ) : null}
+                    </Column>
+                  </Row>
+                )
+              })}
+            </Section>
+          )}
+
+          {/* ── Chemicals applied ──────────────────────────────────────────── */}
+          {dosingAmounts && dosingAmounts.length > 0 && (
+            <Section
+              style={{
+                backgroundColor: C.surface,
+                borderLeft: `1px solid ${C.border}`,
+                borderRight: `1px solid ${C.border}`,
+                borderTop: `1px solid ${C.border}`,
+                padding: "0",
+              }}
+            >
+              <Text
+                style={{
+                  margin: "0",
+                  backgroundColor: "#162032",
+                  color: C.muted,
+                  fontSize: "11px",
+                  fontWeight: "700",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  padding: "10px 16px",
+                  borderBottom: `1px solid ${C.border}`,
+                }}
+              >
+                Chemicals Applied
+              </Text>
+
+              {dosingAmounts.map((dose, idx) => {
+                const isLastRow = idx === dosingAmounts.length - 1
+                return (
+                  <Row
+                    key={idx}
+                    style={{
+                      borderBottom: isLastRow ? "none" : `1px solid ${C.border}`,
+                    }}
+                  >
+                    <Column
+                      style={{
+                        padding: "10px 16px",
+                        color: C.muted,
+                        fontSize: "12px",
+                        width: "50%",
+                      }}
+                    >
+                      {dose.chemical}
+                    </Column>
+                    <Column
+                      style={{
+                        padding: "10px 16px",
+                        color: C.text,
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        textAlign: "right",
+                      }}
+                    >
+                      {dose.amount}
+                      <span
+                        style={{
+                          color: C.muted,
+                          fontWeight: "400",
+                          fontSize: "11px",
+                          marginLeft: "2px",
+                        }}
+                      >
+                        {dose.unit}
+                      </span>
                     </Column>
                   </Row>
                 )

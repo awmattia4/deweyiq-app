@@ -641,6 +641,11 @@ export async function completeStop(
         serviceDate,
         poolName,
         chemistry: input.chemistry,
+        dosingAmounts: input.dosingAmounts?.map((d) => ({
+          chemical: d.chemical,
+          amount: d.amount,
+          unit: d.unit,
+        })) ?? null,
         checklist: input.checklist.map((item) => ({
           task: item.taskId,
           completed: item.completed,
