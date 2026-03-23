@@ -131,6 +131,9 @@ export const orgSettings = pgTable(
     // Days of no activity on an active project before triggering a stalled-project alert
     project_inactivity_alert_days: integer("project_inactivity_alert_days").notNull().default(7),
 
+    // Phase 13: Purchase Order number sequence
+    next_po_number: integer("next_po_number").notNull().default(1),
+
     // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
     // No complex queries needed on broadcast history; JSONB avoids a separate table.
     broadcast_history: jsonb("broadcast_history")

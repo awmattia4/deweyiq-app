@@ -89,6 +89,15 @@ import {
   projectIssueFlags,
   projectEquipmentAssignments,
 } from "./project-field"
+import {
+  truckInventory,
+  truckInventoryLog,
+  truckLoadTemplates,
+  truckLoadTemplateItems,
+} from "./truck-inventory"
+import { shoppingListItems, purchaseOrders, poLineItems } from "./shopping-lists"
+import { barcodeCatalogLinks } from "./barcode-catalog"
+import { partsCatalog } from "./parts-catalog"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -869,3 +878,146 @@ export const projectEquipmentAssignmentsRelations = relations(
     }),
   })
 )
+
+// Phase 13 relations — Truck Inventory & Shopping Lists
+
+export const truckInventoryRelations = relations(truckInventory, ({ one, many }) => ({
+  org: one(orgs, { fields: [truckInventory.org_id], references: [orgs.id] }),
+  tech: one(profiles, { fields: [truckInventory.tech_id], references: [profiles.id] }),
+  catalogItem: one(partsCatalog, {
+    fields: [truckInventory.catalog_item_id],
+    references: [partsCatalog.id],
+  }),
+  chemicalProduct: one(chemicalProducts, {
+    fields: [truckInventory.chemical_product_id],
+    references: [chemicalProducts.id],
+  }),
+  logs: many(truckInventoryLog),
+  shoppingListItems: many(shoppingListItems),
+}))
+
+export const truckInventoryLogRelations = relations(truckInventoryLog, ({ one }) => ({
+  org: one(orgs, { fields: [truckInventoryLog.org_id], references: [orgs.id] }),
+  inventoryItem: one(truckInventory, {
+    fields: [truckInventoryLog.truck_inventory_item_id],
+    references: [truckInventory.id],
+  }),
+  tech: one(profiles, {
+    fields: [truckInventoryLog.tech_id],
+    references: [profiles.id],
+    relationName: "truckLog_tech",
+  }),
+  transferToTech: one(profiles, {
+    fields: [truckInventoryLog.transfer_to_tech_id],
+    references: [profiles.id],
+    relationName: "truckLog_transferTo",
+  }),
+  transferFromTech: one(profiles, {
+    fields: [truckInventoryLog.transfer_from_tech_id],
+    references: [profiles.id],
+    relationName: "truckLog_transferFrom",
+  }),
+}))
+
+export const truckLoadTemplatesRelations = relations(truckLoadTemplates, ({ one, many }) => ({
+  org: one(orgs, { fields: [truckLoadTemplates.org_id], references: [orgs.id] }),
+  items: many(truckLoadTemplateItems),
+}))
+
+export const truckLoadTemplateItemsRelations = relations(truckLoadTemplateItems, ({ one }) => ({
+  org: one(orgs, { fields: [truckLoadTemplateItems.org_id], references: [orgs.id] }),
+  template: one(truckLoadTemplates, {
+    fields: [truckLoadTemplateItems.template_id],
+    references: [truckLoadTemplates.id],
+  }),
+  catalogItem: one(partsCatalog, {
+    fields: [truckLoadTemplateItems.catalog_item_id],
+    references: [partsCatalog.id],
+  }),
+  chemicalProduct: one(chemicalProducts, {
+    fields: [truckLoadTemplateItems.chemical_product_id],
+    references: [chemicalProducts.id],
+  }),
+}))
+
+export const shoppingListItemsRelations = relations(shoppingListItems, ({ one }) => ({
+  org: one(orgs, { fields: [shoppingListItems.org_id], references: [orgs.id] }),
+  tech: one(profiles, {
+    fields: [shoppingListItems.tech_id],
+    references: [profiles.id],
+    relationName: "shoppingItem_tech",
+  }),
+  catalogItem: one(partsCatalog, {
+    fields: [shoppingListItems.catalog_item_id],
+    references: [partsCatalog.id],
+  }),
+  chemicalProduct: one(chemicalProducts, {
+    fields: [shoppingListItems.chemical_product_id],
+    references: [chemicalProducts.id],
+  }),
+  sourceWorkOrder: one(workOrders, {
+    fields: [shoppingListItems.source_work_order_id],
+    references: [workOrders.id],
+  }),
+  sourceInventoryItem: one(truckInventory, {
+    fields: [shoppingListItems.source_inventory_item_id],
+    references: [truckInventory.id],
+  }),
+  orderedBy: one(profiles, {
+    fields: [shoppingListItems.ordered_by_id],
+    references: [profiles.id],
+    relationName: "shoppingItem_orderedBy",
+  }),
+  receivedBy: one(profiles, {
+    fields: [shoppingListItems.received_by_id],
+    references: [profiles.id],
+    relationName: "shoppingItem_receivedBy",
+  }),
+  loadedBy: one(profiles, {
+    fields: [shoppingListItems.loaded_by_id],
+    references: [profiles.id],
+    relationName: "shoppingItem_loadedBy",
+  }),
+  usedBy: one(profiles, {
+    fields: [shoppingListItems.used_by_id],
+    references: [profiles.id],
+    relationName: "shoppingItem_usedBy",
+  }),
+}))
+
+export const purchaseOrdersRelations = relations(purchaseOrders, ({ one, many }) => ({
+  org: one(orgs, { fields: [purchaseOrders.org_id], references: [orgs.id] }),
+  createdBy: one(profiles, {
+    fields: [purchaseOrders.created_by_id],
+    references: [profiles.id],
+  }),
+  lineItems: many(poLineItems),
+}))
+
+export const poLineItemsRelations = relations(poLineItems, ({ one }) => ({
+  org: one(orgs, { fields: [poLineItems.org_id], references: [orgs.id] }),
+  purchaseOrder: one(purchaseOrders, {
+    fields: [poLineItems.po_id],
+    references: [purchaseOrders.id],
+  }),
+  shoppingListItem: one(shoppingListItems, {
+    fields: [poLineItems.shopping_list_item_id],
+    references: [shoppingListItems.id],
+  }),
+}))
+
+export const barcodeCatalogLinksRelations = relations(barcodeCatalogLinks, ({ one }) => ({
+  org: one(orgs, { fields: [barcodeCatalogLinks.org_id], references: [orgs.id] }),
+  catalogItem: one(partsCatalog, {
+    fields: [barcodeCatalogLinks.catalog_item_id],
+    references: [partsCatalog.id],
+  }),
+  chemicalProduct: one(chemicalProducts, {
+    fields: [barcodeCatalogLinks.chemical_product_id],
+    references: [chemicalProducts.id],
+  }),
+  createdBy: one(profiles, {
+    fields: [barcodeCatalogLinks.created_by_id],
+    references: [profiles.id],
+  }),
+}))

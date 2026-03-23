@@ -66,6 +66,11 @@ export * from "./project-billing"
 export * from "./subcontractors"
 export * from "./project-field"
 
+// Phase 13 tables — Truck Inventory & Shopping Lists
+export * from "./truck-inventory"
+export * from "./shopping-lists"
+export * from "./barcode-catalog"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

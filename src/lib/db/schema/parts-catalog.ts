@@ -45,6 +45,8 @@ export const partsCatalog = pgTable(
     // When true, this item represents a labor charge (not a physical part)
     is_labor: boolean("is_labor").notNull().default(false),
     is_active: boolean("is_active").notNull().default(true),
+    // Phase 13: QuickBooks Online two-way sync — QBO item ID for this catalog item
+    qbo_item_id: text("qbo_item_id"),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
