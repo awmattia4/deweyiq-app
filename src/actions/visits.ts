@@ -709,7 +709,27 @@ export async function completeStop(
         })
     })
 
-    // ── 9b. Update route_stops.status to "complete" ─────────────────────────
+    // ── 9b. Phase 13: Auto-decrement truck inventory from dosing amounts ────────
+    // Non-blocking — inventory decrement failure NEVER blocks stop completion.
+    if (input.dosingAmounts && input.dosingAmounts.length > 0) {
+      try {
+        const { decrementTruckInventoryFromDosing } = await import("@/actions/truck-inventory")
+        await decrementTruckInventoryFromDosing(
+          techId,
+          orgId,
+          input.dosingAmounts.map((d) => ({
+            chemical_product_id: d.productId,
+            amount: d.amount,
+            unit: d.unit,
+          })),
+          token
+        )
+      } catch (invErr) {
+        console.error("[completeStop] truck inventory decrement failed (non-blocking):", invErr)
+      }
+    }
+
+    // ── 9c. Update route_stops.status to "complete" ─────────────────────────
     // The dispatch page reads from route_stops.status, not service_visits.
     // Without this, the dispatch page shows "scheduled" even after completion.
     // Look up the route_stop by pool + tech + today's date.

@@ -38,6 +38,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/requests": "Service Requests",
   "/projects": "Projects",
   "/change-order": "Change Order",
+  "/inventory": "Inventory",
 }
 
 function getPageTitle(pathname: string): string {

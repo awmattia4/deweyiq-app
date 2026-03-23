@@ -72,6 +72,8 @@ class OfflineDB extends Dexie {
   // Phase 12 stores
   projectTaskDrafts!: Table<ProjectTaskDraft>
   projectPhotoQueue!: Table<ProjectPhotoQueueItem>
+  // Phase 13 stores
+  inventoryUpdates!: Table<InventoryUpdate>
 
   constructor() {
     super("poolco-offline")
@@ -118,6 +120,19 @@ class OfflineDB extends Dexie {
       projectTaskDrafts: "id, projectId, phaseId, updatedAt, status",
       // Project photo queue: same blob-not-indexed pattern as photoQueue
       projectPhotoQueue: "++id, projectId, phaseId, status, createdAt",
+    })
+
+    // v5: Phase 13 — offline inventory quantity adjustments
+    // Carry forward ALL v4 stores unchanged — Dexie immutable versioning.
+    this.version(5).stores({
+      syncQueue: "++id, createdAt, retries, status",
+      routeCache: "id, cachedAt, expiresAt",
+      visitDrafts: "id, stopId, updatedAt, status",
+      photoQueue: "++id, visitId, orgId, status, createdAt",
+      projectTaskDrafts: "id, projectId, phaseId, updatedAt, status",
+      projectPhotoQueue: "++id, projectId, phaseId, status, createdAt",
+      // Inventory updates: pending quantity adjustments when offline
+      inventoryUpdates: "++id, techId, itemId, status, createdAt",
     })
   }
 }
@@ -169,6 +184,32 @@ export interface ProjectPhotoQueueItem {
   status: "pending" | "uploaded" | "failed"
   storagePath?: string            // filled after successful upload
   createdAt: number
+}
+
+// ---------------------------------------------------------------------------
+// Phase 13 offline types
+// ---------------------------------------------------------------------------
+
+/**
+ * InventoryUpdate — offline inventory quantity adjustment queued for sync.
+ *
+ * Created when tech adjusts inventory amounts while offline.
+ * Synced to server when connectivity is restored via the syncQueue processor.
+ *
+ * status="pending"  — not yet synced to server
+ * status="synced"   — successfully applied to server
+ * status="failed"   — sync failed after retry limit
+ */
+export interface InventoryUpdate {
+  id?: number             // auto-increment
+  techId: string          // which tech's truck this is for
+  itemId: string          // truck_inventory.id (server-side UUID)
+  // 'auto_decrement' | 'manual_use' | 'loaded' | 'damaged' | 'adjustment'
+  changeType: string
+  // Negative = used/decremented, positive = loaded/added
+  quantityChange: number
+  status: "pending" | "synced" | "failed"
+  createdAt: number       // Date.now()
 }
 
 export const offlineDb = new OfflineDB()
