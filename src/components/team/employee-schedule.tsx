@@ -111,6 +111,7 @@ export function EmployeeSchedule({ teamMembers, userRole }: Props) {
 
   // Blocked date form
   const [newDate, setNewDate] = useState("")
+  const [newEndDate, setNewEndDate] = useState("")
   const [newReason, setNewReason] = useState("")
   const [addingDate, setAddingDate] = useState(false)
 
@@ -178,12 +179,13 @@ export function EmployeeSchedule({ teamMembers, userRole }: Props) {
     setError(null)
     setAddingDate(true)
     startTransition(async () => {
-      const result = await addBlockedDate(selectedTechId, newDate, newReason)
+      const result = await addBlockedDate(selectedTechId, newDate, newReason, newEndDate || undefined)
       if (result.success) {
         // Refresh the blocked dates
         const { blockedDates: fresh } = await getAvailability(selectedTechId)
         setBlockedDates(fresh)
         setNewDate("")
+        setNewEndDate("")
         setNewReason("")
       } else {
         setError(result.error ?? "Failed to add blocked date")
@@ -376,7 +378,7 @@ export function EmployeeSchedule({ teamMembers, userRole }: Props) {
             {isOwner && (
               <div className="flex items-end gap-3 flex-wrap">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="blocked-date">Date</Label>
+                  <Label htmlFor="blocked-date">Start Date</Label>
                   <Input
                     id="blocked-date"
                     type="date"
@@ -386,12 +388,24 @@ export function EmployeeSchedule({ teamMembers, userRole }: Props) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="blocked-end-date">End Date (optional)</Label>
+                  <Input
+                    id="blocked-end-date"
+                    type="date"
+                    value={newEndDate}
+                    onChange={(e) => setNewEndDate(e.target.value)}
+                    min={newDate}
+                    placeholder="Same day"
+                    className="w-44"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="blocked-reason">Reason (optional)</Label>
                   <Input
                     id="blocked-reason"
                     value={newReason}
                     onChange={(e) => setNewReason(e.target.value)}
-                    placeholder="Doctor appointment, etc."
+                    placeholder="Vacation, appointment, etc."
                     className="w-56"
                   />
                 </div>
@@ -401,7 +415,7 @@ export function EmployeeSchedule({ teamMembers, userRole }: Props) {
                   onClick={handleAddBlockedDate}
                   disabled={isPending || addingDate || !newDate}
                 >
-                  {addingDate ? "Adding..." : "Block Date"}
+                  {addingDate ? "Adding..." : newEndDate ? "Block Range" : "Block Date"}
                 </Button>
               </div>
             )}

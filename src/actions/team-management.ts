@@ -536,12 +536,16 @@ export async function updateAvailability(
 }
 
 /**
- * addBlockedDate — Owner only. Adds a blocked date for a tech.
+ * addBlockedDate — Owner only. Adds blocked date(s) for a tech.
+ *
+ * Supports single date or date range. When endDate is provided,
+ * inserts one row per date in the range (inclusive).
  */
 export async function addBlockedDate(
   techId: string,
   date: string,
-  reason: string
+  reason: string,
+  endDate?: string
 ): Promise<{ success: boolean; error?: string }> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
@@ -553,13 +557,33 @@ export async function addBlockedDate(
   if (!orgId) return { success: false, error: "No org context" }
 
   try {
+    // Generate all dates in range (or single date if no endDate)
+    const dates: string[] = []
+    const start = new Date(date + "T12:00:00")
+    const end = endDate ? new Date(endDate + "T12:00:00") : start
+
+    if (end < start) return { success: false, error: "End date must be after start date" }
+
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      const y = cursor.getFullYear()
+      const m = String(cursor.getMonth() + 1).padStart(2, "0")
+      const d = String(cursor.getDate()).padStart(2, "0")
+      dates.push(`${y}-${m}-${d}`)
+      cursor.setDate(cursor.getDate() + 1)
+    }
+
+    if (dates.length > 90) return { success: false, error: "Cannot block more than 90 days at once" }
+
     await withRls(token, (db) =>
-      db.insert(employeeBlockedDates).values({
-        org_id: orgId,
-        tech_id: techId,
-        blocked_date: date,
-        reason: reason || null,
-      })
+      db.insert(employeeBlockedDates).values(
+        dates.map((d) => ({
+          org_id: orgId,
+          tech_id: techId,
+          blocked_date: d,
+          reason: reason || null,
+        }))
+      ).onConflictDoNothing()
     )
 
     revalidatePath("/team")
