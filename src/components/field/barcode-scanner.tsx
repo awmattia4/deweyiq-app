@@ -37,7 +37,7 @@ interface BarcodeScannerProps {
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   const { ref } = useZxing({
-    onResult(result) {
+    onDecodeResult(result) {
       const text = result.getText()
       if (text) onScan(text)
     },
