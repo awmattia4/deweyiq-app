@@ -88,8 +88,8 @@ export function ChemicalUsagePanel({ initialData }: ChemicalUsagePanelProps) {
   ]
 
   function SortIndicator({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="opacity-30"> ↕</span>
-    return <span>{sortDir === "asc" ? " ↑" : " ↓"}</span>
+    if (sortKey !== k) return <span className="ml-1 opacity-30 text-[10px]">▼</span>
+    return <span className="ml-1 text-[10px]">{sortDir === "asc" ? "▲" : "▼"}</span>
   }
 
   function formatAmount(amount: number, unit: string) {

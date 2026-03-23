@@ -9,7 +9,7 @@
  * Phase 13 Plan 03 adds purchasing/spending/chemical usage tabs for office.
  */
 
-import { useState, useTransition } from "react"
+import { useState, useEffect, useTransition, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { TruckInventoryView } from "@/components/inventory/truck-inventory-view"
 import { ShoppingListView } from "@/components/inventory/shopping-list-view"
@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { TruckInventoryItem } from "@/actions/truck-inventory"
 import type { ShoppingListItem } from "@/actions/shopping-lists"
 import type { PurchasingDashboardData, SpendingInsightsData } from "@/actions/purchasing"
@@ -99,26 +100,7 @@ export function InventoryPageClient({
   initialSpendingData = EMPTY_SPENDING,
   initialChemicalData = EMPTY_CHEMICAL,
 }: InventoryPageClientProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("inventory")
-  const [selectedTechId, setSelectedTechId] = useState(defaultTechId ?? currentUserId)
-  const [inventoryItems, setInventoryItems] = useState<TruckInventoryItem[]>(initialInventoryItems)
-  const [shoppingItems] = useState<ShoppingListItem[]>(initialShoppingItems)
-  const [, startTransition] = useTransition()
-
   const isOffice = role === "office"
-  const selectedTech = allTechs.find((t) => t.id === selectedTechId)
-
-  function handleTechChange(techId: string) {
-    setSelectedTechId(techId)
-    startTransition(async () => {
-      try {
-        const items = await getTruckInventory(techId)
-        setInventoryItems(items as TruckInventoryItem[])
-      } catch (err) {
-        console.error("Failed to fetch inventory for tech:", err)
-      }
-    })
-  }
 
   const officeTabs: Array<{ id: TabId; label: string }> = [
     { id: "inventory", label: "Truck Inventory" },
@@ -134,6 +116,52 @@ export function InventoryPageClient({
   ]
 
   const tabs = isOffice ? officeTabs : techTabs
+  const validTabIds = new Set(tabs.map((t) => t.id))
+
+  // Persist active tab in URL hash so it survives refresh
+  const getInitialTab = useCallback((): TabId => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "") as TabId
+      if (hash && validTabIds.has(hash)) return hash
+    }
+    return "inventory"
+  }, [])
+
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab)
+  const [selectedTechId, setSelectedTechId] = useState(defaultTechId ?? currentUserId)
+  const [inventoryItems, setInventoryItems] = useState<TruckInventoryItem[]>(initialInventoryItems)
+  const [shoppingItems] = useState<ShoppingListItem[]>(initialShoppingItems)
+  const [, startTransition] = useTransition()
+
+  // Sync hash on tab change
+  function handleTabChange(tabId: TabId) {
+    setActiveTab(tabId)
+    window.history.replaceState(null, "", `#${tabId}`)
+  }
+
+  // Listen for popstate (browser back/forward) to update tab
+  useEffect(() => {
+    function onHashChange() {
+      const hash = window.location.hash.replace("#", "") as TabId
+      if (hash && validTabIds.has(hash)) setActiveTab(hash)
+    }
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
+
+  const selectedTech = allTechs.find((t) => t.id === selectedTechId)
+
+  function handleTechChange(techId: string) {
+    setSelectedTechId(techId)
+    startTransition(async () => {
+      try {
+        const items = await getTruckInventory(techId)
+        setInventoryItems(items as TruckInventoryItem[])
+      } catch (err) {
+        console.error("Failed to fetch inventory for tech:", err)
+      }
+    })
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -164,25 +192,35 @@ export function InventoryPageClient({
         </p>
       )}
 
-      {/* Tab bar */}
-      <div className="flex overflow-x-auto border-b border-border" role="tablist">
+      {/* Mobile: dropdown select */}
+      <div className="sm:hidden">
+        <Select value={activeTab} onValueChange={(v) => handleTabChange(v as TabId)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((tab) => (
+              <SelectItem key={tab.id} value={tab.id}>
+                {tab.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Desktop: tab bar */}
+      <TabsList className="hidden sm:inline-flex flex-wrap h-auto gap-1 p-1">
         {tabs.map((tab) => (
-          <button
+          <TabsTrigger
             key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "shrink-0 px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer -mb-px border-b-2 whitespace-nowrap",
-              activeTab === tab.id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-            )}
+            value={tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            data-state={activeTab === tab.id ? "active" : "inactive"}
           >
             {tab.label}
-          </button>
+          </TabsTrigger>
         ))}
-      </div>
+      </TabsList>
 
       {/* Tab content */}
       <div>
