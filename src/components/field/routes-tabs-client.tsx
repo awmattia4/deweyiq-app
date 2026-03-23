@@ -39,16 +39,16 @@ export function RoutesTabsClient({
 
   return (
     <Tabs defaultValue="routes" className="flex flex-col">
-      <TabsList className="w-full rounded-none border-b border-border/60 bg-transparent h-auto px-0 py-0 gap-0 shrink-0 -mx-0 justify-start">
+      <TabsList className="w-full rounded-none border-b border-border bg-transparent h-auto px-0 py-0 gap-1 shrink-0 justify-start">
         <TabsTrigger
           value="routes"
-          className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer transition-colors duration-150"
+          className="rounded-none border-b-2 border-transparent -mb-px px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-border data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none cursor-pointer transition-colors"
         >
           Routes
         </TabsTrigger>
         <TabsTrigger
           value="projects"
-          className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer transition-colors duration-150"
+          className="rounded-none border-b-2 border-transparent -mb-px px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-border data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none cursor-pointer transition-colors"
         >
           Projects
           {projects.length > 0 && (

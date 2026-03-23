@@ -382,7 +382,7 @@ function PayrollSection({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          This is a payroll prep export for import into Gusto, ADP, or similar. Phase 11 adds native payroll processing.
+          This is a payroll prep export for import into Gusto, ADP, or similar.
         </p>
       </div>
     </div>

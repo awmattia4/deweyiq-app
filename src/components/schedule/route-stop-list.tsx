@@ -202,7 +202,7 @@ function SortableStopRow({
             type="button"
             onClick={(e) => e.stopPropagation()}
             aria-label={`Actions for ${stop.customerName}`}
-            className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+            className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 cursor-pointer"
           >
             <MoreVerticalIcon className="h-3.5 w-3.5" />
           </button>

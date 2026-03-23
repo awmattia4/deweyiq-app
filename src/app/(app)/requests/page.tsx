@@ -26,7 +26,7 @@ export default async function OfficeRequestsPage() {
   const requests = await getOfficeRequests(user.org_id)
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6">
       {/* ── Header ────────────────────────────────────────────────────── */}
       <h1 className="text-2xl font-bold tracking-tight">Service Requests</h1>
 

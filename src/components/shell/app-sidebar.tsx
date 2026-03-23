@@ -284,7 +284,7 @@ export function AppSidebar({ user, alertCount = 0, orgName, orgLogoUrl, orgId }:
               <img
                 src={orgLogoUrl}
                 alt={orgName ?? "Company logo"}
-                className="h-8 w-8 shrink-0 rounded-md object-contain"
+                className="h-8 w-8 shrink-0 rounded-md object-contain group-data-[collapsible=icon]:h-6 group-data-[collapsible=icon]:w-6"
               />
             ) : (
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary">

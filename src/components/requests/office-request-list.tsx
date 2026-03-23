@@ -3,6 +3,13 @@
 import { useState } from "react"
 import { AlertTriangleIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { OfficeServiceRequest } from "@/actions/service-requests"
 import { RequestReviewPanel } from "@/components/requests/request-review-panel"
 
@@ -110,8 +117,22 @@ export function OfficeRequestList({ requests, orgId, officerName }: OfficeReques
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Filter tabs ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 border-b border-border/60 overflow-x-auto">
+      {/* ── Filter tabs — mobile dropdown / desktop tab bar ─────────── */}
+      <div className="sm:hidden">
+        <Select value={activeTab} onValueChange={(v) => setActiveTab(v as FilterTab)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((tab) => (
+              <SelectItem key={tab.key} value={tab.key}>
+                {tab.label} ({tab.count})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="hidden sm:flex items-center gap-1 border-b border-border/60">
         {tabs.map((tab) => (
           <button
             key={tab.key}

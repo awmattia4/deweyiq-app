@@ -13,6 +13,7 @@ import {
   profiles,
   workOrders,
 } from "@/lib/db/schema"
+import { ptoRequests, employeeBlockedDates, employeeAvailability } from "@/lib/db/schema/team-management"
 import { and, eq, gt, gte, lte, inArray, isNull } from "drizzle-orm"
 import { toLocalDateString } from "@/lib/date-utils"
 import { notifyUser } from "@/lib/notifications/dispatch"
@@ -1158,6 +1159,83 @@ export async function bulkAssignStops(
     let insertedCount = 0
 
     await withRls(token, async (db) => {
+      // Check if the target date is a company holiday
+      const dayHolidays = await db
+        .select({ date: holidays.date })
+        .from(holidays)
+        .where(and(eq(holidays.org_id, orgId), eq(holidays.date, date)))
+      if (dayHolidays.length > 0) {
+        insertedCount = -1 // sentinel to signal holiday block
+        return
+      }
+
+      // Check if the tech has approved PTO covering this date
+      const techPto = await db
+        .select({ id: ptoRequests.id })
+        .from(ptoRequests)
+        .where(
+          and(
+            eq(ptoRequests.org_id, orgId),
+            eq(ptoRequests.tech_id, techId),
+            eq(ptoRequests.status, "approved"),
+            lte(ptoRequests.start_date, date),
+            gte(ptoRequests.end_date, date)
+          )
+        )
+        .limit(1)
+      if (techPto.length > 0) {
+        insertedCount = -2 // sentinel to signal PTO block
+        return
+      }
+
+      // Check if the tech is available on this day of week (Team > Schedules > Weekly Availability)
+      // employeeAvailability has rows only for days the tech IS available (toggled On)
+      const targetDate = new Date(date + "T12:00:00")
+      const dayOfWeek = targetDate.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+      const availRows = await db
+        .select({ id: employeeAvailability.id })
+        .from(employeeAvailability)
+        .where(
+          and(
+            eq(employeeAvailability.org_id, orgId),
+            eq(employeeAvailability.tech_id, techId),
+            eq(employeeAvailability.day_of_week, dayOfWeek)
+          )
+        )
+        .limit(1)
+      // If the tech has ANY availability rows but none for this day, they're off
+      const anyAvail = await db
+        .select({ id: employeeAvailability.id })
+        .from(employeeAvailability)
+        .where(
+          and(
+            eq(employeeAvailability.org_id, orgId),
+            eq(employeeAvailability.tech_id, techId)
+          )
+        )
+        .limit(1)
+      if (anyAvail.length > 0 && availRows.length === 0) {
+        insertedCount = -4 // sentinel: tech not available this day of week
+        return
+      }
+
+      // Check if the tech has a blocked date (from Team > Schedules)
+      const blockedDate = await db
+        .select({ id: employeeBlockedDates.id })
+        .from(employeeBlockedDates)
+        .where(
+          and(
+            eq(employeeBlockedDates.org_id, orgId),
+            eq(employeeBlockedDates.tech_id, techId),
+            eq(employeeBlockedDates.blocked_date, date)
+          )
+        )
+        .limit(1)
+      if (blockedDate.length > 0) {
+        insertedCount = -3 // sentinel to signal blocked date
+        return
+      }
+
       // Find the current max sort_index for tech+date
       const existingStops = await db
         .select({ sort_index: routeStops.sort_index })
@@ -1194,6 +1272,23 @@ export async function bulkAssignStops(
         if (result.length > 0) insertedCount++
       }
     })
+
+    // Holiday sentinel — date is blocked
+    if (insertedCount === -1) {
+      return { success: false, count: 0, error: "Cannot schedule on a holiday" }
+    }
+    // PTO sentinel — tech has approved time off
+    if (insertedCount === -2) {
+      return { success: false, count: 0, error: "Tech has approved time off on this date" }
+    }
+    // Blocked date sentinel
+    if (insertedCount === -3) {
+      return { success: false, count: 0, error: "Tech has this date blocked" }
+    }
+    // Weekly availability sentinel
+    if (insertedCount === -4) {
+      return { success: false, count: 0, error: "Tech is not available on this day of the week" }
+    }
 
     revalidatePath("/schedule")
 

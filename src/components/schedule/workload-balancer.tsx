@@ -335,7 +335,7 @@ export function WorkloadBalancer({
               </div>
 
               {/* Before/After comparison */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <MetricsPanel
                   metrics={proposal.metrics.before}
                   weekDates={weekDates}
