@@ -35,6 +35,7 @@ import { NotificationPreferences } from "@/components/settings/notification-pref
 import { TimeTrackingSettings } from "@/components/settings/time-tracking-settings"
 import { ProjectTemplates } from "@/components/settings/project-templates"
 import { SubcontractorSettings } from "@/components/settings/subcontractor-settings"
+import { TruckTemplatesSettings } from "@/components/inventory/truck-templates-settings"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
@@ -65,7 +66,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "account"
+type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "inventory" | "account"
 
 interface TabDef {
   id: TabId
@@ -79,6 +80,7 @@ const OWNER_TABS: TabDef[] = [
   { id: "billing", label: "Billing" },
   { id: "time-tracking", label: "Time Tracking" },
   { id: "projects", label: "Projects" },
+  { id: "inventory", label: "Inventory" },
   { id: "account", label: "Account" },
 ]
 
@@ -129,6 +131,9 @@ interface SettingsTabsProps {
   projectTemplates: ProjectTemplate[]
   // Phase 12: Subcontractor directory (owner only)
   initialSubcontractors: SubcontractorRow[]
+  // Phase 13: Inventory templates (owner only)
+  inventoryTechProfiles?: Array<{ id: string; fullName: string }>
+  inventoryTemplates?: Array<{ id: string; name: string; target_role: string | null; is_active: boolean }>
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -167,6 +172,8 @@ export function SettingsTabs({
   initialNotifPreferences,
   projectTemplates,
   initialSubcontractors,
+  inventoryTechProfiles = [],
+  inventoryTemplates = [],
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -602,6 +609,26 @@ export function SettingsTabs({
             </CardHeader>
             <CardContent>
               <SubcontractorSettings initialSubs={initialSubcontractors} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Inventory tab — owner only */}
+      {isOwner && (
+        <div className={cn("flex flex-col gap-6", activeTab === "inventory" ? "block" : "hidden")}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Truck Load Templates</CardTitle>
+              <CardDescription>
+                Define standard truck loads to apply to your techs. Templates specify which chemicals, parts, and tools should be on each truck along with minimum thresholds for reorder alerts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TruckTemplatesSettings
+                initialTemplates={inventoryTemplates}
+                allTechs={inventoryTechProfiles}
+              />
             </CardContent>
           </Card>
         </div>

@@ -20,6 +20,7 @@ import { getProjectTemplates } from "@/actions/projects"
 import type { ProjectTemplate } from "@/actions/projects"
 import { getSubcontractors } from "@/actions/projects-subcontractors"
 import type { SubcontractorRow } from "@/actions/projects-subcontractors"
+import { getTruckLoadTemplates } from "@/actions/truck-inventory"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -58,7 +59,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -72,8 +73,9 @@ export default async function SettingsPage() {
         getOrgTemplateSettings(),
         getProjectTemplates(),
         getSubcontractors(true),
+        getTruckLoadTemplates(),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, [], []]
+    : [null, [], null, [], [], null, null, null, [], null, [], [], []]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
@@ -84,6 +86,10 @@ export default async function SettingsPage() {
     isOwner && subcontractorsResult && !("error" in subcontractorsResult)
       ? (subcontractorsResult as SubcontractorRow[])
       : []
+
+  const truckTemplateList = isOwner && Array.isArray(truckTemplatesResult)
+    ? (truckTemplatesResult as Array<{ id: string; name: string; target_role: string | null; is_active: boolean }>)
+    : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
   // adminDb bypasses RLS, so explicitly filter by org_id
@@ -221,6 +227,8 @@ export default async function SettingsPage() {
         initialNotifPreferences={initialNotifPreferences}
         projectTemplates={projectTemplateList}
         initialSubcontractors={subcontractorList}
+        inventoryTemplates={truckTemplateList}
+        inventoryTechProfiles={techProfiles.map(t => ({ id: t.id, fullName: t.fullName }))}
         signOutAction={async () => {
           "use server"
           await signOut()

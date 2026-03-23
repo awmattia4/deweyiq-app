@@ -2111,6 +2111,138 @@ export async function updateProfitMarginThreshold(
 }
 
 // ---------------------------------------------------------------------------
+// getChemicalUsageReport — Phase 13
+// ---------------------------------------------------------------------------
+
+export interface ChemicalUsageEntry {
+  groupKey: string
+  groupLabel: string
+  chemical: string
+  totalAmount: number
+  unit: string
+  visitCount: number
+  avgAmountPerVisit: number
+}
+
+export interface ChemicalUsageReport {
+  entries: ChemicalUsageEntry[]
+  period: string
+  groupBy: "tech" | "route" | "customer" | "pool"
+}
+
+/**
+ * Aggregates dosing_amounts from service_visits for chemical usage tracking.
+ * dosing_amounts is a JSONB array of { chemical, productId, amount, unit }.
+ *
+ * Uses LEFT JOIN + GROUP BY per MEMORY.md (no correlated subqueries).
+ * Returns per-group totals and averages by chemical name.
+ */
+export async function getChemicalUsageReport(
+  period: "week" | "month" | "quarter" = "month",
+  groupBy: "tech" | "route" | "customer" | "pool" = "tech"
+): Promise<ChemicalUsageReport> {
+  const token = await getRlsToken()
+  if (!token) throw new Error("Not authenticated")
+
+  return withRls(token, async (db) => {
+    const now = new Date()
+    let startDate: Date
+    if (period === "week") {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    } else if (period === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
+    }
+
+    // Fetch service visits with dosing_amounts in the period
+    const visitRows = await db
+      .select({
+        id: serviceVisits.id,
+        tech_id: serviceVisits.tech_id,
+        customer_id: serviceVisits.customer_id,
+        pool_id: serviceVisits.pool_id,
+        dosing_amounts: serviceVisits.dosing_amounts,
+        tech_name: profiles.full_name,
+        customer_name: customers.full_name,
+      })
+      .from(serviceVisits)
+      .leftJoin(profiles, eq(serviceVisits.tech_id, profiles.id))
+      .leftJoin(customers, eq(serviceVisits.customer_id, customers.id))
+      .where(
+        and(
+          sql`${serviceVisits.dosing_amounts} IS NOT NULL`,
+          sql`${serviceVisits.visited_at} >= ${startDate.toISOString()}`
+        )
+      )
+
+    // Process dosing_amounts JSONB in TypeScript (avoids complex SQL JSONB unpacking)
+    // dosing_amounts: Array<{ chemical: string; productId: string; amount: number; unit: string }>
+    type DosingAmount = { chemical: string; productId: string; amount: number; unit: string }
+
+    // Accumulator: groupKey -> chemical -> { total, count, unit }
+    const acc: Map<string, Map<string, { total: number; count: number; unit: string; groupLabel: string }>> = new Map()
+
+    for (const visit of visitRows) {
+      const dosings = (visit.dosing_amounts ?? []) as DosingAmount[]
+      if (!dosings.length) continue
+
+      let groupKey: string
+      let groupLabel: string
+      if (groupBy === "tech") {
+        groupKey = visit.tech_id ?? "unassigned"
+        groupLabel = visit.tech_name ?? "Unassigned"
+      } else if (groupBy === "customer") {
+        groupKey = visit.customer_id ?? "unknown"
+        groupLabel = visit.customer_name ?? "Unknown Customer"
+      } else if (groupBy === "pool") {
+        groupKey = visit.pool_id ?? "no-pool"
+        groupLabel = visit.pool_id ? `Pool ${visit.pool_id.slice(0, 8)}` : "No Pool"
+      } else {
+        // route — group by tech as proxy (routes are per-tech per-day)
+        groupKey = visit.tech_id ?? "unassigned"
+        groupLabel = visit.tech_name ? `${visit.tech_name}'s Route` : "Unassigned Route"
+      }
+
+      if (!acc.has(groupKey)) {
+        acc.set(groupKey, new Map())
+      }
+      const chemMap = acc.get(groupKey)!
+
+      for (const d of dosings) {
+        const existing = chemMap.get(d.chemical) ?? { total: 0, count: 0, unit: d.unit, groupLabel }
+        chemMap.set(d.chemical, {
+          total: existing.total + (d.amount ?? 0),
+          count: existing.count + 1,
+          unit: d.unit,
+          groupLabel,
+        })
+      }
+    }
+
+    const entries: ChemicalUsageEntry[] = []
+    for (const [groupKey, chemMap] of acc.entries()) {
+      for (const [chemical, stats] of chemMap.entries()) {
+        entries.push({
+          groupKey,
+          groupLabel: stats.groupLabel,
+          chemical,
+          totalAmount: stats.total,
+          unit: stats.unit,
+          visitCount: stats.count,
+          avgAmountPerVisit: stats.count > 0 ? stats.total / stats.count : 0,
+        })
+      }
+    }
+
+    // Sort by total amount descending
+    entries.sort((a, b) => b.totalAmount - a.totalAmount)
+
+    return { entries, period, groupBy }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // CSV helper
 // ---------------------------------------------------------------------------
 

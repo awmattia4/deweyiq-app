@@ -18,6 +18,8 @@ import { RoutesTabsClient } from "@/components/field/routes-tabs-client"
 import { getTechProjects, getTechProjectBriefing } from "@/actions/projects-field"
 import type { TechProjectSummary, ProjectBriefingData } from "@/actions/projects-field"
 import { toLocalDateString } from "@/lib/date-utils"
+import { getWhatToBring } from "@/actions/what-to-bring"
+import type { WhatToBringResult } from "@/actions/what-to-bring"
 
 export const metadata: Metadata = {
   title: "Routes",
@@ -69,13 +71,17 @@ export default async function RoutesPage() {
   // Also check if route was already started for the Start Route button initial state
   // Also fetch time tracking enabled flag (conditionally for field users only)
   // Also fetch project data for field users (tech/owner only)
-  const [stops, routeAlreadyStarted, timeTrackingEnabled, techProjectsResult, briefingResult] = await Promise.all([
+  const todayDateString = toLocalDateString(new Date())
+
+  const [stops, routeAlreadyStarted, timeTrackingEnabled, techProjectsResult, briefingResult, prepDataResult] = await Promise.all([
     getTodayStops(),
     user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
     isFieldUser ? getTimeTrackingEnabled() : Promise.resolve(false),
     // Project data — only for tech/owner field users
     isFieldUser ? getTechProjects() : Promise.resolve([] as TechProjectSummary[]),
     isFieldUser ? getTechProjectBriefing() : Promise.resolve({ todayPhases: [], materialsNeeded: [], subsOnSite: [], upcomingInspections: [] } as ProjectBriefingData),
+    // Prep tab data — only for field users with an ID
+    isFieldUser ? getWhatToBring(user.id, todayDateString).catch(() => null) : Promise.resolve(null),
   ])
 
   // Normalize project data (handle error gracefully — don't break the page)
@@ -86,7 +92,9 @@ export default async function RoutesPage() {
     ? { todayPhases: [], materialsNeeded: [], subsOnSite: [], upcomingInspections: [] }
     : briefingResult
 
-  const todayLabel = toLocalDateString(new Date())
+  const prepData: WhatToBringResult | null = prepDataResult
+
+  const todayLabel = todayDateString
 
   // ── Weather fetch (Phase 10-07) ──────────────────────────────────────────
   // Fetch a single daily forecast for the route area — all stops share the same
@@ -207,6 +215,9 @@ export default async function RoutesPage() {
         briefing={briefing}
         today={todayLabel}
         showProjectsTab={isFieldUser}
+        techId={user.id}
+        prepData={prepData}
+        showPrepTab={isFieldUser}
       />
     </div>
   )

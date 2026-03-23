@@ -21,6 +21,7 @@ import {
   ClipboardListIcon,
   BookOpenIcon,
   FolderKanbanIcon,
+  PackageIcon,
 } from "lucide-react"
 import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
@@ -135,6 +136,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: FolderKanbanIcon,
     roles: ["owner", "office"],
   },
+  // ── Available in Phase 13 ──────────────────────────────────────────────────
+  {
+    label: "Inventory",
+    href: "/inventory",
+    icon: PackageIcon,
+    roles: ["owner", "office"],
+  },
   // ── Available in Phase 7 ───────────────────────────────────────────────────
   {
     label: "Billing",
@@ -172,11 +180,18 @@ const NAV_ITEMS: NavItem[] = [
 
 // Tech-only nav (minimal — just their work)
 // Phase 3: Settings added for tech so they can set maps preference (FIELD-11)
+// Phase 13: Inventory added for truck inventory and shopping list
 const TECH_NAV_ITEMS: NavItem[] = [
   {
     label: "My Routes",
     href: "/routes",
     icon: MapIcon,
+    roles: ["tech"],
+  },
+  {
+    label: "Inventory",
+    href: "/inventory",
+    icon: PackageIcon,
     roles: ["tech"],
   },
   {
