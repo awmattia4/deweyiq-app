@@ -150,6 +150,16 @@ export default async function TeamPage() {
         ]}
       >
 
+        {/* ── Dashboard tab (owner only) ─────────────────────────────────────── */}
+        {isOwner && (
+          <TabsContent value="dashboard">
+            <TeamDashboard
+              initialEmployees={initialDashboardEmployees}
+              initialAlerts={initialDashboardAlerts}
+            />
+          </TabsContent>
+        )}
+
         {/* ── Members tab (owner/office only) ───────────────────────────────── */}
         {!isTech && (
           <TabsContent value="members">
