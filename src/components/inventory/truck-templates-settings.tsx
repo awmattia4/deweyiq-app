@@ -196,7 +196,7 @@ function TemplateEditorDialog({ existingTemplate, onSaved, onClose }: TemplateEd
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState(existingTemplate?.name ?? "")
-  const [targetRole, setTargetRole] = useState(existingTemplate?.target_role ?? "tech")
+  const [targetRole, setTargetRole] = useState(existingTemplate?.target_role ?? "all")
   const [items, setItems] = useState<TemplateItem[]>([])
 
   function addItem() {
@@ -230,16 +230,17 @@ function TemplateEditorDialog({ existingTemplate, onSaved, onClose }: TemplateEd
 
     startTransition(async () => {
       try {
+        const roleValue = targetRole === "all" ? null : targetRole
         if (existingTemplate) {
           const updated = await updateTruckLoadTemplate(existingTemplate.id, {
             name: name.trim(),
-            target_role: targetRole || null,
+            target_role: roleValue,
           })
           if (updated) onSaved(updated as Template)
         } else {
           const created = await createTruckLoadTemplate({
             name: name.trim(),
-            target_role: targetRole || null,
+            target_role: roleValue,
             items: items.filter((i) => i.item_name.trim()),
           })
           if (created) onSaved(created as Template)
@@ -276,13 +277,16 @@ function TemplateEditorDialog({ existingTemplate, onSaved, onClose }: TemplateEd
 
           <div className="flex flex-col gap-1.5">
             <Label>Target Role</Label>
-            <Select value={targetRole ?? ""} onValueChange={setTargetRole}>
+            <Select
+              value={targetRole}
+              onValueChange={setTargetRole}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="All roles" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tech">Tech</SelectItem>
-                <SelectItem value="">All roles</SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
               </SelectContent>
             </Select>
           </div>
