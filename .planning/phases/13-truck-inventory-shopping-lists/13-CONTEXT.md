@@ -53,6 +53,7 @@ Full truck inventory management system — per-tech truck inventory with auto-de
 - PO generation needs two modes because real-world suppliers vary — some accept email POs, others just get a phone call with a list
 - "What to Bring" should feel like a morning prep checklist — tech opens it, knows exactly what to load before leaving the shop
 - Chemical predictions based on pool history help techs avoid under-loading but should be clearly separated from confirmed requirements
+- **CRITICAL: Review existing commits and code before implementing.** This phase touches existing systems (parts catalog, dosing logs, route pages, work orders). Researchers and planners MUST read recent git history and existing code to understand current state — do NOT break or revert any existing functionality. Additive changes only; extend, don't replace.
 
 </specifics>
 
