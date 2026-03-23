@@ -55,6 +55,7 @@ interface Props {
   initialRequests: PtoRequest[]
   userRole: string
   userId: string
+  teamMembers?: Array<{ id: string; full_name: string }>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ function RequestPtoDialog({ onSubmitted }: { onSubmitted: () => void }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function PtoManager({ initialBalances, initialRequests, userRole, userId }: Props) {
+export function PtoManager({ initialBalances, initialRequests, userRole, userId, teamMembers = [] }: Props) {
   const [balances, setBalances] = useState<PtoBalance[]>(initialBalances)
   const [requests, setRequests] = useState<PtoRequest[]>(initialRequests)
   const [isPending, startTransition] = useTransition()
@@ -307,6 +308,13 @@ export function PtoManager({ initialBalances, initialRequests, userRole, userId 
   const isOwner = userRole === "owner"
   const pendingRequests = requests.filter((r) => r.status === "pending")
   const historyRequests = requests.filter((r) => r.status !== "pending")
+
+  // Add balance form state (owner only)
+  const [addTechId, setAddTechId] = useState("")
+  const [addType, setAddType] = useState<PtoType>("vacation")
+  const [addHoursStr, setAddHoursStr] = useState("40")
+  const [addAccrualStr, setAddAccrualStr] = useState("0")
+  const [addError, setAddError] = useState<string | null>(null)
 
   async function refreshData() {
     const [newBalances, newRequests] = await Promise.all([
@@ -340,10 +348,72 @@ export function PtoManager({ initialBalances, initialRequests, userRole, userId 
           {!isOwner && <RequestPtoDialog onSubmitted={refreshData} />}
         </div>
 
+        {/* Add Balance form — shown for owner regardless of whether balances exist */}
+        {isOwner && teamMembers.length > 0 && (
+          <div className="flex items-end gap-3 flex-wrap rounded-lg border border-border/60 bg-muted/10 p-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Employee</Label>
+              <Select value={addTechId} onValueChange={setAddTechId}>
+                <SelectTrigger className="w-44 h-8 text-xs">
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamMembers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Type</Label>
+              <Select value={addType} onValueChange={(v) => setAddType(v as PtoType)}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vacation">Vacation</SelectItem>
+                  <SelectItem value="sick">Sick</SelectItem>
+                  <SelectItem value="personal">Personal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Hours</Label>
+              <Input type="number" step="0.5" min="0" value={addHoursStr} onChange={(e) => setAddHoursStr(e.target.value)} className="w-20 h-8 text-xs" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Accrual/Period</Label>
+              <Input type="number" step="0.5" min="0" value={addAccrualStr} onChange={(e) => setAddAccrualStr(e.target.value)} className="w-24 h-8 text-xs" />
+            </div>
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={isPending || !addTechId}
+              onClick={() => {
+                const hours = parseFloat(addHoursStr)
+                const accrual = parseFloat(addAccrualStr)
+                if (!addTechId) { setAddError("Select an employee"); return }
+                if (isNaN(hours)) { setAddError("Invalid hours"); return }
+                setAddError(null)
+                startTransition(async () => {
+                  await updatePtoBalance(addTechId, addType, hours, isNaN(accrual) ? 0 : accrual)
+                  await refreshData()
+                  setAddTechId("")
+                  setAddType("vacation")
+                  setAddHoursStr("40")
+                  setAddAccrualStr("0")
+                })
+              }}
+            >
+              {isPending ? "Adding..." : "Add Balance"}
+            </Button>
+            {addError && <p className="text-xs text-destructive w-full">{addError}</p>}
+          </div>
+        )}
+
         {balances.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
-            No PTO balances configured yet.
-            {isOwner ? " Add balances by editing the hours below once employees are set up." : ""}
+            {isOwner ? "No PTO balances yet. Use the form above to add hours for your employees." : "No PTO balances configured yet."}
           </p>
         ) : (
           <div className="rounded-xl border border-border overflow-hidden">

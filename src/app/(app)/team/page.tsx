@@ -227,6 +227,7 @@ export default async function TeamPage() {
             initialRequests={ptoRequests}
             userRole={user.role}
             userId={user.id}
+            teamMembers={members.map((m) => ({ id: m.id, full_name: m.full_name || m.email }))}
           />
         </TabsContent>
 
