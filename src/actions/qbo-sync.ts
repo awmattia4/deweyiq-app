@@ -440,6 +440,22 @@ export async function handleQboWebhook(
       const entities = notification.dataChangeEvent?.entities ?? []
 
       for (const entity of entities) {
+        // Phase 13: Handle Item create/update — sync to DeweyIQ parts_catalog
+        if (entity.name === "Item") {
+          if (entity.operation === "Create" || entity.operation === "Update") {
+            try {
+              const { syncQboItemToDeweyIq } = await import("@/actions/qbo-items")
+              await syncQboItemToDeweyIq(entity.id, orgId)
+            } catch (itemErr) {
+              console.error(
+                `[handleQboWebhook] Error syncing Item ${entity.id}:`,
+                itemErr
+              )
+            }
+          }
+          continue
+        }
+
         // Only process Payment create/update
         if (entity.name !== "Payment") continue
         if (entity.operation !== "Create" && entity.operation !== "Update") continue

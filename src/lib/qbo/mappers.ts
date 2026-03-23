@@ -8,6 +8,8 @@
  * - mapQboPaymentToPoolCo: QBO payment -> partial DeweyIQ payment record
  * - mapTimeEntryToQboTimeActivity: DeweyIQ time_entry -> QBO TimeActivity (Phase 11-04)
  * - mapProfileToQboEmployee: DeweyIQ profile -> QBO Employee (Phase 11-04)
+ * - mapCatalogItemToQboItem: DeweyIQ parts_catalog item -> QBO Item (Phase 13)
+ * - mapQboItemToCatalogItem: QBO Item -> DeweyIQ parts_catalog shape (Phase 13)
  */
 
 // ---------------------------------------------------------------------------
@@ -325,4 +327,126 @@ export function mapProfileToQboEmployee(
   }
 
   return qboEmployee
+}
+
+// ---------------------------------------------------------------------------
+// Phase 13: Parts catalog <-> QBO Item mappers
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal shape for a DeweyIQ parts_catalog item (mapper input).
+ */
+export interface PoolCoCatalogItem {
+  id: string
+  name: string
+  description?: string | null
+  sku?: string | null
+  default_cost_price?: string | null
+  default_sell_price?: string | null
+  is_labor: boolean
+  is_active: boolean
+  qbo_item_id?: string | null
+}
+
+/**
+ * Mapped shape returned by mapQboItemToCatalogItem for upsert into parts_catalog.
+ */
+export interface MappedCatalogItem {
+  name: string
+  description?: string | null
+  sku?: string | null
+  default_cost_price?: string | null
+  default_sell_price?: string | null
+  is_labor: boolean
+  is_active: boolean
+}
+
+// ---------------------------------------------------------------------------
+// mapCatalogItemToQboItem
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a DeweyIQ parts_catalog item to a QBO Item create/update payload.
+ *
+ * QBO Item type mapping:
+ * - is_labor = true  → Type: "Service"
+ * - is_labor = false → Type: "NonInventory" (pool supplies are not stocked in QBO)
+ *
+ * QBO Item fields:
+ * - Name: required, must be unique in QBO
+ * - Type: "Service" | "NonInventory"
+ * - Sku: optional SKU
+ * - UnitPrice: default sell price (appears on invoices)
+ * - PurchaseCost: default cost price (for P&L)
+ * - Active: mirrors is_active
+ *
+ * Caller adds Id + SyncToken for updates.
+ */
+export function mapCatalogItemToQboItem(item: PoolCoCatalogItem): Record<string, any> {
+  const qboItem: Record<string, any> = {
+    Name: item.name,
+    Type: item.is_labor ? "Service" : "NonInventory",
+    Active: item.is_active,
+  }
+
+  if (item.sku) {
+    qboItem.Sku = item.sku
+  }
+
+  if (item.description) {
+    qboItem.Description = item.description
+  }
+
+  if (item.default_sell_price) {
+    const price = parseFloat(item.default_sell_price)
+    if (!isNaN(price)) {
+      qboItem.UnitPrice = price
+    }
+  }
+
+  if (item.default_cost_price) {
+    const cost = parseFloat(item.default_cost_price)
+    if (!isNaN(cost)) {
+      qboItem.PurchaseCost = cost
+    }
+  }
+
+  return qboItem
+}
+
+// ---------------------------------------------------------------------------
+// mapQboItemToCatalogItem
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a QBO Item object to a DeweyIQ parts_catalog shape.
+ * Used for inbound webhook processing and bulk import.
+ *
+ * QBO Item type mapping (reverse of above):
+ * - Type === "Service" → is_labor = true
+ * - All others (NonInventory, Inventory, etc.) → is_labor = false
+ */
+export function mapQboItemToCatalogItem(qboItem: any): MappedCatalogItem {
+  const isService = qboItem.Type === "Service"
+  const isActive = qboItem.Active !== false // default to true if not present
+
+  const sellPrice =
+    qboItem.UnitPrice !== undefined && qboItem.UnitPrice !== null
+      ? String(qboItem.UnitPrice)
+      : null
+
+  const costPrice =
+    qboItem.PurchaseCost !== undefined && qboItem.PurchaseCost !== null
+      ? String(qboItem.PurchaseCost)
+      : null
+
+  return {
+    name: String(qboItem.Name ?? "Unknown Item"),
+    description: qboItem.Description ?? null,
+    sku: qboItem.Sku ?? null,
+    default_sell_price: sellPrice,
+    default_cost_price: costPrice,
+    is_labor: isService,
+    is_active: isActive,
+  }
 }
