@@ -21,8 +21,9 @@ import {
   truckLoadTemplateItems,
   barcodeCatalogLinks,
   alerts,
+  partsCatalog,
 } from "@/lib/db/schema"
-import { eq, and, inArray, isNull, sql } from "drizzle-orm"
+import { eq, and, inArray, isNull, sql, ilike } from "drizzle-orm"
 import { convertUnits } from "@/lib/unit-conversion"
 import { notifyUser, notifyOrgRole } from "@/lib/notifications/dispatch"
 
@@ -130,6 +131,57 @@ export async function addTruckInventoryItem(data: AddTruckInventoryItemInput) {
         barcode: data.barcode ?? null,
       })
       .returning()
+
+    // Auto-add to parts catalog if not already there (non-chemical items only)
+    // This keeps the catalog in sync with what techs actually use on their trucks
+    if (newItem && !data.catalog_item_id && !data.chemical_product_id && data.category !== "chemical") {
+      try {
+        const existing = await db
+          .select({ id: partsCatalog.id })
+          .from(partsCatalog)
+          .where(
+            and(
+              eq(partsCatalog.org_id, orgId),
+              ilike(partsCatalog.name, data.item_name)
+            )
+          )
+          .limit(1)
+
+        if (existing.length === 0) {
+          // Item doesn't exist in catalog — add it
+          const [catalogItem] = await db
+            .insert(partsCatalog)
+            .values({
+              org_id: orgId,
+              name: data.item_name,
+              category: data.category === "tool" ? "Other" : data.category === "equipment" ? "Other" : "Other",
+              default_unit: data.unit,
+              is_labor: false,
+              is_active: true,
+            })
+            .returning()
+
+          // Link the inventory item to the new catalog entry
+          if (catalogItem) {
+            await db
+              .update(truckInventory)
+              .set({ catalog_item_id: catalogItem.id })
+              .where(eq(truckInventory.id, newItem.id))
+            newItem.catalog_item_id = catalogItem.id
+          }
+        } else {
+          // Item exists — link inventory item to it
+          await db
+            .update(truckInventory)
+            .set({ catalog_item_id: existing[0].id })
+            .where(eq(truckInventory.id, newItem.id))
+          newItem.catalog_item_id = existing[0].id
+        }
+      } catch (catalogErr) {
+        // Non-fatal — inventory item was still created
+        console.error("[addTruckInventoryItem] catalog sync failed:", catalogErr)
+      }
+    }
 
     // If a barcode was provided, also upsert into barcode_catalog_links
     if (data.barcode && newItem) {
