@@ -51,15 +51,19 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
             Html5QrcodeSupportedFormats.QR_CODE,
           ],
           verbose: false,
+          useBarCodeDetectorIfSupported: true,
         })
         scannerRef.current = scanner
 
         await scanner.start(
           { facingMode: "environment" },
           {
-            fps: 15,
-            qrbox: undefined, // Scan the FULL camera frame — no restricted box
-            aspectRatio: 1.5,
+            fps: 20,
+            // Dynamic scan box — 80% of video width, maintains barcode aspect ratio
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+              width: Math.floor(viewfinderWidth * 0.85),
+              height: Math.floor(viewfinderHeight * 0.4),
+            }),
           },
           (decodedText) => {
             if (scannedRef.current) return
