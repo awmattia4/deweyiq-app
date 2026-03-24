@@ -4,6 +4,7 @@ import { getRlsToken, withRls } from "@/lib/db"
 import { customers, serviceVisits, invoices, portalMessages } from "@/lib/db/schema"
 import { and, eq, gte, lt, sql, count, max } from "drizzle-orm"
 import { getAiClient, AI_MODEL } from "@/lib/ai/client"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -268,7 +269,7 @@ export async function getChurnPredictions(): Promise<GetChurnPredictionsResult> 
       score = Math.min(score, 100)
 
       const lastServiceDate = lastVisit
-        ? lastVisit.toISOString().split("T")[0]
+        ? toLocalDateString(new Date(lastVisit))
         : null
 
       scored.push({

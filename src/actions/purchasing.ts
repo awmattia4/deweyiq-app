@@ -389,7 +389,7 @@ export async function sendPurchaseOrder(poId: string): Promise<{ ok: boolean; er
     await resend.emails.send({
       from: process.env.EMAIL_FROM ?? "noreply@deweyiq.com",
       to: po.supplier_email,
-      subject: `Purchase Order ${po.po_number} from ${po.supplier_name}`,
+      subject: `Purchase Order ${po.po_number}`,
       html: htmlBody,
     })
 

@@ -501,7 +501,12 @@ export async function autoGenerateFromScheduleForecast(techId: string, routeDate
       { total: number; count: number; unit: string; name: string }
     > = {}
 
+    // Cap at 4 visits per pool to prevent skewed data
+    const visitCountByPool: Record<string, number> = {}
     for (const visit of recentVisits) {
+      if (!visit.pool_id) continue
+      visitCountByPool[visit.pool_id] = (visitCountByPool[visit.pool_id] ?? 0) + 1
+      if (visitCountByPool[visit.pool_id] > 4) continue
       if (!visit.dosing_amounts) continue
       const dosing = visit.dosing_amounts as Array<{
         chemical_product_id?: string

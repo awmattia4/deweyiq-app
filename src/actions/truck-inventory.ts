@@ -557,7 +557,9 @@ export async function transferInventoryItem(
         eq(truckInventory.tech_id, toTechId),
         sourceItem.chemical_product_id
           ? eq(truckInventory.chemical_product_id, sourceItem.chemical_product_id)
-          : sql`FALSE`
+          : sourceItem.catalog_item_id
+            ? eq(truckInventory.catalog_item_id, sourceItem.catalog_item_id)
+            : eq(truckInventory.item_name, sourceItem.item_name)
       )
     )
     .limit(1)

@@ -9,7 +9,7 @@
  * Phase 13 Plan 03 adds purchasing/spending/chemical usage tabs for office.
  */
 
-import { useState, useEffect, useTransition, useCallback } from "react"
+import { useState, useEffect, useTransition } from "react"
 import { cn } from "@/lib/utils"
 import { TruckInventoryView } from "@/components/inventory/truck-inventory-view"
 import { ShoppingListView } from "@/components/inventory/shopping-list-view"
@@ -118,13 +118,13 @@ export function InventoryPageClient({
   const validTabIds = new Set(tabs.map((t) => t.id))
 
   // Persist active tab in URL hash so it survives refresh
-  const getInitialTab = useCallback((): TabId => {
+  function getInitialTab(): TabId {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "") as TabId
       if (hash && validTabIds.has(hash)) return hash
     }
     return "inventory"
-  }, [])
+  }
 
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab)
   const [selectedTechId, setSelectedTechId] = useState(defaultTechId ?? currentUserId)
