@@ -377,18 +377,16 @@ Plans:
   5. Office can pause an agreement (stops and billing suspended), resume it (stops and billing restart), or cancel it (with notice period enforcement)
   6. Expiring agreements trigger renewal reminders, and office can renew or amend terms — amendments create a new version sent for customer re-approval
   7. Customer portal shows active agreements with service scope, pricing, billing schedule, and contract term
-**Plans**: TBD
+**Plans**: 7 plans
 
 Plans:
-- [ ] 14-01: Schema foundation — service_agreements, agreement_versions, agreement_signatures tables with RLS, agreement_templates table, enums (status, term_type), relations
-- [ ] 14-02: Agreement builder — create agreement UI (customer/pool selector, frequency, services checklist, pricing, term config, cancellation terms), agreement template manager in settings
-- [ ] 14-03: Agreement PDF + delivery — @react-pdf/renderer agreement document, branded template with terms/conditions, email delivery via Resend, secure token system (reuse quote pattern)
-- [ ] 14-04: Customer approval page — public /agree/[token] page (no auth), agreement review with full terms display, e-signature capture (name + date + IP + user agent), accept/decline flow
-- [ ] 14-05: Auto-provisioning on acceptance — auto-create schedule_rule, auto-configure recurring billing model, link agreement to billing cycle, status transition to active
-- [ ] 14-06: Agreement lifecycle — pause/resume (suspend stops + billing), cancel (notice period enforcement, final invoice), expire (auto-flag at term end), auto-renew toggle, amendment flow with re-approval
-- [ ] 14-07: Agreement manager UI — list page with status filters, expiration alerts, renewal dashboard, compliance flags (missed stops vs. agreed frequency)
-- [ ] 14-08: Customer portal integration — active agreements view, service scope, pricing, next billing date, request changes/cancellation
-- [ ] 14-09: End-to-end verification checkpoint
+- [ ] 14-01-PLAN.md — Schema foundation: service_agreements, agreement_pool_entries, agreement_amendments, agreement_templates tables with RLS, org_settings extensions, agreement CRUD server actions
+- [ ] 14-02-PLAN.md — Agreement builder UI: multi-pool agreement creation with per-pool frequency/pricing/checklist, template selection, Settings "Agreements" tab for template management
+- [ ] 14-03-PLAN.md — PDF generation + delivery: agreement PDF document with @react-pdf/renderer, JWT token system, email template, sendAgreement action with PDF attachment
+- [ ] 14-04-PLAN.md — Customer approval page: public /agreement/[token] page with dual e-signature (typed + canvas draw), accept/decline flow, auto-provisioning of schedule rules and billing on acceptance
+- [ ] 14-05-PLAN.md — Agreement manager: top-level /agreements page with status/customer/search filters, agreement detail page with actions and activity timeline, sidebar + header integration
+- [ ] 14-06-PLAN.md — Lifecycle management: pause/resume (schedule rule control), cancel (notice period), renew, amendment system with major/minor classification and version history
+- [ ] 14-07-PLAN.md — Renewal cron + compliance: daily cron for renewal reminders and expiration checks, compliance tracking (missed stops vs agreed frequency, billing alignment), compliance indicators in UI
 
 ### Phase 15: Intelligent Billing Automation
 **Goal**: Layer per-customer pricing, bulk operational fees, and smart anomaly detection onto the existing /billing page — so the owner sets a rate per customer once, applies shop fees in bulk, and the system catches billing mistakes before invoices go out
