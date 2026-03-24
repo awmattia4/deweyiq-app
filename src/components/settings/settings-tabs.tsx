@@ -20,6 +20,7 @@ import { CompanyProfileSettings } from "@/components/settings/company-profile-se
 import { ChecklistManager } from "@/components/settings/checklist-manager"
 import { ChemistryTargetEditor } from "@/components/settings/chemistry-target-editor"
 import { PartsCatalogManager } from "@/components/settings/parts-catalog-manager"
+import { ChemicalProductsManager } from "@/components/settings/chemical-products-manager"
 import { WoTemplateManager } from "@/components/settings/wo-template-manager"
 import { WorkOrderSettings } from "@/components/settings/work-order-settings"
 import { StripeConnectSettings } from "@/components/settings/stripe-connect-settings"
@@ -44,6 +45,7 @@ import type { TemplateRow } from "@/actions/notification-templates"
 import type { DunningStep } from "@/lib/db/schema/dunning"
 import type { CatalogItem } from "@/actions/parts-catalog"
 import type { WoTemplate } from "@/actions/parts-catalog"
+import type { ChemicalProduct } from "@/actions/chemical-products"
 import type { StripeAccountStatus } from "@/actions/stripe-connect"
 import type { ProjectTemplate } from "@/actions/projects"
 import type { SubcontractorRow } from "@/actions/projects-subcontractors"
@@ -134,6 +136,8 @@ interface SettingsTabsProps {
   // Phase 13: Inventory templates (owner only)
   inventoryTechProfiles?: Array<{ id: string; fullName: string }>
   inventoryTemplates?: Array<{ id: string; name: string; target_role: string | null; is_active: boolean }>
+  // Chemical products catalog (full CRUD, Inventory tab)
+  chemicalProductCatalog?: ChemicalProduct[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -174,6 +178,7 @@ export function SettingsTabs({
   initialSubcontractors,
   inventoryTechProfiles = [],
   inventoryTemplates = [],
+  chemicalProductCatalog = [],
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -440,21 +445,6 @@ export function SettingsTabs({
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <ShoppingCartIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                <CardTitle className="text-base">Parts &amp; Materials Catalog</CardTitle>
-              </div>
-              <CardDescription>
-                Save frequently used parts and labor items for quick reuse on work orders and quotes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PartsCatalogManager initialItems={catalogItems} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
                 <FileTextIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <CardTitle className="text-base">Work Order Templates</CardTitle>
               </div>
@@ -617,6 +607,36 @@ export function SettingsTabs({
       {/* Inventory tab — owner only */}
       {isOwner && (
         <div className={cn("flex flex-col gap-6", activeTab === "inventory" ? "block" : "hidden")}>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <FlaskConicalIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <CardTitle className="text-base">Chemical Products</CardTitle>
+              </div>
+              <CardDescription>
+                Manage the chemical products your company uses. Each product maps to a dosing type so DeweyIQ can calculate dose recommendations and track chemical costs per pool.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChemicalProductsManager initialProducts={chemicalProductCatalog} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShoppingCartIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <CardTitle className="text-base">Parts &amp; Materials Catalog</CardTitle>
+              </div>
+              <CardDescription>
+                Save frequently used parts and labor items for quick reuse on work orders and quotes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PartsCatalogManager initialItems={catalogItems} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Truck Load Templates</CardTitle>

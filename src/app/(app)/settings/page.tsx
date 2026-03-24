@@ -21,6 +21,8 @@ import type { ProjectTemplate } from "@/actions/projects"
 import { getSubcontractors } from "@/actions/projects-subcontractors"
 import type { SubcontractorRow } from "@/actions/projects-subcontractors"
 import { getTruckLoadTemplates } from "@/actions/truck-inventory"
+import { getChemicalProducts } from "@/actions/chemical-products"
+import type { ChemicalProduct } from "@/actions/chemical-products"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -59,7 +61,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -74,8 +76,9 @@ export default async function SettingsPage() {
         getProjectTemplates(),
         getSubcontractors(true),
         getTruckLoadTemplates(),
+        getChemicalProducts(),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, [], [], []]
+    : [null, [], null, [], [], null, null, null, [], null, [], [], [], []]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
@@ -89,6 +92,10 @@ export default async function SettingsPage() {
 
   const truckTemplateList = isOwner && Array.isArray(truckTemplatesResult)
     ? (truckTemplatesResult as Array<{ id: string; name: string; target_role: string | null; is_active: boolean }>)
+    : []
+
+  const chemicalProductCatalogList: ChemicalProduct[] = isOwner && Array.isArray(chemicalProductCatalogResult)
+    ? (chemicalProductCatalogResult as ChemicalProduct[])
     : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
@@ -229,6 +236,7 @@ export default async function SettingsPage() {
         initialSubcontractors={subcontractorList}
         inventoryTemplates={truckTemplateList}
         inventoryTechProfiles={techProfiles.map(t => ({ id: t.id, fullName: t.fullName }))}
+        chemicalProductCatalog={chemicalProductCatalogList}
         signOutAction={async () => {
           "use server"
           await signOut()
