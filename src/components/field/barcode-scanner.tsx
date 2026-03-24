@@ -3,12 +3,12 @@
 /**
  * Phase 13: Barcode Scanner Component
  *
- * Strategy:
- * 1. Try native BarcodeDetector API (Chrome 83+, Safari 17.2+) — fast, hardware-accelerated
- * 2. Fall back to @zxing/library JS decoder (works everywhere including iOS PWA WebView)
- * 3. Manual entry always available as last resort
+ * Two-tier strategy:
+ * 1. Native BarcodeDetector API (Chrome desktop/Android) — fast, hardware-accelerated
+ * 2. @zxing/library fallback (iOS PWA, older browsers) — zxing manages its own video stream
+ * 3. Manual entry always available
  *
- * IMPORTANT: Load via next/dynamic with ssr: false.
+ * Load via next/dynamic with ssr: false.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 // ---------------------------------------------------------------------------
-// BarcodeDetector type (native browser API, not yet in TS lib)
+// BarcodeDetector type (native browser API)
 // ---------------------------------------------------------------------------
 
 interface DetectedBarcode {
@@ -53,15 +53,22 @@ interface BarcodeScannerProps {
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const scanLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const zxingReaderRef = useRef<{ reset: () => void } | null>(null)
   const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading")
   const [manualInput, setManualInput] = useState("")
   const scannedRef = useRef(false)
+  const onScanRef = useRef(onScan)
+  onScanRef.current = onScan
 
-  const stopCamera = useCallback(() => {
-    if (scanLoopRef.current) {
-      clearTimeout(scanLoopRef.current)
-      scanLoopRef.current = null
+  const cleanup = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    if (zxingReaderRef.current) {
+      try { zxingReaderRef.current.reset() } catch {}
+      zxingReaderRef.current = null
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
@@ -71,55 +78,95 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
   useEffect(() => {
     let cancelled = false
+    scannedRef.current = false
 
-    async function start() {
+    async function tryNativeDetector(): Promise<boolean> {
+      if (!window.BarcodeDetector) return false
+
       try {
-        // 1. Get camera stream
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        })
+        const supported = await window.BarcodeDetector.getSupportedFormats()
+        const wanted = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"]
+        const formats = wanted.filter((f) => supported.includes(f))
+        if (formats.length === 0) return false
 
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop())
-          return
-        }
+        // Get camera
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        })
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return true }
 
         streamRef.current = stream
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
         }
 
+        const detector = new window.BarcodeDetector!({ formats })
         setStatus("scanning")
 
-        // 2. Try native BarcodeDetector first
-        if (window.BarcodeDetector) {
+        // Scan loop
+        const scan = async () => {
+          if (cancelled || scannedRef.current) return
           try {
-            const supported = await window.BarcodeDetector.getSupportedFormats()
-            const wanted = [
-              "ean_13", "ean_8", "upc_a", "upc_e",
-              "code_128", "code_39", "code_93",
-              "itf", "qr_code", "data_matrix",
-            ]
-            const formats = wanted.filter((f) => supported.includes(f))
-
-            if (formats.length > 0) {
-              const detector = new window.BarcodeDetector!({ formats })
-              startNativeScan(detector)
-              return
+            if (videoRef.current && videoRef.current.readyState >= 2) {
+              const barcodes = await detector.detect(videoRef.current)
+              if (barcodes.length > 0 && barcodes[0].rawValue && !scannedRef.current) {
+                scannedRef.current = true
+                if (navigator.vibrate) navigator.vibrate(100)
+                onScanRef.current(barcodes[0].rawValue)
+                return
+              }
             }
-          } catch {
-            // BarcodeDetector failed — fall through to zxing
+          } catch {}
+          if (!cancelled && !scannedRef.current) {
+            timerRef.current = setTimeout(scan, 250)
           }
         }
+        scan()
+        return true
+      } catch {
+        return false
+      }
+    }
 
-        // 3. Fallback: zxing JS decoder
-        startZxingScan()
+    async function useZxingFallback() {
+      try {
+        const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import("@zxing/library")
+        if (cancelled) return
+
+        const hints = new Map()
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.QR_CODE, BarcodeFormat.ITF,
+        ])
+        hints.set(DecodeHintType.TRY_HARDER, true)
+
+        const reader = new BrowserMultiFormatReader(hints)
+        zxingReaderRef.current = reader
+
+        // Let zxing manage the video element entirely — it requests its own stream
+        // This is the ONLY reliable way on iOS PWA
+        await reader.decodeFromVideoDevice(
+          undefined as unknown as string,  // null = default camera
+          videoRef.current!,
+          (result) => {
+            if (cancelled || scannedRef.current) return
+            if (result) {
+              const text = result.getText()
+              if (text) {
+                scannedRef.current = true
+                if (navigator.vibrate) navigator.vibrate(100)
+                onScanRef.current(text)
+                try { reader.reset() } catch {}
+              }
+            }
+            // No result = no barcode in this frame, zxing will retry automatically
+          }
+        )
+
+        if (!cancelled) setStatus("scanning")
       } catch (err) {
         if (!cancelled) {
           setStatus("error")
@@ -128,74 +175,11 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
       }
     }
 
-    function startNativeScan(detector: InstanceType<NonNullable<typeof window.BarcodeDetector>>) {
-      const scan = async () => {
-        if (cancelled || scannedRef.current) return
-
-        try {
-          if (videoRef.current && videoRef.current.readyState >= 2) {
-            const barcodes = await detector.detect(videoRef.current)
-            if (barcodes.length > 0 && barcodes[0].rawValue && !scannedRef.current) {
-              scannedRef.current = true
-              if (navigator.vibrate) navigator.vibrate(100)
-              onScan(barcodes[0].rawValue)
-              return
-            }
-          }
-        } catch {
-          // Frame detection failed — continue
-        }
-
-        if (!cancelled && !scannedRef.current) {
-          scanLoopRef.current = setTimeout(scan, 250)
-        }
-      }
-      scan()
-    }
-
-    async function startZxingScan() {
-      // Dynamic import — only load zxing when needed (~200KB)
-      const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import("@zxing/library")
-
-      if (cancelled || scannedRef.current) return
-      if (!videoRef.current || !streamRef.current) return
-
-      const hints = new Map()
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E,
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.CODE_128,
-        BarcodeFormat.CODE_39,
-        BarcodeFormat.QR_CODE,
-        BarcodeFormat.DATA_MATRIX,
-        BarcodeFormat.ITF,
-      ])
-      hints.set(DecodeHintType.TRY_HARDER, true)
-
-      const reader = new BrowserMultiFormatReader(hints)
-
-      // Use decodeFromStream to reuse existing camera stream (don't request a new one)
-      try {
-        reader.decodeFromStream(
-          streamRef.current,
-          videoRef.current,
-          (result) => {
-            if (cancelled || scannedRef.current) return
-            if (result) {
-              const text = result.getText()
-              if (text) {
-                scannedRef.current = true
-                reader.reset()
-                if (navigator.vibrate) navigator.vibrate(100)
-                onScan(text)
-              }
-            }
-          }
-        )
-      } catch {
-        // zxing setup failed — manual entry still available
+    async function start() {
+      // Try native first, fall back to zxing
+      const nativeWorked = await tryNativeDetector()
+      if (!nativeWorked && !cancelled) {
+        await useZxingFallback()
       }
     }
 
@@ -203,13 +187,13 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
     return () => {
       cancelled = true
-      stopCamera()
+      cleanup()
     }
-  }, [onScan, onError, stopCamera])
+  }, [cleanup, onError])
 
   const handleManualSubmit = () => {
     const code = manualInput.trim()
-    if (code) {
+    if (code && !scannedRef.current) {
       scannedRef.current = true
       onScan(code)
     }
@@ -217,7 +201,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
   return (
     <div className="space-y-3">
-      <div className="relative w-full overflow-hidden rounded-lg bg-black">
+      <div className="relative w-full overflow-hidden rounded-lg bg-black" style={{ minHeight: 200 }}>
         <video
           ref={videoRef}
           className="w-full object-cover"
@@ -228,22 +212,15 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         />
 
         {/* Scanning overlay */}
-        <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          aria-hidden
-        >
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
           <div className="relative h-40 w-64">
             <div className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-primary" />
             <div className="absolute right-0 top-0 h-8 w-8 border-r-2 border-t-2 border-primary" />
             <div className="absolute bottom-0 left-0 h-8 w-8 border-b-2 border-l-2 border-primary" />
             <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary" />
-
             <div
               className="absolute inset-x-0 h-0.5 bg-primary/70"
-              style={{
-                animation: "scan-line 2s ease-in-out infinite",
-                top: "50%",
-              }}
+              style={{ animation: "scan-line 2s ease-in-out infinite", top: "50%" }}
             />
           </div>
         </div>
@@ -323,16 +300,9 @@ export function BarcodeScannerDialog({
           <div className="space-y-4">
             <BarcodeScanner
               onScan={handleScan}
-              onError={(err) =>
-                console.error("[BarcodeScannerDialog] scan error:", err)
-              }
+              onError={(err) => console.error("[BarcodeScannerDialog] scan error:", err)}
             />
-
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => handleOpenChange(false)}
-            >
+            <Button variant="outline" className="w-full" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
           </div>
