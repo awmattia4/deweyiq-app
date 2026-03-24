@@ -16,6 +16,8 @@ import { ShoppingListView } from "@/components/inventory/shopping-list-view"
 import { PurchasingDashboard } from "@/components/inventory/purchasing-dashboard"
 import { SpendingInsights } from "@/components/inventory/spending-insights"
 import { ChemicalUsagePanel } from "@/components/inventory/chemical-usage-panel"
+import { WarehouseInventoryView } from "@/components/inventory/warehouse-inventory-view"
+import { InventoryCountFlow } from "@/components/inventory/inventory-count-flow"
 import { getTruckInventory } from "@/actions/truck-inventory"
 import {
   Select,
@@ -33,7 +35,7 @@ import type { ChemicalUsageReport } from "@/actions/reporting"
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "inventory" | "shopping-list" | "purchasing" | "spending" | "chemical-usage"
+type TabId = "inventory" | "warehouse" | "shopping-list" | "purchasing" | "spending" | "chemical-usage" | "count"
 
 interface TechProfile {
   id: string
@@ -60,6 +62,8 @@ interface InventoryPageClientProps {
   initialPurchasingData?: PurchasingDashboardData
   initialSpendingData?: SpendingInsightsData
   initialChemicalData?: ChemicalUsageReport
+  // Warehouse inventory (office only)
+  initialWarehouseItems?: TruckInventoryItem[]
 }
 
 // ---------------------------------------------------------------------------
@@ -98,20 +102,24 @@ export function InventoryPageClient({
   initialPurchasingData = EMPTY_PURCHASING,
   initialSpendingData = EMPTY_SPENDING,
   initialChemicalData = EMPTY_CHEMICAL,
+  initialWarehouseItems = [],
 }: InventoryPageClientProps) {
   const isOffice = role === "office"
 
   const officeTabs: Array<{ id: TabId; label: string }> = [
     { id: "inventory", label: "Truck Inventory" },
+    { id: "warehouse", label: "Warehouse" },
     { id: "shopping-list", label: "Shopping Lists" },
     { id: "purchasing", label: "Purchasing" },
     { id: "spending", label: "Spending" },
     { id: "chemical-usage", label: "Chemical Usage" },
+    { id: "count", label: "Count Inventory" },
   ]
 
   const techTabs: Array<{ id: TabId; label: string }> = [
     { id: "inventory", label: "My Truck" },
     { id: "shopping-list", label: "Shopping List" },
+    { id: "count", label: "Count Inventory" },
   ]
 
   const tabs = isOffice ? officeTabs : techTabs
@@ -130,6 +138,7 @@ export function InventoryPageClient({
   const [selectedTechId, setSelectedTechId] = useState(defaultTechId ?? currentUserId)
   const [inventoryItems, setInventoryItems] = useState<TruckInventoryItem[]>(initialInventoryItems)
   const [shoppingItems] = useState<ShoppingListItem[]>(initialShoppingItems)
+  const [warehouseItems] = useState<TruckInventoryItem[]>(initialWarehouseItems)
   const [, startTransition] = useTransition()
 
   // Sync hash on tab change
@@ -256,6 +265,36 @@ export function InventoryPageClient({
 
         {activeTab === "chemical-usage" && isOffice && (
           <ChemicalUsagePanel initialData={initialChemicalData} />
+        )}
+
+        {activeTab === "warehouse" && isOffice && (
+          <WarehouseInventoryView
+            initialItems={warehouseItems}
+            allTechs={allTechs}
+          />
+        )}
+
+        {activeTab === "count" && (
+          <InventoryCountFlow
+            items={isOffice ? inventoryItems : inventoryItems}
+            techId={isOffice ? selectedTechId : currentUserId}
+            label={
+              isOffice
+                ? (selectedTech?.fullName ? `${selectedTech.fullName}'s Truck` : "Selected Truck")
+                : "My Truck"
+            }
+            onComplete={() => {
+              // Refresh inventory after count
+              startTransition(async () => {
+                try {
+                  const items = await getTruckInventory(isOffice ? selectedTechId : currentUserId)
+                  setInventoryItems(items as TruckInventoryItem[])
+                } catch (err) {
+                  console.error("Failed to refresh inventory after count:", err)
+                }
+              })
+            }}
+          />
         )}
       </div>
     </div>

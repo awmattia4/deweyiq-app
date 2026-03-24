@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
-import { getTruckInventory, getTruckLoadTemplates } from "@/actions/truck-inventory"
+import { getTruckInventory, getTruckLoadTemplates, getWarehouseInventory } from "@/actions/truck-inventory"
 import { getShoppingList } from "@/actions/shopping-lists"
 import { getPurchasingDashboard, getSpendingInsights } from "@/actions/purchasing"
 import { getChemicalUsageReport } from "@/actions/reporting"
@@ -82,6 +82,7 @@ export default async function InventoryPage() {
     purchasingData,
     spendingData,
     chemicalData,
+    warehouseItems,
   ] = await Promise.all([
     getTruckInventory(defaultTechId).catch(() => []),
     getShoppingList(null).catch(() => []),
@@ -101,6 +102,7 @@ export default async function InventoryPage() {
       period: "month" as const,
       groupBy: "tech" as const,
     })),
+    getWarehouseInventory().catch(() => []),
   ])
 
   return (
@@ -116,6 +118,7 @@ export default async function InventoryPage() {
       initialPurchasingData={purchasingData}
       initialSpendingData={spendingData}
       initialChemicalData={chemicalData}
+      initialWarehouseItems={warehouseItems}
     />
   )
 }

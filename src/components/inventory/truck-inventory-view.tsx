@@ -41,6 +41,7 @@ import {
   updateTruckInventoryItem,
   deleteTruckInventoryItem,
   transferInventoryItem,
+  returnToWarehouse,
 } from "@/actions/truck-inventory"
 import type { TruckInventoryItem } from "@/actions/truck-inventory"
 
@@ -531,6 +532,100 @@ function TransferDialog({ item, fromTechId, allTechs, onSuccess, onClose }: Tran
 }
 
 // ---------------------------------------------------------------------------
+// Return to Warehouse Dialog (tech view only)
+// ---------------------------------------------------------------------------
+
+interface ReturnToWarehouseDialogProps {
+  item: TruckInventoryItem
+  techId: string
+  onSuccess: (updatedItem: TruckInventoryItem) => void
+  onClose: () => void
+}
+
+function ReturnToWarehouseDialog({ item, techId, onSuccess, onClose }: ReturnToWarehouseDialogProps) {
+  const [isPending, startTransition] = useTransition()
+  const [quantityStr, setQuantityStr] = useState("1")
+  const [error, setError] = useState<string | null>(null)
+
+  const maxQty = parseFloat(item.quantity)
+
+  function handleReturn() {
+    const quantity = parseFloat(quantityStr)
+    if (isNaN(quantity) || quantity <= 0) {
+      setError("Enter a valid quantity greater than 0")
+      return
+    }
+    if (quantity > maxQty) {
+      setError(`Only ${formatQuantity(item.quantity)} ${item.unit} on truck`)
+      return
+    }
+    setError(null)
+
+    startTransition(async () => {
+      try {
+        const result = await returnToWarehouse(item.id, techId, quantity)
+        if (!result.success) {
+          setError(result.error ?? "Return failed")
+          return
+        }
+        const newQty = Math.max(0, maxQty - quantity)
+        onSuccess({ ...item, quantity: String(newQty) })
+        onClose()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Return failed")
+      }
+    })
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[360px]">
+      <DialogHeader>
+        <DialogTitle>Return to Warehouse</DialogTitle>
+      </DialogHeader>
+
+      <div className="flex flex-col gap-4 py-2">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{item.item_name}</span>
+          {" — "}
+          {formatQuantity(item.quantity)} {item.unit} on truck
+        </p>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Quantity to return</Label>
+          <Input
+            type="text"
+            inputMode="decimal"
+            value={quantityStr}
+            onChange={(e) => {
+              const v = e.target.value
+              if (/^\d*\.?\d*$/.test(v)) setQuantityStr(v)
+            }}
+            onBlur={() => {
+              if (!quantityStr.endsWith(".")) {
+                const parsed = parseFloat(quantityStr)
+                if (!isNaN(parsed)) setQuantityStr(String(parsed))
+              }
+            }}
+            autoFocus
+          />
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} disabled={isPending} className="cursor-pointer">
+          Cancel
+        </Button>
+        <Button onClick={handleReturn} disabled={isPending} className="cursor-pointer">
+          {isPending ? "Returning..." : "Return to Warehouse"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Inventory Row
 // ---------------------------------------------------------------------------
 
@@ -539,10 +634,11 @@ interface InventoryRowProps {
   onUpdate: (updated: TruckInventoryItem) => void
   onDelete: (id: string) => void
   onTransfer?: (item: TruckInventoryItem) => void
+  onReturnToWarehouse?: (item: TruckInventoryItem) => void
   isOfficeView: boolean
 }
 
-function InventoryRow({ item, onUpdate, onDelete, onTransfer, isOfficeView }: InventoryRowProps) {
+function InventoryRow({ item, onUpdate, onDelete, onTransfer, onReturnToWarehouse, isOfficeView }: InventoryRowProps) {
   const [, startTransition] = useTransition()
   // Controlled decimal state per MEMORY.md
   const [quantityStr, setQuantityStr] = useState(formatQuantity(item.quantity))
@@ -669,12 +765,24 @@ function InventoryRow({ item, onUpdate, onDelete, onTransfer, isOfficeView }: In
         >
           Use 1
         </Button>
+        {!isOfficeView && onReturnToWarehouse && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+            onClick={() => onReturnToWarehouse(item)}
+            disabled={parseFloat(item.quantity) <= 0}
+          >
+            Return
+          </Button>
+        )}
         {isOfficeView && onTransfer && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground"
+            className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
             onClick={() => onTransfer(item)}
           >
             Transfer
@@ -709,6 +817,7 @@ export function TruckInventoryView({
   const [items, setItems] = useState<TruckInventoryItem[]>(initialItems)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [transferItem, setTransferItem] = useState<TruckInventoryItem | null>(null)
+  const [returnItem, setReturnItem] = useState<TruckInventoryItem | null>(null)
 
   const groups = groupByCategory(items)
   const lowCount = items.filter(isBelowThreshold).length
@@ -775,6 +884,7 @@ export function TruckInventoryView({
                   onUpdate={handleItemUpdated}
                   onDelete={handleItemDeleted}
                   onTransfer={isOfficeView ? (i) => setTransferItem(i) : undefined}
+                  onReturnToWarehouse={!isOfficeView ? (i) => setReturnItem(i) : undefined}
                   isOfficeView={isOfficeView}
                 />
               ))}
@@ -806,6 +916,21 @@ export function TruckInventoryView({
               // In production, could re-fetch; for now optimistic update
             }}
             onClose={() => setTransferItem(null)}
+          />
+        )}
+      </Dialog>
+
+      {/* Return to Warehouse dialog */}
+      <Dialog open={!!returnItem} onOpenChange={() => setReturnItem(null)}>
+        {returnItem && (
+          <ReturnToWarehouseDialog
+            item={returnItem}
+            techId={techId}
+            onSuccess={(updated) => {
+              handleItemUpdated(updated)
+              setReturnItem(null)
+            }}
+            onClose={() => setReturnItem(null)}
           />
         )}
       </Dialog>
