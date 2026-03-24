@@ -127,6 +127,7 @@ export function ChemicalProductsManager({ initialProducts }: ChemicalProductsMan
   const [isRefreshing, startRefreshTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   function patchForm(patch: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...patch }))
@@ -149,19 +150,24 @@ export function ChemicalProductsManager({ initialProducts }: ChemicalProductsMan
     setEditingId(null)
     setShowScanner(false)
     setLookingUp(false)
+    setScanMessage(null)
   }
 
   async function handleBarcodeScan(code: string) {
     setShowScanner(false)
     setLookingUp(true)
+    setScanMessage(null)
     try {
       const { resolveBarcode } = await import("@/actions/barcode")
       const result = await resolveBarcode(code)
       if (result.found && result.item_name) {
         patchForm({ name: result.item_name })
+      } else {
+        setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
     } catch (err) {
       console.error("[ChemicalProducts] UPC lookup failed:", err)
+      setScanMessage(`Barcode ${code} scanned but lookup failed — enter the name manually`)
     } finally {
       setLookingUp(false)
     }
@@ -409,6 +415,9 @@ export function ChemicalProductsManager({ initialProducts }: ChemicalProductsMan
                   </Button>
                 )}
 
+                {scanMessage && (
+                  <p className="text-sm text-amber-400">{scanMessage}</p>
+                )}
                 {lookingUp && (
                   <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
                 )}

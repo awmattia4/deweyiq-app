@@ -192,6 +192,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [isPending, startTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [itemName, setItemName] = useState("")
   const [category, setCategory] = useState("chemical")
@@ -207,6 +208,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
 
   function handleNameChange(value: string) {
     setItemName(value)
+    if (scanMessage) setScanMessage(null)
     if (searchTimer.current) clearTimeout(searchTimer.current)
     if (value.length >= 2) {
       searchTimer.current = setTimeout(async () => {
@@ -233,17 +235,22 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   }
 
   async function handleBarcodeScan(code: string) {
-    setItemName(code)
     setShowScanner(false)
     setLookingUp(true)
+    setScanMessage(null)
     try {
       const { resolveBarcode } = await import("@/actions/barcode")
       const result = await resolveBarcode(code)
       if (result.found && result.item_name) {
         setItemName(result.item_name)
+      } else {
+        setItemName("")
+        setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
     } catch (err) {
       console.error("[AddItemDialog] UPC lookup failed:", err)
+      setItemName("")
+      setScanMessage(`Barcode ${code} scanned but lookup failed — enter the name manually`)
     } finally {
       setLookingUp(false)
     }
@@ -315,6 +322,9 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {scanMessage && (
+            <p className="text-sm text-amber-400">{scanMessage}</p>
+          )}
           {lookingUp && (
             <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
           )}

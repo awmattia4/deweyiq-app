@@ -125,6 +125,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [isPending, startTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Form fields
@@ -142,6 +143,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
 
   function handleNameChange(value: string) {
     setItemName(value)
+    if (scanMessage) setScanMessage(null)
     // Debounced catalog search
     if (searchTimer.current) clearTimeout(searchTimer.current)
     if (value.length >= 2) {
@@ -173,11 +175,13 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
     setBarcode(code)
     setShowScanner(false)
     setLookingUp(true)
+    setScanMessage(null)
     try {
       const { resolveBarcode } = await import("@/actions/barcode")
       const result = await resolveBarcode(code)
       if (result.found && result.item_name) {
         setItemName(result.item_name)
+        setScanMessage(null)
         if (result.upc_data?.category) {
           const cat = result.upc_data.category.toLowerCase()
           if (cat.includes("chemical") || cat.includes("chlorine") || cat.includes("pool")) {
@@ -190,9 +194,12 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
             setCategory("part")
           }
         }
+      } else {
+        setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
     } catch (err) {
       console.error("[AddItemDialog] UPC lookup failed:", err)
+      setScanMessage(`Barcode ${code} scanned but lookup failed — enter the name manually`)
     } finally {
       setLookingUp(false)
     }
@@ -282,6 +289,9 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
 
           {error && (
             <p className="text-sm text-destructive">{error}</p>
+          )}
+          {scanMessage && (
+            <p className="text-sm text-amber-400">{scanMessage}</p>
           )}
           {lookingUp && (
             <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>

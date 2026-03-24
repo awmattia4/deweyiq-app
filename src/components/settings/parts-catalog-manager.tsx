@@ -125,6 +125,7 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
   const [isRefreshing, startRefreshTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   function patchForm(patch: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...patch }))
@@ -147,11 +148,13 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
     setEditingItemId(null)
     setShowScanner(false)
     setLookingUp(false)
+    setScanMessage(null)
   }
 
   async function handleBarcodeScan(code: string) {
     setShowScanner(false)
     setLookingUp(true)
+    setScanMessage(null)
     try {
       const { resolveBarcode } = await import("@/actions/barcode")
       const result = await resolveBarcode(code)
@@ -159,10 +162,12 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
         patchForm({ name: result.item_name, sku: code })
       } else {
         patchForm({ sku: code })
+        setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
     } catch (err) {
       console.error("[PartsCatalog] UPC lookup failed:", err)
       patchForm({ sku: code })
+      setScanMessage(`Barcode ${code} scanned but lookup failed — enter the name manually`)
     } finally {
       setLookingUp(false)
     }
@@ -474,6 +479,9 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
               </div>
             )}
 
+            {scanMessage && (
+              <p className="text-sm text-amber-400">{scanMessage}</p>
+            )}
             {lookingUp && (
               <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
             )}
