@@ -55,18 +55,11 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         scannerRef.current = scanner
 
         await scanner.start(
-          {
-            facingMode: "environment",
-          },
+          { facingMode: "environment" },
           {
             fps: 10,
             qrbox: { width: 250, height: 150 },
             aspectRatio: 1.7778,
-            // Enable autofocus for close-up barcode scanning
-            videoConstraints: {
-              facingMode: "environment",
-              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
-            },
           },
           (decodedText) => {
             if (scannedRef.current) return
@@ -77,27 +70,28 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
           () => {} // onScanFailure — fires every non-barcode frame, ignore
         )
 
-        // Try to apply continuous autofocus after camera starts
-        try {
-          const videoTrack = scanner.getRunningTrackSettings?.()
-          if (!videoTrack) {
-            // Access the video element directly and apply focus
-            const videoEl = document.querySelector(`#${containerId.current} video`) as HTMLVideoElement
-            if (videoEl?.srcObject) {
-              const track = (videoEl.srcObject as MediaStream).getVideoTracks()[0]
+        // Apply continuous autofocus AFTER camera starts — critical for close-up barcode scanning
+        // html5-qrcode doesn't expose focus config, so we reach into the video track directly
+        setTimeout(() => {
+          try {
+            const videoEl = document.querySelector(`#${containerId.current} video`) as HTMLVideoElement | null
+            if (videoEl?.srcObject && videoEl.srcObject instanceof MediaStream) {
+              const track = videoEl.srcObject.getVideoTracks()[0]
               if (track) {
-                const capabilities = track.getCapabilities?.()
-                if (capabilities && "focusMode" in capabilities) {
-                  await track.applyConstraints({
-                    advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
-                  })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const caps = (track as any).getCapabilities?.()
+                if (caps?.focusMode?.includes?.("continuous")) {
+                  track.applyConstraints({
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    advanced: [{ focusMode: "continuous" } as any],
+                  }).catch(() => {})
                 }
               }
             }
+          } catch {
+            // Focus not supported on this device — scanner still works, just no macro focus
           }
-        } catch {
-          // Focus constraints not supported — fine, scanner still works
-        }
+        }, 500)
 
         if (mounted) setStatus("scanning")
       } catch (err) {
