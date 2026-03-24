@@ -3,10 +3,8 @@
 /**
  * Phase 13: Barcode Scanner Component
  *
- * Uses html5-qrcode (supports ALL barcode formats despite the name):
- * UPC-A, UPC-E, EAN-13, EAN-8, Code 128, Code 39, ITF, QR, DataMatrix, etc.
- *
- * Battle-tested on iOS PWA, Safari, Chrome, Android.
+ * Uses html5-qrcode — supports all barcode formats:
+ * UPC-A, UPC-E, EAN-13, EAN-8, Code 128, Code 39, ITF, QR, DataMatrix.
  *
  * Load via next/dynamic with ssr: false.
  */
@@ -32,7 +30,8 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
-  const containerId = useRef(`barcode-scanner-${Math.random().toString(36).slice(2, 8)}`)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const containerId = useRef(`scanner-${Math.random().toString(36).slice(2, 8)}`)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading")
   const [manualInput, setManualInput] = useState("")
@@ -56,17 +55,14 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
             qrbox: { width: 250, height: 150 },
             aspectRatio: 1.7778,
           },
-          // onScanSuccess
           (decodedText) => {
             if (scannedRef.current) return
             scannedRef.current = true
             if (navigator.vibrate) navigator.vibrate(100)
             onScanRef.current(decodedText)
-            // Stop scanning after success
             scanner.stop().catch(() => {})
           },
-          // onScanFailure — fires every frame without a barcode, ignore
-          () => {}
+          () => {} // onScanFailure — ignore (fires every non-barcode frame)
         )
 
         if (mounted) setStatus("scanning")
@@ -78,15 +74,16 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
       }
     }
 
-    // Small delay to ensure the container div is in the DOM
-    const timer = setTimeout(start, 100)
+    // Delay to ensure DOM container is rendered
+    const timer = setTimeout(start, 150)
 
     return () => {
       mounted = false
       clearTimeout(timer)
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {})
-        scannerRef.current.clear()
+      const s = scannerRef.current
+      if (s) {
+        // Only stop — do NOT call s.clear() as it removes DOM nodes that React manages
+        s.stop().catch(() => {})
         scannerRef.current = null
       }
     }
@@ -96,7 +93,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const code = manualInput.trim()
     if (code && !scannedRef.current) {
       scannedRef.current = true
-      // Stop camera before firing callback
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {})
       }
@@ -108,18 +104,19 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     <div className="space-y-3">
       {/* html5-qrcode renders into this div */}
       <div
+        ref={containerRef}
         id={containerId.current}
-        className="w-full overflow-hidden rounded-lg"
-        style={{ minHeight: 200 }}
+        className="w-full overflow-hidden rounded-lg bg-black"
+        style={{ minHeight: 250 }}
       />
 
       <p className="text-center text-xs text-muted-foreground">
         {status === "loading" && "Starting camera..."}
         {status === "scanning" && "Point camera at barcode — hold steady"}
-        {status === "error" && "Camera error — check permissions"}
+        {status === "error" && "Camera error — check permissions or try manual entry"}
       </p>
 
-      {/* Manual entry — always available */}
+      {/* Manual entry */}
       <div className="flex gap-2">
         <Input
           value={manualInput}

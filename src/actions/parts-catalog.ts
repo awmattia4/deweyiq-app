@@ -118,6 +118,100 @@ export async function getCatalogItems(
 }
 
 // ---------------------------------------------------------------------------
+// searchCatalogAndChemicals — unified search for add-item dialogs
+// ---------------------------------------------------------------------------
+
+export interface CatalogSearchResult {
+  id: string
+  name: string
+  category: string
+  unit: string
+  source: "parts_catalog" | "chemical_products"
+  catalogItemId?: string
+  chemicalProductId?: string
+}
+
+/**
+ * Search both parts_catalog and chemical_products tables.
+ * Used by inventory add-item dialogs for quick catalog selection.
+ */
+export async function searchCatalogAndChemicals(
+  query: string
+): Promise<CatalogSearchResult[]> {
+  if (!query || query.length < 2) return []
+
+  const token = await getRlsToken()
+  if (!token) return []
+
+  try {
+    const results = await withRls(token, async (db) => {
+      const searchPattern = `%${query}%`
+
+      // Search parts catalog
+      const parts = await db
+        .select({
+          id: partsCatalog.id,
+          name: partsCatalog.name,
+          category: partsCatalog.category,
+          unit: partsCatalog.default_unit,
+        })
+        .from(partsCatalog)
+        .where(
+          and(
+            eq(partsCatalog.is_active, true),
+            ilike(partsCatalog.name, searchPattern)
+          )
+        )
+        .limit(10)
+
+      // Search chemical products
+      const { chemicalProducts } = await import("@/lib/db/schema")
+      const chemicals = await db
+        .select({
+          id: chemicalProducts.id,
+          name: chemicalProducts.name,
+          chemicalType: chemicalProducts.chemical_type,
+          unit: chemicalProducts.unit,
+        })
+        .from(chemicalProducts)
+        .where(
+          and(
+            eq(chemicalProducts.is_active, true),
+            ilike(chemicalProducts.name, searchPattern)
+          )
+        )
+        .limit(10)
+
+      const combined: CatalogSearchResult[] = [
+        ...parts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          category: p.category ?? "part",
+          unit: p.unit ?? "each",
+          source: "parts_catalog" as const,
+          catalogItemId: p.id,
+        })),
+        ...chemicals.map((c) => ({
+          id: c.id,
+          name: c.name,
+          category: "chemical",
+          unit: c.unit ?? "floz",
+          source: "chemical_products" as const,
+          chemicalProductId: c.id,
+        })),
+      ]
+
+      return combined
+    })
+
+    return results
+  } catch (err) {
+    console.error("[searchCatalogAndChemicals] Error:", err)
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
 // addCatalogItem
 // ---------------------------------------------------------------------------
 

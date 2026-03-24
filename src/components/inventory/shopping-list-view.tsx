@@ -15,7 +15,7 @@
  * - Barcode scan on "Mark Loaded"
  */
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -199,6 +199,38 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [isUrgent, setIsUrgent] = useState(false)
   const [notes, setNotes] = useState("")
 
+  // Catalog search
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; category: string; unit: string; source: string }>>([])
+  const [showResults, setShowResults] = useState(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleNameChange(value: string) {
+    setItemName(value)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    if (value.length >= 2) {
+      searchTimer.current = setTimeout(async () => {
+        try {
+          const { searchCatalogAndChemicals } = await import("@/actions/parts-catalog")
+          const results = await searchCatalogAndChemicals(value)
+          setSearchResults(results)
+          setShowResults(results.length > 0)
+        } catch {
+          setSearchResults([])
+        }
+      }, 300)
+    } else {
+      setSearchResults([])
+      setShowResults(false)
+    }
+  }
+
+  function selectCatalogItem(item: typeof searchResults[0]) {
+    setItemName(item.name)
+    setCategory(item.category)
+    setUnit(item.unit)
+    setShowResults(false)
+  }
+
   async function handleBarcodeScan(code: string) {
     setItemName(code)
     setShowScanner(false)
@@ -270,15 +302,18 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
         <div className="flex flex-col gap-4 py-2">
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 relative">
             <Label htmlFor="add-item-name">Item Name</Label>
             <div className="flex gap-2">
               <Input
                 id="add-item-name"
                 value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                placeholder="e.g. Liquid Chlorine"
+                onChange={(e) => handleNameChange(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                placeholder="Search catalog or type name..."
                 autoFocus
+                autoComplete="off"
                 className="flex-1"
               />
               <Button
@@ -290,6 +325,25 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
                 Scan
               </Button>
             </div>
+            {/* Catalog search dropdown */}
+            {showResults && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+                {searchResults.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors flex items-center justify-between cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      selectCatalogItem(item)
+                    }}
+                  >
+                    <span className="truncate">{item.name}</span>
+                    <span className="text-xs text-muted-foreground ml-2 shrink-0 capitalize">{item.category}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
