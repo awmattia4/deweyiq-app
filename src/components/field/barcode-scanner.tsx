@@ -3,8 +3,9 @@
 /**
  * Phase 13: Barcode Scanner Component
  *
- * Wraps react-zxing to provide cross-platform barcode scanning (iOS + Android).
- * Uses the device camera to scan barcodes in real-time.
+ * Uses the native BarcodeDetector API (Chrome 83+, Safari 17.2+) for fast,
+ * reliable hardware-accelerated barcode detection. Falls back to manual
+ * entry if BarcodeDetector is unavailable.
  *
  * IMPORTANT: This component must ONLY be loaded via next/dynamic with ssr: false.
  * The camera API is browser-only and will crash during SSR.
@@ -16,9 +17,7 @@
  *   )
  */
 
-import { useRef, useState } from "react"
-import { useZxing } from "react-zxing"
-import { BarcodeFormat, DecodeHintType } from "@zxing/library"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -26,6 +25,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+
+// ---------------------------------------------------------------------------
+// BarcodeDetector type (native browser API, not yet in TS lib)
+// ---------------------------------------------------------------------------
+
+interface DetectedBarcode {
+  rawValue: string
+  format: string
+  boundingBox: DOMRectReadOnly
+}
+
+declare global {
+  interface Window {
+    BarcodeDetector?: {
+      new (options?: { formats: string[] }): {
+        detect: (source: ImageBitmapSource) => Promise<DetectedBarcode[]>
+      }
+      getSupportedFormats: () => Promise<string[]>
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Raw scanner component (embed in any layout)
@@ -37,57 +58,158 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const scanLoopRef = useRef<number | null>(null)
+  const [status, setStatus] = useState<"loading" | "ready" | "scanning" | "no-api" | "error">("loading")
+  const [manualInput, setManualInput] = useState("")
+  const scannedRef = useRef(false)
 
-  // Explicitly enable all common barcode formats for product scanning
-  const hints = new Map()
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-    BarcodeFormat.UPC_A,
-    BarcodeFormat.UPC_E,
-    BarcodeFormat.EAN_13,
-    BarcodeFormat.EAN_8,
-    BarcodeFormat.CODE_128,
-    BarcodeFormat.CODE_39,
-    BarcodeFormat.QR_CODE,
-    BarcodeFormat.DATA_MATRIX,
-    BarcodeFormat.ITF,
-  ])
-  hints.set(DecodeHintType.TRY_HARDER, true)
+  const stopCamera = useCallback(() => {
+    if (scanLoopRef.current) {
+      cancelAnimationFrame(scanLoopRef.current)
+      scanLoopRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+  }, [])
 
-  const { ref } = useZxing({
-    hints,
-    onDecodeResult(result) {
-      const text = result.getText()
-      if (text) {
-        setStatus("ready")
-        onScan(text)
+  useEffect(() => {
+    // Check for native BarcodeDetector
+    if (!window.BarcodeDetector) {
+      setStatus("no-api")
+      return
+    }
+
+    let cancelled = false
+
+    async function startScanning() {
+      try {
+        // Get camera
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        })
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        streamRef.current = stream
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+
+        // Create detector with all common product barcode formats
+        const supportedFormats = await window.BarcodeDetector!.getSupportedFormats()
+        const wantedFormats = [
+          "ean_13", "ean_8", "upc_a", "upc_e",
+          "code_128", "code_39", "code_93",
+          "itf", "qr_code", "data_matrix",
+        ]
+        const formats = wantedFormats.filter((f) => supportedFormats.includes(f))
+
+        if (formats.length === 0) {
+          setStatus("no-api")
+          return
+        }
+
+        const detector = new window.BarcodeDetector!({ formats })
+
+        setStatus("scanning")
+
+        // Scan loop — detect barcodes every 250ms
+        const scan = async () => {
+          if (cancelled || scannedRef.current) return
+
+          try {
+            if (videoRef.current && videoRef.current.readyState >= 2) {
+              const barcodes = await detector.detect(videoRef.current)
+              if (barcodes.length > 0 && !scannedRef.current) {
+                const code = barcodes[0].rawValue
+                if (code) {
+                  scannedRef.current = true
+                  // Haptic feedback on mobile
+                  if (navigator.vibrate) navigator.vibrate(100)
+                  onScan(code)
+                  return
+                }
+              }
+            }
+          } catch {
+            // Detection frame failed — continue scanning
+          }
+
+          if (!cancelled && !scannedRef.current) {
+            scanLoopRef.current = requestAnimationFrame(() => {
+              setTimeout(scan, 250)
+            })
+          }
+        }
+
+        scan()
+      } catch (err) {
+        if (!cancelled) {
+          setStatus("error")
+          if (onError) onError(err instanceof Error ? err : new Error(String(err)))
+        }
       }
-    },
-    onDecodeError() {
-      // This fires on every frame that doesn't find a barcode — not a real error
-      // Just means the camera is looking but hasn't found anything yet
-      if (status === "loading") setStatus("ready")
-    },
-    onError(err) {
-      setStatus("error")
-      if (onError) onError(err instanceof Error ? err : new Error(String(err)))
-    },
-    // Prefer rear camera on mobile — better for barcodes
-    constraints: {
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-    },
-    timeBetweenDecodingAttempts: 200,
-  })
+    }
+
+    startScanning()
+
+    return () => {
+      cancelled = true
+      stopCamera()
+    }
+  }, [onScan, onError, stopCamera])
+
+  // Manual entry fallback
+  const handleManualSubmit = () => {
+    const code = manualInput.trim()
+    if (code) {
+      scannedRef.current = true
+      onScan(code)
+    }
+  }
+
+  // No native API — show manual entry only
+  if (status === "no-api") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Camera barcode scanning isn&apos;t supported on this device. Enter the barcode manually:
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            placeholder="Enter barcode number..."
+            className="flex-1"
+            onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+            autoFocus
+          />
+          <Button onClick={handleManualSubmit} disabled={!manualInput.trim()}>
+            Go
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative w-full overflow-hidden rounded-lg bg-black">
       {/* Camera video feed */}
       <video
-        ref={ref}
+        ref={videoRef}
         className="w-full object-cover"
         style={{ maxHeight: "60dvh" }}
         autoPlay
@@ -100,7 +222,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         className="pointer-events-none absolute inset-0 flex items-center justify-center"
         aria-hidden
       >
-        {/* Corner brackets */}
         <div className="relative h-40 w-64">
           {/* Top-left */}
           <div className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-primary" />
@@ -122,7 +243,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         </div>
       </div>
 
-      {/* Inject scan-line animation keyframes */}
       <style>{`
         @keyframes scan-line {
           0% { transform: translateY(-64px); opacity: 0; }
@@ -134,9 +254,26 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
       <p className="absolute bottom-3 w-full text-center text-xs text-white/70">
         {status === "loading" && "Starting camera..."}
-        {status === "ready" && "Point camera at barcode — hold steady"}
+        {status === "scanning" && "Point camera at barcode — hold steady"}
         {status === "error" && "Camera error — check permissions"}
       </p>
+
+      {/* Manual entry fallback always available below camera */}
+      <div className="mt-3 space-y-2">
+        <p className="text-xs text-muted-foreground text-center">Or enter manually:</p>
+        <div className="flex gap-2">
+          <Input
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            placeholder="Barcode number..."
+            className="flex-1 h-9 text-sm"
+            onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+          />
+          <Button size="sm" onClick={handleManualSubmit} disabled={!manualInput.trim()}>
+            Go
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -161,10 +298,8 @@ export function BarcodeScannerDialog({
   const hasScanned = useRef(false)
 
   function handleScan(barcode: string) {
-    // Debounce — only fire once per dialog open
     if (hasScanned.current) return
     hasScanned.current = true
-
     onScan(barcode)
     onOpenChange(false)
   }
