@@ -37,6 +37,7 @@
     "dexie": "^4.3.0",
     "dexie-react-hooks": "^4.2.0",
     "drizzle-orm": "^0.45.1",
+    "html5-qrcode": "^2.3.8",
     "intuit-oauth": "^4.2.2",
     "lucide-react": "^0.576.0",
     "maplibre-gl": "^5.19.0",

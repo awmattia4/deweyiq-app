@@ -123,6 +123,7 @@ interface AddItemDialogProps {
 function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [isPending, startTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
+  const [lookingUp, setLookingUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Form fields
@@ -132,6 +133,37 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [unit, setUnit] = useState("oz")
   const [thresholdStr, setThresholdStr] = useState("0")
   const [barcode, setBarcode] = useState("")
+
+  // Barcode scan → UPC lookup → autofill
+  async function handleBarcodeScan(code: string) {
+    setBarcode(code)
+    setShowScanner(false)
+    setLookingUp(true)
+    try {
+      const { resolveBarcode } = await import("@/actions/barcode")
+      const result = await resolveBarcode(code)
+      if (result.found && result.item_name) {
+        setItemName(result.item_name)
+        // Try to guess category from UPC data
+        if (result.upc_data?.category) {
+          const cat = result.upc_data.category.toLowerCase()
+          if (cat.includes("chemical") || cat.includes("chlorine") || cat.includes("pool")) {
+            setCategory("chemical")
+          } else if (cat.includes("tool")) {
+            setCategory("tool")
+          } else if (cat.includes("equip")) {
+            setCategory("equipment")
+          } else {
+            setCategory("part")
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[AddItemDialog] UPC lookup failed:", err)
+    } finally {
+      setLookingUp(false)
+    }
+  }
 
   function handleSubmit() {
     if (!itemName.trim()) {
@@ -176,10 +208,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
         {showScanner ? (
           <div className="flex flex-col gap-3 py-2">
             <BarcodeScanner
-              onScan={(code) => {
-                setBarcode(code)
-                setShowScanner(false)
-              }}
+              onScan={handleBarcodeScan}
               onError={(err) => console.error("[AddItemDialog] scan error:", err)}
             />
             <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
@@ -192,6 +221,9 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
+          {lookingUp && (
+            <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="item-name">Item Name</Label>
@@ -199,8 +231,9 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
               id="item-name"
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
-              placeholder="e.g. Liquid Chlorine"
+              placeholder={lookingUp ? "Looking up..." : "e.g. Liquid Chlorine"}
               autoFocus
+              disabled={lookingUp}
             />
           </div>
 

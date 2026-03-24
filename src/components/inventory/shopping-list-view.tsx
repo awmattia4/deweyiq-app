@@ -190,6 +190,7 @@ interface AddItemDialogProps {
 function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [isPending, startTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
+  const [lookingUp, setLookingUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [itemName, setItemName] = useState("")
   const [category, setCategory] = useState("chemical")
@@ -197,6 +198,23 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
   const [unit, setUnit] = useState("oz")
   const [isUrgent, setIsUrgent] = useState(false)
   const [notes, setNotes] = useState("")
+
+  async function handleBarcodeScan(code: string) {
+    setItemName(code)
+    setShowScanner(false)
+    setLookingUp(true)
+    try {
+      const { resolveBarcode } = await import("@/actions/barcode")
+      const result = await resolveBarcode(code)
+      if (result.found && result.item_name) {
+        setItemName(result.item_name)
+      }
+    } catch (err) {
+      console.error("[AddItemDialog] UPC lookup failed:", err)
+    } finally {
+      setLookingUp(false)
+    }
+  }
 
   function handleSubmit() {
     if (!itemName.trim()) {
@@ -240,10 +258,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
         {showScanner ? (
           <div className="flex flex-col gap-3 py-2">
             <BarcodeScanner
-              onScan={(code) => {
-                setItemName(code)
-                setShowScanner(false)
-              }}
+              onScan={handleBarcodeScan}
               onError={(err) => console.error("[AddItemDialog] scan error:", err)}
             />
             <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
