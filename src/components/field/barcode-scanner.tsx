@@ -3,18 +3,12 @@
 /**
  * Phase 13: Barcode Scanner Component
  *
- * Uses the native BarcodeDetector API (Chrome 83+, Safari 17.2+) for fast,
- * reliable hardware-accelerated barcode detection. Falls back to manual
- * entry if BarcodeDetector is unavailable.
+ * Strategy:
+ * 1. Try native BarcodeDetector API (Chrome 83+, Safari 17.2+) — fast, hardware-accelerated
+ * 2. Fall back to @zxing/library JS decoder (works everywhere including iOS PWA WebView)
+ * 3. Manual entry always available as last resort
  *
- * IMPORTANT: This component must ONLY be loaded via next/dynamic with ssr: false.
- * The camera API is browser-only and will crash during SSR.
- *
- * Usage:
- *   const BarcodeScannerDialog = dynamic(
- *     () => import("@/components/field/barcode-scanner").then(m => m.BarcodeScannerDialog),
- *     { ssr: false }
- *   )
+ * IMPORTANT: Load via next/dynamic with ssr: false.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -34,7 +28,6 @@ import { Input } from "@/components/ui/input"
 interface DetectedBarcode {
   rawValue: string
   format: string
-  boundingBox: DOMRectReadOnly
 }
 
 declare global {
@@ -49,7 +42,7 @@ declare global {
 }
 
 // ---------------------------------------------------------------------------
-// Raw scanner component (embed in any layout)
+// Raw scanner component
 // ---------------------------------------------------------------------------
 
 interface BarcodeScannerProps {
@@ -60,14 +53,14 @@ interface BarcodeScannerProps {
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const scanLoopRef = useRef<number | null>(null)
-  const [status, setStatus] = useState<"loading" | "ready" | "scanning" | "no-api" | "error">("loading")
+  const scanLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading")
   const [manualInput, setManualInput] = useState("")
   const scannedRef = useRef(false)
 
   const stopCamera = useCallback(() => {
     if (scanLoopRef.current) {
-      cancelAnimationFrame(scanLoopRef.current)
+      clearTimeout(scanLoopRef.current)
       scanLoopRef.current = null
     }
     if (streamRef.current) {
@@ -77,17 +70,11 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
   }, [])
 
   useEffect(() => {
-    // Check for native BarcodeDetector
-    if (!window.BarcodeDetector) {
-      setStatus("no-api")
-      return
-    }
-
     let cancelled = false
 
-    async function startScanning() {
+    async function start() {
       try {
-        // Get camera
+        // 1. Get camera stream
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
@@ -108,63 +95,114 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
           await videoRef.current.play()
         }
 
-        // Create detector with all common product barcode formats
-        const supportedFormats = await window.BarcodeDetector!.getSupportedFormats()
-        const wantedFormats = [
-          "ean_13", "ean_8", "upc_a", "upc_e",
-          "code_128", "code_39", "code_93",
-          "itf", "qr_code", "data_matrix",
-        ]
-        const formats = wantedFormats.filter((f) => supportedFormats.includes(f))
-
-        if (formats.length === 0) {
-          setStatus("no-api")
-          return
-        }
-
-        const detector = new window.BarcodeDetector!({ formats })
-
         setStatus("scanning")
 
-        // Scan loop — detect barcodes every 250ms
-        const scan = async () => {
-          if (cancelled || scannedRef.current) return
-
+        // 2. Try native BarcodeDetector first
+        if (window.BarcodeDetector) {
           try {
-            if (videoRef.current && videoRef.current.readyState >= 2) {
-              const barcodes = await detector.detect(videoRef.current)
-              if (barcodes.length > 0 && !scannedRef.current) {
-                const code = barcodes[0].rawValue
-                if (code) {
-                  scannedRef.current = true
-                  // Haptic feedback on mobile
-                  if (navigator.vibrate) navigator.vibrate(100)
-                  onScan(code)
-                  return
-                }
-              }
+            const supported = await window.BarcodeDetector.getSupportedFormats()
+            const wanted = [
+              "ean_13", "ean_8", "upc_a", "upc_e",
+              "code_128", "code_39", "code_93",
+              "itf", "qr_code", "data_matrix",
+            ]
+            const formats = wanted.filter((f) => supported.includes(f))
+
+            if (formats.length > 0) {
+              const detector = new window.BarcodeDetector!({ formats })
+              startNativeScan(detector)
+              return
             }
           } catch {
-            // Detection frame failed — continue scanning
-          }
-
-          if (!cancelled && !scannedRef.current) {
-            scanLoopRef.current = requestAnimationFrame(() => {
-              setTimeout(scan, 250)
-            })
+            // BarcodeDetector failed — fall through to zxing
           }
         }
 
-        scan()
+        // 3. Fallback: zxing JS decoder
+        startZxingScan()
       } catch (err) {
         if (!cancelled) {
           setStatus("error")
-          if (onError) onError(err instanceof Error ? err : new Error(String(err)))
+          onError?.(err instanceof Error ? err : new Error(String(err)))
         }
       }
     }
 
-    startScanning()
+    function startNativeScan(detector: InstanceType<NonNullable<typeof window.BarcodeDetector>>) {
+      const scan = async () => {
+        if (cancelled || scannedRef.current) return
+
+        try {
+          if (videoRef.current && videoRef.current.readyState >= 2) {
+            const barcodes = await detector.detect(videoRef.current)
+            if (barcodes.length > 0 && barcodes[0].rawValue && !scannedRef.current) {
+              scannedRef.current = true
+              if (navigator.vibrate) navigator.vibrate(100)
+              onScan(barcodes[0].rawValue)
+              return
+            }
+          }
+        } catch {
+          // Frame detection failed — continue
+        }
+
+        if (!cancelled && !scannedRef.current) {
+          scanLoopRef.current = setTimeout(scan, 250)
+        }
+      }
+      scan()
+    }
+
+    async function startZxingScan() {
+      // Dynamic import — only load zxing when needed (it's ~200KB)
+      const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import("@zxing/library")
+
+      if (cancelled || scannedRef.current) return
+
+      const hints = new Map()
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.DATA_MATRIX,
+        BarcodeFormat.ITF,
+      ])
+      hints.set(DecodeHintType.TRY_HARDER, true)
+
+      const reader = new BrowserMultiFormatReader(hints)
+
+      // Use zxing's built-in continuous decode from video element
+      if (!videoRef.current || !streamRef.current) return
+
+      try {
+        const deviceId = streamRef.current.getVideoTracks()[0]?.getSettings().deviceId
+        reader.decodeFromVideoDevice(
+          deviceId ?? null,
+          videoRef.current,
+          (result, err) => {
+            if (cancelled || scannedRef.current) return
+            if (result) {
+              const text = result.getText()
+              if (text) {
+                scannedRef.current = true
+                reader.reset()
+                if (navigator.vibrate) navigator.vibrate(100)
+                onScan(text)
+              }
+            }
+            // err fires on every non-detection frame — ignore
+          }
+        )
+      } catch {
+        // zxing setup failed — manual entry still available
+      }
+    }
+
+    start()
 
     return () => {
       cancelled = true
@@ -172,7 +210,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     }
   }, [onScan, onError, stopCamera])
 
-  // Manual entry fallback
   const handleManualSubmit = () => {
     const code = manualInput.trim()
     if (code) {
@@ -181,105 +218,74 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     }
   }
 
-  // No native API — show manual entry only
-  if (status === "no-api") {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Camera barcode scanning isn&apos;t supported on this device. Enter the barcode manually:
-        </p>
-        <div className="flex gap-2">
-          <Input
-            value={manualInput}
-            onChange={(e) => setManualInput(e.target.value)}
-            placeholder="Enter barcode number..."
-            className="flex-1"
-            onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
-            autoFocus
-          />
-          <Button onClick={handleManualSubmit} disabled={!manualInput.trim()}>
-            Go
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="relative w-full overflow-hidden rounded-lg bg-black">
-      {/* Camera video feed */}
-      <video
-        ref={videoRef}
-        className="w-full object-cover"
-        style={{ maxHeight: "60dvh" }}
-        autoPlay
-        playsInline
-        muted
-      />
+    <div className="space-y-3">
+      <div className="relative w-full overflow-hidden rounded-lg bg-black">
+        <video
+          ref={videoRef}
+          className="w-full object-cover"
+          style={{ maxHeight: "60dvh" }}
+          autoPlay
+          playsInline
+          muted
+        />
 
-      {/* Scanning overlay — visual guide for barcode alignment */}
-      <div
-        className="pointer-events-none absolute inset-0 flex items-center justify-center"
-        aria-hidden
-      >
-        <div className="relative h-40 w-64">
-          {/* Top-left */}
-          <div className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-primary" />
-          {/* Top-right */}
-          <div className="absolute right-0 top-0 h-8 w-8 border-r-2 border-t-2 border-primary" />
-          {/* Bottom-left */}
-          <div className="absolute bottom-0 left-0 h-8 w-8 border-b-2 border-l-2 border-primary" />
-          {/* Bottom-right */}
-          <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary" />
+        {/* Scanning overlay */}
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          aria-hidden
+        >
+          <div className="relative h-40 w-64">
+            <div className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-primary" />
+            <div className="absolute right-0 top-0 h-8 w-8 border-r-2 border-t-2 border-primary" />
+            <div className="absolute bottom-0 left-0 h-8 w-8 border-b-2 border-l-2 border-primary" />
+            <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary" />
 
-          {/* Scanning line animation */}
-          <div
-            className="absolute inset-x-0 h-0.5 bg-primary/70"
-            style={{
-              animation: "scan-line 2s ease-in-out infinite",
-              top: "50%",
-            }}
-          />
+            <div
+              className="absolute inset-x-0 h-0.5 bg-primary/70"
+              style={{
+                animation: "scan-line 2s ease-in-out infinite",
+                top: "50%",
+              }}
+            />
+          </div>
         </div>
+
+        <style>{`
+          @keyframes scan-line {
+            0% { transform: translateY(-64px); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(64px); opacity: 0; }
+          }
+        `}</style>
+
+        <p className="absolute bottom-3 w-full text-center text-xs text-white/70">
+          {status === "loading" && "Starting camera..."}
+          {status === "scanning" && "Point camera at barcode — hold steady"}
+          {status === "error" && "Camera error — check permissions"}
+        </p>
       </div>
 
-      <style>{`
-        @keyframes scan-line {
-          0% { transform: translateY(-64px); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(64px); opacity: 0; }
-        }
-      `}</style>
-
-      <p className="absolute bottom-3 w-full text-center text-xs text-white/70">
-        {status === "loading" && "Starting camera..."}
-        {status === "scanning" && "Point camera at barcode — hold steady"}
-        {status === "error" && "Camera error — check permissions"}
-      </p>
-
-      {/* Manual entry fallback always available below camera */}
-      <div className="mt-3 space-y-2">
-        <p className="text-xs text-muted-foreground text-center">Or enter manually:</p>
-        <div className="flex gap-2">
-          <Input
-            value={manualInput}
-            onChange={(e) => setManualInput(e.target.value)}
-            placeholder="Barcode number..."
-            className="flex-1 h-9 text-sm"
-            onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
-          />
-          <Button size="sm" onClick={handleManualSubmit} disabled={!manualInput.trim()}>
-            Go
-          </Button>
-        </div>
+      {/* Manual entry — always available */}
+      <div className="flex gap-2">
+        <Input
+          value={manualInput}
+          onChange={(e) => setManualInput(e.target.value)}
+          placeholder="Or type barcode number..."
+          className="flex-1 h-9 text-sm"
+          onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+        />
+        <Button size="sm" onClick={handleManualSubmit} disabled={!manualInput.trim()}>
+          Go
+        </Button>
       </div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Dialog wrapper — scanner in a modal sheet
+// Dialog wrapper
 // ---------------------------------------------------------------------------
 
 interface BarcodeScannerDialogProps {
@@ -305,9 +311,7 @@ export function BarcodeScannerDialog({
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
-      hasScanned.current = false
-    }
+    if (!nextOpen) hasScanned.current = false
     onOpenChange(nextOpen)
   }
 
