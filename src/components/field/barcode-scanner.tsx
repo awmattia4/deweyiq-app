@@ -3,14 +3,24 @@
 /**
  * Phase 13: Barcode Scanner Component
  *
- * Uses html5-qrcode — supports all barcode formats:
- * UPC-A, UPC-E, EAN-13, EAN-8, Code 128, Code 39, ITF, QR, DataMatrix.
+ * Uses `barcode-detector` polyfill which provides the native BarcodeDetector API
+ * everywhere — uses hardware-accelerated native API on Chrome/Android/Safari 17.2+,
+ * and a reliable ZXing-based polyfill on older browsers and iOS PWA.
+ *
+ * This is the "Scan & Go" style live scanner — real-time video feed with
+ * frame-by-frame barcode detection.
  *
  * Load via next/dynamic with ssr: false.
  */
 
-import { useEffect, useRef, useState } from "react"
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { BarcodeDetector } from "barcode-detector"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -24,107 +34,123 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
-  const containerId = useRef(`scanner-${Math.random().toString(36).slice(2, 8)}`)
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const rafRef = useRef<number | null>(null)
   const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading")
   const [manualInput, setManualInput] = useState("")
   const scannedRef = useRef(false)
   const onScanRef = useRef(onScan)
   onScanRef.current = onScan
 
+  const cleanup = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
-    let mounted = true
+    let cancelled = false
     scannedRef.current = false
 
     async function start() {
       try {
-        const scanner = new Html5Qrcode(containerId.current, {
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.QR_CODE,
-          ],
-          verbose: false,
-          useBarCodeDetectorIfSupported: true,
+        // Request high-resolution rear camera
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
         })
-        scannerRef.current = scanner
 
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 20,
-            // Dynamic scan box — 80% of video width, maintains barcode aspect ratio
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-              width: Math.floor(viewfinderWidth * 0.85),
-              height: Math.floor(viewfinderHeight * 0.4),
-            }),
-          },
-          (decodedText) => {
-            if (scannedRef.current) return
-            scannedRef.current = true
-            if (navigator.vibrate) navigator.vibrate(100)
-            onScanRef.current(decodedText)
-          },
-          () => {} // onScanFailure — fires every non-barcode frame, ignore
-        )
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
 
-        // Apply continuous autofocus AFTER camera starts — critical for close-up barcode scanning
-        // html5-qrcode doesn't expose focus config, so we reach into the video track directly
-        setTimeout(() => {
+        streamRef.current = stream
+        const video = videoRef.current
+        if (!video) return
+
+        video.srcObject = stream
+        await video.play()
+
+        // Apply continuous autofocus
+        const track = stream.getVideoTracks()[0]
+        if (track) {
           try {
-            const videoEl = document.querySelector(`#${containerId.current} video`) as HTMLVideoElement | null
-            if (videoEl?.srcObject && videoEl.srcObject instanceof MediaStream) {
-              const track = videoEl.srcObject.getVideoTracks()[0]
-              if (track) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const caps = (track as any).getCapabilities?.()
-                if (caps?.focusMode?.includes?.("continuous")) {
-                  track.applyConstraints({
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    advanced: [{ focusMode: "continuous" } as any],
-                  }).catch(() => {})
-                }
-              }
-            }
+            await track.applyConstraints({
+              // @ts-expect-error — focusMode is valid but not in TS types
+              advanced: [{ focusMode: "continuous" }],
+            })
           } catch {
-            // Focus not supported on this device — scanner still works, just no macro focus
+            // Not supported — fine
           }
-        }, 500)
+        }
 
-        if (mounted) setStatus("scanning")
+        // Create barcode detector with all common formats
+        const detector = new BarcodeDetector({
+          formats: [
+            "upc_a", "upc_e", "ean_13", "ean_8",
+            "code_128", "code_39", "code_93",
+            "itf", "qr_code",
+          ],
+        })
+
+        setStatus("scanning")
+
+        // Scan loop — detect barcodes from video frames
+        let lastScanTime = 0
+        const SCAN_INTERVAL = 150 // ms between scans
+
+        function scanFrame(timestamp: number) {
+          if (cancelled || scannedRef.current) return
+
+          if (timestamp - lastScanTime >= SCAN_INTERVAL) {
+            lastScanTime = timestamp
+
+            if (video!.readyState >= 2) {
+              detector.detect(video!).then((barcodes) => {
+                if (cancelled || scannedRef.current) return
+                if (barcodes.length > 0 && barcodes[0].rawValue) {
+                  scannedRef.current = true
+                  if (navigator.vibrate) navigator.vibrate(100)
+                  onScanRef.current(barcodes[0].rawValue)
+                  return
+                }
+              }).catch(() => {
+                // Detection failed on this frame — continue
+              })
+            }
+          }
+
+          if (!cancelled && !scannedRef.current) {
+            rafRef.current = requestAnimationFrame(scanFrame)
+          }
+        }
+
+        rafRef.current = requestAnimationFrame(scanFrame)
       } catch (err) {
-        if (mounted) {
+        if (!cancelled) {
           setStatus("error")
           onError?.(err instanceof Error ? err : new Error(String(err)))
         }
       }
     }
 
-    const timer = setTimeout(start, 150)
+    start()
 
     return () => {
-      mounted = false
-      clearTimeout(timer)
-      const s = scannerRef.current
-      scannerRef.current = null
-      if (s) {
-        // Must fully stop camera to release it on iOS (Dynamic Island indicator)
-        s.stop()
-          .then(() => {
-            try { s.clear() } catch {}
-          })
-          .catch(() => {
-            try { s.clear() } catch {}
-          })
-      }
+      cancelled = true
+      cleanup()
     }
-  }, [onError])
+  }, [cleanup, onError])
 
   const handleManualSubmit = () => {
     const code = manualInput.trim()
@@ -136,17 +162,32 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
   return (
     <div className="space-y-3">
-      <div
-        id={containerId.current}
-        className="w-full overflow-hidden rounded-lg bg-black"
-        style={{ minHeight: 250 }}
-      />
+      <div className="relative w-full overflow-hidden rounded-lg bg-black" style={{ minHeight: 250 }}>
+        <video
+          ref={videoRef}
+          className="w-full object-cover"
+          style={{ maxHeight: "55dvh" }}
+          autoPlay
+          playsInline
+          muted
+        />
 
-      <p className="text-center text-xs text-muted-foreground">
-        {status === "loading" && "Starting camera..."}
-        {status === "scanning" && "Point camera at barcode — hold steady"}
-        {status === "error" && "Camera error — check permissions or try manual entry"}
-      </p>
+        {/* Scan guide overlay */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+          <div className="relative" style={{ width: "80%", height: "30%" }}>
+            <div className="absolute left-0 top-0 h-6 w-6 border-l-2 border-t-2 border-white/70 rounded-tl-sm" />
+            <div className="absolute right-0 top-0 h-6 w-6 border-r-2 border-t-2 border-white/70 rounded-tr-sm" />
+            <div className="absolute bottom-0 left-0 h-6 w-6 border-b-2 border-l-2 border-white/70 rounded-bl-sm" />
+            <div className="absolute bottom-0 right-0 h-6 w-6 border-b-2 border-r-2 border-white/70 rounded-br-sm" />
+          </div>
+        </div>
+
+        <p className="absolute bottom-3 w-full text-center text-xs text-white/70">
+          {status === "loading" && "Starting camera..."}
+          {status === "scanning" && "Align barcode within the frame"}
+          {status === "error" && "Camera error — try manual entry"}
+        </p>
+      </div>
 
       <div className="flex gap-2">
         <Input
@@ -167,13 +208,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 // ---------------------------------------------------------------------------
 // Dialog wrapper — for standalone use (not inside another Dialog)
 // ---------------------------------------------------------------------------
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 interface BarcodeScannerDialogProps {
   open: boolean
