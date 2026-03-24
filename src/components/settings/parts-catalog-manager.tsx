@@ -17,6 +17,7 @@ import {
   SearchIcon,
   EyeOffIcon,
   EyeIcon,
+  ScanBarcodeIcon,
 } from "lucide-react"
 import {
   getCatalogItems,
@@ -438,12 +439,41 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
                 onError={(err) => console.error("[PartsCatalog] scan error:", err)}
               />
               <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
-                Back to Form
+                Enter Manually Instead
               </Button>
             </div>
           ) : (
           <>
           <div className="flex flex-col gap-4">
+            {/* Scan button — primary action for adding */}
+            {dialogMode === "add" && !form.name && !form.sku && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-14 text-base font-medium border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer"
+                onClick={() => setShowScanner(true)}
+              >
+                <ScanBarcodeIcon className="h-5 w-5 mr-2.5" />
+                Scan Barcode to Add
+              </Button>
+            )}
+
+            {form.sku && (
+              <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2">
+                <ScanBarcodeIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground truncate">Scanned: {form.sku}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-6 px-2 text-xs cursor-pointer"
+                  onClick={() => setShowScanner(true)}
+                >
+                  Rescan
+                </Button>
+              </div>
+            )}
+
             {lookingUp && (
               <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
             )}
@@ -452,26 +482,15 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
               <Label htmlFor="ci-name" className="text-xs text-muted-foreground">
                 Name <span className="text-destructive">*</span>
               </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="ci-name"
-                  className="h-8 text-sm flex-1"
-                  placeholder={lookingUp ? "Looking up..." : "e.g. Hayward Super Pump 1.5HP"}
-                  value={form.name}
-                  onChange={(e) => patchForm({ name: e.target.value })}
-                  disabled={lookingUp}
-                />
-                {dialogMode === "add" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowScanner(true)}
-                  >
-                    Scan
-                  </Button>
-                )}
-              </div>
+              <Input
+                id="ci-name"
+                className="h-8 text-sm"
+                placeholder={lookingUp ? "Looking up..." : "e.g. Hayward Super Pump 1.5HP"}
+                value={form.name}
+                onChange={(e) => patchForm({ name: e.target.value })}
+                disabled={lookingUp}
+                autoFocus={!!form.name || !!form.sku}
+              />
             </div>
 
             {/* Description */}

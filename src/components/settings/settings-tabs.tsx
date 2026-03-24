@@ -388,20 +388,7 @@ export function SettingsTabs({
             </>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Chemical Costs</CardTitle>
-              <CardDescription>
-                Set the cost per unit for each chemical product. Used to calculate per-pool profitability on the Reports page.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChemistryCostSettings
-                chemicalProducts={chemicalProducts}
-                marginThreshold={orgSettings?.chem_profit_margin_threshold_pct ?? "20"}
-              />
-            </CardContent>
-          </Card>
+          {/* Chemical Costs moved to Inventory tab > Chemical Products manager */}
 
           {orgSettings && (
             <Card>

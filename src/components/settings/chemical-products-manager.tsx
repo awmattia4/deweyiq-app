@@ -14,6 +14,7 @@ import {
   Trash2Icon,
   EyeOffIcon,
   EyeIcon,
+  ScanBarcodeIcon,
 } from "lucide-react"
 import {
   getChemicalProducts,
@@ -389,12 +390,25 @@ export function ChemicalProductsManager({ initialProducts }: ChemicalProductsMan
                 onError={(err) => console.error("[ChemicalProducts] scan error:", err)}
               />
               <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
-                Back to Form
+                Enter Manually Instead
               </Button>
             </div>
           ) : (
             <>
               <div className="flex flex-col gap-4">
+                {/* Scan button — primary action for adding */}
+                {dialogMode === "add" && !form.name && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-14 text-base font-medium border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer"
+                    onClick={() => setShowScanner(true)}
+                  >
+                    <ScanBarcodeIcon className="h-5 w-5 mr-2.5" />
+                    Scan Barcode to Add
+                  </Button>
+                )}
+
                 {lookingUp && (
                   <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
                 )}
@@ -404,26 +418,15 @@ export function ChemicalProductsManager({ initialProducts }: ChemicalProductsMan
                   <Label htmlFor="cp-name" className="text-xs text-muted-foreground">
                     Name <span className="text-destructive">*</span>
                   </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="cp-name"
-                      className="h-8 text-sm flex-1"
-                      placeholder={lookingUp ? "Looking up..." : "e.g. 31.45% Muriatic Acid"}
-                      value={form.name}
-                      onChange={(e) => patchForm({ name: e.target.value })}
-                      disabled={lookingUp}
-                    />
-                    {dialogMode === "add" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowScanner(true)}
-                      >
-                        Scan
-                      </Button>
-                    )}
-                  </div>
+                  <Input
+                    id="cp-name"
+                    className="h-8 text-sm"
+                    placeholder={lookingUp ? "Looking up..." : "e.g. 31.45% Muriatic Acid"}
+                    value={form.name}
+                    onChange={(e) => patchForm({ name: e.target.value })}
+                    disabled={lookingUp}
+                    autoFocus={!!form.name}
+                  />
                 </div>
 
                 {/* Chemical type */}
