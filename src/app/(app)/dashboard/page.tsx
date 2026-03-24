@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { getCurrentUser } from "@/actions/auth"
 import { getAlertCountByType, getPredictiveAlerts } from "@/actions/alerts"
+import { getChurnPredictions } from "@/actions/ai-churn"
 import { withRls, getRlsToken } from "@/lib/db"
 import { profiles, orgs, routeStops } from "@/lib/db/schema"
 import { eq, count, and } from "drizzle-orm"
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ChurnPredictions } from "@/components/dashboard/churn-predictions"
 import {
   UsersIcon,
   MapIcon,
@@ -103,8 +105,8 @@ export default async function DashboardPage() {
     console.error("[DashboardPage] Failed to fetch org data:", err)
   }
 
-  // Fetch alert counts and predictive alerts for dashboard summary (non-fatal)
-  const [alertCounts, predictiveAlerts] = await Promise.all([
+  // Fetch alert counts, predictive alerts, and churn predictions (all non-fatal)
+  const [alertCounts, predictiveAlerts, churnResult] = await Promise.all([
     getAlertCountByType().catch(() => ({
       total: 0,
       missed_stop: 0,
@@ -114,6 +116,8 @@ export default async function DashboardPage() {
       predictive_chemistry: 0,
     })),
     getPredictiveAlerts().catch(() => []),
+    // Only fetch churn predictions for owner/office — not techs (already redirected above)
+    getChurnPredictions().catch(() => null),
   ])
 
   const firstName = user.full_name?.split(" ")[0] || "there"
@@ -302,6 +306,14 @@ export default async function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Churn predictions (owner/office only — techs are redirected above) */}
+      {churnResult?.success && (
+        <ChurnPredictions
+          predictions={churnResult.predictions}
+          summary={churnResult.summary}
+        />
+      )}
     </div>
   )
 }

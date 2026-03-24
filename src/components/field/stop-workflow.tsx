@@ -28,10 +28,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { ChemistryGrid } from "@/components/field/chemistry-grid"
 import { ChemistryDosing } from "@/components/field/chemistry-dosing"
+import { ChemistryPrediction } from "@/components/field/chemistry-prediction"
 import { Checklist } from "@/components/field/checklist"
 import { PhotoCapture, processPhotoQueue } from "@/components/field/photo-capture"
+import { PhotoDiagnosis } from "@/components/field/photo-diagnosis"
 import { NotesField } from "@/components/field/notes-field"
 import { InternalNotes } from "@/components/field/internal-notes"
+import { VoiceNoteButton } from "@/components/field/voice-note-button"
+import type { StructuredVoiceData } from "@/components/field/voice-note-button"
 import { CompletionModal, SkipStopDialog, OverrideWarningSheet } from "@/components/field/completion-modal"
 import { FlagIssueSheet } from "@/components/work-orders/flag-issue-sheet"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
@@ -214,6 +218,48 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
         .count(),
     [visitId],
     0
+  )
+
+  // ── Latest uploaded photo — used for AI photo diagnosis ──────────────────
+  // Only uploaded photos have a storagePath we can pass to the AI vision API.
+  const latestUploadedPhoto = useLiveQuery(
+    () =>
+      offlineDb.photoQueue
+        .where("visitId")
+        .equals(visitId)
+        .and((item) => item.status === "uploaded")
+        .sortBy("createdAt")
+        .then((items) => items[items.length - 1] ?? null),
+    [visitId],
+    null
+  )
+
+  // ── Voice note structured data handler ────────────────────────────────────
+  // Merges AI-extracted fields into the draft without overwriting unrelated data.
+  const handleVoiceStructured = useCallback(
+    (data: StructuredVoiceData) => {
+      // Apply chemistry readings
+      if (data.chemistryReadings && Object.keys(data.chemistryReadings).length > 0) {
+        for (const [key, value] of Object.entries(data.chemistryReadings)) {
+          updateChemistry(key, value)
+        }
+      }
+      // Apply notes (append if existing notes present)
+      if (data.notes) {
+        const existingNotes = draft?.notes ?? ""
+        const newNotes = existingNotes
+          ? `${existingNotes}\n\n${data.notes}`
+          : data.notes
+        updateNotes(newNotes)
+      }
+      // Apply checklist updates
+      if (data.checklistUpdates && data.checklistUpdates.length > 0) {
+        for (const update of data.checklistUpdates) {
+          updateChecklist(update.taskId, update.completed, update.notes ?? "")
+        }
+      }
+    },
+    [draft?.notes, updateChemistry, updateNotes, updateChecklist]
   )
 
   // ── Get uploaded photo storage paths for saving with the visit ──────────
@@ -546,6 +592,10 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             value="chemistry"
             className="flex-1 overflow-y-auto mt-0 px-4 py-4 space-y-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150"
           >
+            {/* AI chemistry predictions — shown before taking readings (not when completed) */}
+            {!isCompleted && (
+              <ChemistryPrediction poolId={context.poolId} />
+            )}
             <ChemistryGrid
               chemistry={draft?.chemistry ?? {}}
               previousChemistry={context.previousChemistry}
@@ -590,9 +640,19 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           {/* ── Photos tab ────────────────────────────────────────────────── */}
           <TabsContent
             value="photos"
-            className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150"
+            className="flex-1 overflow-y-auto mt-0 px-4 py-4 pb-28 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-150 space-y-4"
           >
             <PhotoCapture visitId={visitId} orgId={context.orgId} readOnly={isCompleted} />
+            {/* AI photo diagnosis — only shown when at least one photo is uploaded */}
+            {latestUploadedPhoto?.storagePath && (
+              <PhotoDiagnosis
+                photoUrl={latestUploadedPhoto.storagePath}
+                poolContext={{
+                  sanitizerType: context.sanitizerType,
+                  lastChemistry: context.previousChemistry,
+                }}
+              />
+            )}
           </TabsContent>
 
           {/* ── Notes tab ─────────────────────────────────────────────────── */}
@@ -602,6 +662,20 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           >
             {draft ? (
               <>
+                {/* AI voice note — only shown when not completed */}
+                {!isCompleted && (
+                  <VoiceNoteButton
+                    onStructured={handleVoiceStructured}
+                    poolContext={{
+                      sanitizerType: context.sanitizerType,
+                      chemistryParams: Object.keys(draft.chemistry),
+                      checklistTasks: context.checklistTasks.map((t) => ({
+                        taskId: t.taskId,
+                        label: t.label,
+                      })),
+                    }}
+                  />
+                )}
                 <NotesField draft={draft} onUpdate={updateNotes} readOnly={isCompleted} />
                 <InternalNotes
                   notes={draft.internalNotes ?? ""}

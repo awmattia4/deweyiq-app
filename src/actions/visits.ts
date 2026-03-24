@@ -709,7 +709,38 @@ export async function completeStop(
         })
     })
 
-    // ── 9b. Phase 13: Auto-decrement truck inventory from dosing amounts ────────
+    // ── 9b. AI smart summary — non-blocking fire-and-forget ──────────────────
+    // Generates a customer-friendly plain-language summary of the service visit.
+    // Currently logs the result; persisting requires adding ai_summary column to
+    // service_visits. Never blocks completion regardless of outcome.
+    void (async () => {
+      try {
+        const { generateSmartSummary } = await import("@/actions/ai-reports")
+        const summaryInput = {
+          customerName,
+          poolName,
+          chemistryReadings: input.chemistry as Record<string, number | null>,
+          dosingAmounts: input.dosingAmounts?.map((d) => ({
+            chemical: d.chemical,
+            amount: d.amount,
+            unit: d.unit,
+          })),
+          checklistCompletion: input.checklist.map((item) => ({
+            task: item.taskId,
+            completed: item.completed,
+          })),
+          notes: input.notes || undefined,
+        }
+        const summaryResult = await generateSmartSummary(summaryInput)
+        if (summaryResult.success && summaryResult.summary) {
+          console.debug("[completeStop] AI smart summary generated for visit", input.visitId, ":", summaryResult.summary)
+        }
+      } catch (aiErr) {
+        console.warn("[completeStop] Smart summary generation failed (non-blocking):", aiErr)
+      }
+    })()
+
+    // ── 9c. Phase 13: Auto-decrement truck inventory from dosing amounts ────────
     // Non-blocking — inventory decrement failure NEVER blocks stop completion.
     if (input.dosingAmounts && input.dosingAmounts.length > 0) {
       try {
