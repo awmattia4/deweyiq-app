@@ -45,9 +45,13 @@ import {
 } from "@/actions/shopping-lists"
 import type { ShoppingListItem, ShoppingListStatus } from "@/actions/shopping-lists"
 
-// Dynamic import for barcode scanner (camera API — SSR unsafe)
+// Dynamic imports for barcode scanner (camera API — SSR unsafe)
 const BarcodeScannerDialog = dynamic(
   () => import("@/components/field/barcode-scanner").then((m) => m.BarcodeScannerDialog),
+  { ssr: false }
+)
+const BarcodeScanner = dynamic(
+  () => import("@/components/field/barcode-scanner").then((m) => m.BarcodeScanner),
   { ssr: false }
 )
 
@@ -230,9 +234,24 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
     <>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Add to Shopping List</DialogTitle>
+          <DialogTitle>{showScanner ? "Scan Barcode" : "Add to Shopping List"}</DialogTitle>
         </DialogHeader>
 
+        {showScanner ? (
+          <div className="flex flex-col gap-3 py-2">
+            <BarcodeScanner
+              onScan={(code) => {
+                setItemName(code)
+                setShowScanner(false)
+              }}
+              onError={(err) => console.error("[AddItemDialog] scan error:", err)}
+            />
+            <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
+              Back to Form
+            </Button>
+          </div>
+        ) : (
+        <>
         <div className="flex flex-col gap-4 py-2">
           {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -337,19 +356,9 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
             {isPending ? "Adding..." : "Add to List"}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
-
-      {showScanner && (
-        <BarcodeScannerDialog
-          open={showScanner}
-          onOpenChange={(open) => !open && setShowScanner(false)}
-          onScan={(code) => {
-            // Barcode scan populates item name from the scanned value
-            setItemName(code)
-            setShowScanner(false)
-          }}
-        />
-      )}
     </>
   )
 }

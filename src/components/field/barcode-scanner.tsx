@@ -154,10 +154,11 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     }
 
     async function startZxingScan() {
-      // Dynamic import — only load zxing when needed (it's ~200KB)
+      // Dynamic import — only load zxing when needed (~200KB)
       const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import("@zxing/library")
 
       if (cancelled || scannedRef.current) return
+      if (!videoRef.current || !streamRef.current) return
 
       const hints = new Map()
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
@@ -175,15 +176,12 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
       const reader = new BrowserMultiFormatReader(hints)
 
-      // Use zxing's built-in continuous decode from video element
-      if (!videoRef.current || !streamRef.current) return
-
+      // Use decodeFromStream to reuse existing camera stream (don't request a new one)
       try {
-        const deviceId = streamRef.current.getVideoTracks()[0]?.getSettings().deviceId
-        reader.decodeFromVideoDevice(
-          deviceId ?? null,
+        reader.decodeFromStream(
+          streamRef.current,
           videoRef.current,
-          (result, err) => {
+          (result) => {
             if (cancelled || scannedRef.current) return
             if (result) {
               const text = result.getText()
@@ -194,7 +192,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
                 onScan(text)
               }
             }
-            // err fires on every non-detection frame — ignore
           }
         )
       } catch {
