@@ -15,6 +15,7 @@
  */
 
 import { useRef, useState, useTransition } from "react"
+import { ScanBarcodeIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -244,12 +245,41 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
               onError={(err) => console.error("[AddItemDialog] scan error:", err)}
             />
             <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
-              Back to Form
+              Enter Manually Instead
             </Button>
           </div>
         ) : (
         <>
         <div className="flex flex-col gap-4 py-2">
+          {/* Scan button — primary action, big and prominent */}
+          {!itemName && !barcode && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-14 text-base font-medium border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer"
+              onClick={() => setShowScanner(true)}
+            >
+              <ScanBarcodeIcon className="h-5 w-5 mr-2.5" />
+              Scan Barcode to Add
+            </Button>
+          )}
+
+          {barcode && (
+            <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2">
+              <ScanBarcodeIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground truncate">Scanned: {barcode}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-6 px-2 text-xs cursor-pointer"
+                onClick={() => setShowScanner(true)}
+              >
+                Rescan
+              </Button>
+            </div>
+          )}
+
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
@@ -266,7 +296,7 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
               onFocus={() => searchResults.length > 0 && setShowResults(true)}
               onBlur={() => setTimeout(() => setShowResults(false), 200)}
               placeholder={lookingUp ? "Looking up..." : "Search catalog or type name..."}
-              autoFocus
+              autoFocus={!!itemName || !!barcode}
               autoComplete="off"
               disabled={lookingUp}
             />
@@ -365,26 +395,6 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="barcode">Barcode (optional)</Label>
-            <div className="flex gap-2">
-              <Input
-                id="barcode"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Scan or enter barcode"
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowScanner(true)}
-              >
-                Scan
-              </Button>
-            </div>
-          </div>
         </div>
 
         <DialogFooter>

@@ -16,6 +16,7 @@
  */
 
 import { useRef, useState, useTransition } from "react"
+import { ScanBarcodeIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -294,37 +295,44 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
               onError={(err) => console.error("[AddItemDialog] scan error:", err)}
             />
             <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
-              Back to Form
+              Enter Manually Instead
             </Button>
           </div>
         ) : (
         <>
         <div className="flex flex-col gap-4 py-2">
+          {/* Scan button — primary action */}
+          {!itemName && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-14 text-base font-medium border-primary/30 hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer"
+              onClick={() => setShowScanner(true)}
+            >
+              <ScanBarcodeIcon className="h-5 w-5 mr-2.5" />
+              Scan Barcode to Add
+            </Button>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {lookingUp && (
+            <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
+          )}
 
           <div className="flex flex-col gap-1.5 relative">
             <Label htmlFor="add-item-name">Item Name</Label>
-            <div className="flex gap-2">
-              <Input
-                id="add-item-name"
-                value={itemName}
-                onChange={(e) => handleNameChange(e.target.value)}
-                onFocus={() => searchResults.length > 0 && setShowResults(true)}
-                onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                placeholder="Search catalog or type name..."
-                autoFocus
-                autoComplete="off"
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowScanner(true)}
-              >
-                Scan
-              </Button>
-            </div>
+            <Input
+              id="add-item-name"
+              value={itemName}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              onBlur={() => setTimeout(() => setShowResults(false), 200)}
+              placeholder={lookingUp ? "Looking up..." : "Search catalog or type name..."}
+              autoFocus={!!itemName}
+              autoComplete="off"
+              className="flex-1"
+              disabled={lookingUp}
+            />
             {/* Catalog search dropdown */}
             {showResults && searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-popover shadow-md">
