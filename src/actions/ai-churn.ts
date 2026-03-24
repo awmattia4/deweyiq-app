@@ -379,7 +379,8 @@ export async function getChurnPredictions(): Promise<GetChurnPredictionsResult> 
       if (highRiskCount === 0 && mediumRiskCount === 0) {
         overallInsight = "All customers appear healthy — no churn signals detected."
       } else {
-        overallInsight = `${highRiskCount + mediumRiskCount} customers need attention — focus on the highest-risk accounts first.`
+        const atRiskCount = highRiskCount + mediumRiskCount
+        overallInsight = `${atRiskCount} ${atRiskCount === 1 ? "customer needs" : "customers need"} attention — focus on the highest-risk accounts first.`
       }
     }
 
