@@ -182,17 +182,26 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
       if (result.found && result.item_name) {
         setItemName(result.item_name)
         setScanMessage(null)
-        if (result.upc_data?.category) {
-          const cat = result.upc_data.category.toLowerCase()
-          if (cat.includes("chemical") || cat.includes("chlorine") || cat.includes("pool")) {
-            setCategory("chemical")
-          } else if (cat.includes("tool")) {
-            setCategory("tool")
-          } else if (cat.includes("equip")) {
-            setCategory("equipment")
-          } else {
-            setCategory("part")
-          }
+
+        // Map catalog category → truck inventory category
+        const srcCat = (result.catalog_category ?? result.upc_data?.category ?? "").toLowerCase()
+        if (srcCat.includes("chemical") || srcCat.includes("chlorine") || srcCat.includes("pool")) {
+          setCategory("chemical")
+        } else if (srcCat.includes("pump") || srcCat.includes("filter") || srcCat.includes("plumbing") || srcCat.includes("electrical")) {
+          setCategory("part")
+        } else if (srcCat.includes("tool")) {
+          setCategory("tool")
+        } else if (srcCat.includes("equip")) {
+          setCategory("equipment")
+        } else if (srcCat === "labor") {
+          setCategory("other")
+        } else if (srcCat) {
+          setCategory("part")
+        }
+
+        // Use catalog unit if available
+        if (result.catalog_unit) {
+          setUnit(result.catalog_unit)
         }
       } else {
         setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)

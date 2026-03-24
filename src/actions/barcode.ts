@@ -11,7 +11,7 @@
  */
 
 import { getRlsToken, withRls, adminDb } from "@/lib/db"
-import { barcodeCatalogLinks } from "@/lib/db/schema"
+import { barcodeCatalogLinks, partsCatalog } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 
 // ---------------------------------------------------------------------------
@@ -20,11 +20,15 @@ import { eq, and } from "drizzle-orm"
 
 export interface BarcodeResolveResult {
   found: boolean
-  source: "org_catalog" | "upc_api" | "not_found"
+  source: "org_catalog" | "parts_catalog" | "upc_api" | "not_found"
   barcode: string
   item_name?: string
   catalog_item_id?: string | null
   chemical_product_id?: string | null
+  /** Category from the source (parts catalog category, UPC category, etc.) */
+  catalog_category?: string | null
+  /** Default unit from the source */
+  catalog_unit?: string | null
   upc_data?: {
     name: string
     brand?: string
@@ -82,7 +86,39 @@ export async function resolveBarcode(barcode: string): Promise<BarcodeResolveRes
     }
   }
 
-  // 2. Fall back to UPC API
+  // 2. Check parts_catalog by SKU (barcode saved as SKU when scanned in catalog)
+  const [catalogMatch] = await withRls(token, async (db) => {
+    return db
+      .select({
+        id: partsCatalog.id,
+        name: partsCatalog.name,
+        category: partsCatalog.category,
+        default_unit: partsCatalog.default_unit,
+      })
+      .from(partsCatalog)
+      .where(
+        and(
+          eq(partsCatalog.org_id, orgId),
+          eq(partsCatalog.sku, barcode),
+          eq(partsCatalog.is_active, true)
+        )
+      )
+      .limit(1)
+  })
+
+  if (catalogMatch) {
+    return {
+      found: true,
+      source: "parts_catalog",
+      barcode,
+      item_name: catalogMatch.name,
+      catalog_item_id: catalogMatch.id,
+      catalog_category: catalogMatch.category,
+      catalog_unit: catalogMatch.default_unit,
+    }
+  }
+
+  // 3. Fall back to UPC API
   const upcResult = await lookupBarcode(barcode)
   if (upcResult.found && upcResult.name) {
     return {
