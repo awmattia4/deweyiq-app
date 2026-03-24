@@ -72,8 +72,10 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
             if (scannedRef.current) return
             scannedRef.current = true
             if (navigator.vibrate) navigator.vibrate(100)
+            // Don't call scanner.stop() here — it mutates the DOM and crashes React.
+            // The parent will set showScanner=false, unmounting this component,
+            // which triggers the cleanup effect that calls stop().
             onScanRef.current(decodedText)
-            scanner.stop().catch(() => {})
           },
           () => {} // onScanFailure — ignore (fires every non-barcode frame)
         )
@@ -106,9 +108,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const code = manualInput.trim()
     if (code && !scannedRef.current) {
       scannedRef.current = true
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {})
-      }
+      // Don't stop scanner here — cleanup effect handles it on unmount
       onScan(code)
     }
   }
