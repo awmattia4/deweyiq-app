@@ -16,8 +16,9 @@
  *   )
  */
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { useZxing } from "react-zxing"
+import { BarcodeFormat, DecodeHintType } from "@zxing/library"
 import {
   Dialog,
   DialogContent,
@@ -36,21 +37,50 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+
+  // Explicitly enable all common barcode formats for product scanning
+  const hints = new Map()
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+    BarcodeFormat.UPC_A,
+    BarcodeFormat.UPC_E,
+    BarcodeFormat.EAN_13,
+    BarcodeFormat.EAN_8,
+    BarcodeFormat.CODE_128,
+    BarcodeFormat.CODE_39,
+    BarcodeFormat.QR_CODE,
+    BarcodeFormat.DATA_MATRIX,
+    BarcodeFormat.ITF,
+  ])
+  hints.set(DecodeHintType.TRY_HARDER, true)
+
   const { ref } = useZxing({
+    hints,
     onDecodeResult(result) {
       const text = result.getText()
-      if (text) onScan(text)
+      if (text) {
+        setStatus("ready")
+        onScan(text)
+      }
+    },
+    onDecodeError() {
+      // This fires on every frame that doesn't find a barcode — not a real error
+      // Just means the camera is looking but hasn't found anything yet
+      if (status === "loading") setStatus("ready")
     },
     onError(err) {
+      setStatus("error")
       if (onError) onError(err instanceof Error ? err : new Error(String(err)))
     },
     // Prefer rear camera on mobile — better for barcodes
     constraints: {
       video: {
         facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
       },
     },
-    timeBetweenDecodingAttempts: 300,
+    timeBetweenDecodingAttempts: 200,
   })
 
   return (
@@ -103,7 +133,9 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
       `}</style>
 
       <p className="absolute bottom-3 w-full text-center text-xs text-white/70">
-        Point camera at barcode to scan
+        {status === "loading" && "Starting camera..."}
+        {status === "ready" && "Point camera at barcode — hold steady"}
+        {status === "error" && "Camera error — check permissions"}
       </p>
     </div>
   )
