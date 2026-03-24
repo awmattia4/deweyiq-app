@@ -490,11 +490,11 @@ export async function getStopContext(
  * 4. If customer has email_reports enabled: invokes send-service-report Edge Function
  *    (best-effort — failures are logged but don't block the response)
  *
- * @returns { success: true } on success, { success: false, error: string } on failure
+ * @returns { success: true, deductions? } on success, { success: false, error } on failure
  */
 export async function completeStop(
   input: CompleteStopInput
-): Promise<{ success: boolean; error?: string; warnings?: CompleteStopWarnings }> {
+): Promise<{ success: boolean; error?: string; warnings?: CompleteStopWarnings; deductions?: Array<{ inventoryItemId: string; itemName: string; unit: string; deductedAmount: number; newQuantity: number }> }> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
 
@@ -742,10 +742,11 @@ export async function completeStop(
 
     // ── 9c. Phase 13: Auto-decrement truck inventory from dosing amounts ────────
     // Non-blocking — inventory decrement failure NEVER blocks stop completion.
+    let inventoryDeductions: Array<{ inventoryItemId: string; itemName: string; unit: string; deductedAmount: number; newQuantity: number }> = []
     if (input.dosingAmounts && input.dosingAmounts.length > 0) {
       try {
         const { decrementTruckInventoryFromDosing } = await import("@/actions/truck-inventory")
-        await decrementTruckInventoryFromDosing(
+        const deducted = await decrementTruckInventoryFromDosing(
           techId,
           orgId,
           input.dosingAmounts.map((d) => ({
@@ -755,6 +756,13 @@ export async function completeStop(
           })),
           token
         )
+        inventoryDeductions = deducted.map((d) => ({
+          inventoryItemId: d.inventoryItemId,
+          itemName: d.itemName,
+          unit: d.unit,
+          deductedAmount: d.deductedAmount,
+          newQuantity: d.quantityAfter,
+        }))
       } catch (invErr) {
         console.error("[completeStop] truck inventory decrement failed (non-blocking):", invErr)
       }
@@ -924,7 +932,10 @@ export async function completeStop(
       }
     }
 
-    return { success: true }
+    return {
+      success: true,
+      deductions: inventoryDeductions.length > 0 ? inventoryDeductions : undefined,
+    }
   } catch (err) {
     console.error("[completeStop] Error:", err)
     return {

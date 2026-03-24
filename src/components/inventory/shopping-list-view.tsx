@@ -765,11 +765,13 @@ export function ShoppingListView({ techId, initialItems, isOfficeView = false }:
 
       {/* Add item dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <AddItemDialog
-          techId={techId}
-          onSuccess={handleAdded}
-          onClose={() => setShowAddDialog(false)}
-        />
+        {showAddDialog && (
+          <AddItemDialog
+            techId={techId}
+            onSuccess={handleAdded}
+            onClose={() => setShowAddDialog(false)}
+          />
+        )}
       </Dialog>
     </div>
   )

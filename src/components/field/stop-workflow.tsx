@@ -38,6 +38,8 @@ import { VoiceNoteButton } from "@/components/field/voice-note-button"
 import type { StructuredVoiceData } from "@/components/field/voice-note-button"
 import { CompletionModal, SkipStopDialog, OverrideWarningSheet } from "@/components/field/completion-modal"
 import { FlagIssueSheet } from "@/components/work-orders/flag-issue-sheet"
+import { InventoryDeductPrompt } from "@/components/field/inventory-deduct-prompt"
+import { updateTruckInventoryItem } from "@/actions/truck-inventory"
 import { useVisitDraft } from "@/hooks/use-visit-draft"
 import { useLiveQuery } from "dexie-react-hooks"
 import { offlineDb } from "@/lib/offline/db"
@@ -89,6 +91,8 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
   const [pendingNav, setPendingNav] = useState<string | null>(null)
   // Warn-but-allow: warnings returned from completeStop when overrideWarnings=false
   const [warnings, setWarnings] = useState<CompleteStopWarnings | null>(null)
+  // Phase 13: Inventory deductions from auto-decrement (shown after completion)
+  const [deductions, setDeductions] = useState<Array<{ inventoryItemId: string; itemName: string; unit: string; deductedAmount: number; newQuantity: number }> | null>(null)
 
   // Edit mode is derived from Dexie draft status — NOT React state.
   // This avoids stale closure bugs since useLiveQuery keeps it in sync.
@@ -323,6 +327,11 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           if (!result.success) {
             throw new Error(result.error ?? "Failed to complete stop")
           }
+
+          // Phase 13: Capture inventory deductions for confirmation prompt
+          if (result.deductions && result.deductions.length > 0) {
+            setDeductions(result.deductions)
+          }
         } else {
           // Offline: enqueue to sync queue — replayed via POST /api/visits/complete
           await enqueueWrite("/api/visits/complete", "POST", completionData)
@@ -497,6 +506,40 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
             <span className="text-sm font-medium text-green-400">
               Stop completed
             </span>
+          </div>
+        )}
+
+        {/* ── Phase 13: Inventory deduction confirmation ──────────────────── */}
+        {deductions && deductions.length > 0 && (
+          <div className="px-4 pt-3">
+            <InventoryDeductPrompt
+              deductions={deductions}
+              onConfirm={async (adjustments) => {
+                // Apply any adjustments the tech made
+                for (const adj of adjustments) {
+                  const original = deductions.find((d) => d.inventoryItemId === adj.inventoryItemId)
+                  if (original && adj.adjustedAmount !== original.deductedAmount) {
+                    // Difference between what was auto-deducted and what tech says they used
+                    const diff = original.deductedAmount - adj.adjustedAmount
+                    if (diff !== 0) {
+                      try {
+                        // Add back the difference (positive diff = used less than deducted)
+                        await updateTruckInventoryItem(adj.inventoryItemId, {
+                          quantity: original.newQuantity + diff,
+                        })
+                      } catch (err) {
+                        console.error("[StopWorkflow] Failed to adjust inventory:", err)
+                      }
+                    }
+                  }
+                }
+                setDeductions(null)
+                toast("Inventory confirmed")
+              }}
+              onDismiss={() => {
+                setDeductions(null)
+              }}
+            />
           </div>
         )}
 

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +26,11 @@ import {
   type CatalogItem,
   type AddCatalogItemInput,
 } from "@/actions/parts-catalog"
+
+const BarcodeScanner = dynamic(
+  () => import("@/components/field/barcode-scanner").then((m) => m.BarcodeScanner),
+  { ssr: false }
+)
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -116,6 +122,8 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isRefreshing, startRefreshTransition] = useTransition()
+  const [showScanner, setShowScanner] = useState(false)
+  const [lookingUp, setLookingUp] = useState(false)
 
   function patchForm(patch: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...patch }))
@@ -136,6 +144,27 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
   function closeDialog() {
     setDialogMode(null)
     setEditingItemId(null)
+    setShowScanner(false)
+    setLookingUp(false)
+  }
+
+  async function handleBarcodeScan(code: string) {
+    setShowScanner(false)
+    setLookingUp(true)
+    try {
+      const { resolveBarcode } = await import("@/actions/barcode")
+      const result = await resolveBarcode(code)
+      if (result.found && result.item_name) {
+        patchForm({ name: result.item_name, sku: code })
+      } else {
+        patchForm({ sku: code })
+      }
+    } catch (err) {
+      console.error("[PartsCatalog] UPC lookup failed:", err)
+      patchForm({ sku: code })
+    } finally {
+      setLookingUp(false)
+    }
   }
 
   async function refreshItems() {
@@ -398,23 +427,51 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {dialogMode === "add" ? "Add Catalog Item" : "Edit Catalog Item"}
+              {showScanner ? "Scan Barcode" : dialogMode === "add" ? "Add Catalog Item" : "Edit Catalog Item"}
             </DialogTitle>
           </DialogHeader>
 
+          {showScanner ? (
+            <div className="flex flex-col gap-3 py-2">
+              <BarcodeScanner
+                onScan={handleBarcodeScan}
+                onError={(err) => console.error("[PartsCatalog] scan error:", err)}
+              />
+              <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
+                Back to Form
+              </Button>
+            </div>
+          ) : (
+          <>
           <div className="flex flex-col gap-4">
+            {lookingUp && (
+              <p className="text-sm text-muted-foreground animate-pulse">Looking up product...</p>
+            )}
             {/* Name */}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ci-name" className="text-xs text-muted-foreground">
                 Name <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="ci-name"
-                className="h-8 text-sm"
-                placeholder="e.g. Hayward Super Pump 1.5HP"
-                value={form.name}
-                onChange={(e) => patchForm({ name: e.target.value })}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="ci-name"
+                  className="h-8 text-sm flex-1"
+                  placeholder={lookingUp ? "Looking up..." : "e.g. Hayward Super Pump 1.5HP"}
+                  value={form.name}
+                  onChange={(e) => patchForm({ name: e.target.value })}
+                  disabled={lookingUp}
+                />
+                {dialogMode === "add" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowScanner(true)}
+                  >
+                    Scan
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Description */}
@@ -549,6 +606,8 @@ export function PartsCatalogManager({ initialItems }: PartsCatalogManagerProps) 
               {isPending ? "Saving…" : dialogMode === "add" ? "Add Item" : "Save Changes"}
             </Button>
           </DialogFooter>
+          </>
+          )}
         </DialogContent>
       </Dialog>
 

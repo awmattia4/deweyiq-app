@@ -754,13 +754,15 @@ export function TruckInventoryView({
         )
       })}
 
-      {/* Add item dialog */}
+      {/* Add item dialog — only mount AddItemDialog when open so scanner state resets */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <AddItemDialog
-          techId={techId}
-          onSuccess={handleItemAdded}
-          onClose={() => setShowAddDialog(false)}
-        />
+        {showAddDialog && (
+          <AddItemDialog
+            techId={techId}
+            onSuccess={handleItemAdded}
+            onClose={() => setShowAddDialog(false)}
+          />
+        )}
       </Dialog>
 
       {/* Transfer dialog */}

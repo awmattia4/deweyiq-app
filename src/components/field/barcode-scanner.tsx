@@ -11,12 +11,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -30,7 +24,6 @@ interface BarcodeScannerProps {
 }
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
   const containerId = useRef(`scanner-${Math.random().toString(36).slice(2, 8)}`)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading")
@@ -62,23 +55,49 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         scannerRef.current = scanner
 
         await scanner.start(
-          { facingMode: "environment" },
+          {
+            facingMode: "environment",
+          },
           {
             fps: 10,
             qrbox: { width: 250, height: 150 },
             aspectRatio: 1.7778,
+            // Enable autofocus for close-up barcode scanning
+            videoConstraints: {
+              facingMode: "environment",
+              advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+            },
           },
           (decodedText) => {
             if (scannedRef.current) return
             scannedRef.current = true
             if (navigator.vibrate) navigator.vibrate(100)
-            // Don't call scanner.stop() here — it mutates the DOM and crashes React.
-            // The parent will set showScanner=false, unmounting this component,
-            // which triggers the cleanup effect that calls stop().
             onScanRef.current(decodedText)
           },
-          () => {} // onScanFailure — ignore (fires every non-barcode frame)
+          () => {} // onScanFailure — fires every non-barcode frame, ignore
         )
+
+        // Try to apply continuous autofocus after camera starts
+        try {
+          const videoTrack = scanner.getRunningTrackSettings?.()
+          if (!videoTrack) {
+            // Access the video element directly and apply focus
+            const videoEl = document.querySelector(`#${containerId.current} video`) as HTMLVideoElement
+            if (videoEl?.srcObject) {
+              const track = (videoEl.srcObject as MediaStream).getVideoTracks()[0]
+              if (track) {
+                const capabilities = track.getCapabilities?.()
+                if (capabilities && "focusMode" in capabilities) {
+                  await track.applyConstraints({
+                    advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+                  })
+                }
+              }
+            }
+          }
+        } catch {
+          // Focus constraints not supported — fine, scanner still works
+        }
 
         if (mounted) setStatus("scanning")
       } catch (err) {
@@ -89,17 +108,22 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
       }
     }
 
-    // Delay to ensure DOM container is rendered
     const timer = setTimeout(start, 150)
 
     return () => {
       mounted = false
       clearTimeout(timer)
       const s = scannerRef.current
+      scannerRef.current = null
       if (s) {
-        // Only stop — do NOT call s.clear() as it removes DOM nodes that React manages
-        s.stop().catch(() => {})
-        scannerRef.current = null
+        // Must fully stop camera to release it on iOS (Dynamic Island indicator)
+        s.stop()
+          .then(() => {
+            try { s.clear() } catch {}
+          })
+          .catch(() => {
+            try { s.clear() } catch {}
+          })
       }
     }
   }, [onError])
@@ -108,16 +132,13 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const code = manualInput.trim()
     if (code && !scannedRef.current) {
       scannedRef.current = true
-      // Don't stop scanner here — cleanup effect handles it on unmount
       onScan(code)
     }
   }
 
   return (
     <div className="space-y-3">
-      {/* html5-qrcode renders into this div */}
       <div
-        ref={containerRef}
         id={containerId.current}
         className="w-full overflow-hidden rounded-lg bg-black"
         style={{ minHeight: 250 }}
@@ -129,7 +150,6 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         {status === "error" && "Camera error — check permissions or try manual entry"}
       </p>
 
-      {/* Manual entry */}
       <div className="flex gap-2">
         <Input
           value={manualInput}
@@ -147,8 +167,15 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Dialog wrapper
+// Dialog wrapper — for standalone use (not inside another Dialog)
 // ---------------------------------------------------------------------------
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface BarcodeScannerDialogProps {
   open: boolean
