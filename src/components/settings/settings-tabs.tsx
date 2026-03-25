@@ -39,6 +39,7 @@ import { SubcontractorSettings } from "@/components/settings/subcontractor-setti
 import { TruckTemplatesSettings } from "@/components/inventory/truck-templates-settings"
 import { VendorsSettings } from "@/components/settings/vendors-settings"
 import { TrucksSettings } from "@/components/settings/trucks-settings"
+import { AgreementTemplatesTab } from "@/components/settings/agreement-templates-tab"
 import type { VendorRow } from "@/actions/vendor-bills"
 import type { TruckRow } from "@/actions/trucks"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
@@ -72,7 +73,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "trucks" | "inventory" | "account"
+type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "trucks" | "inventory" | "agreements" | "account"
 
 interface TabDef {
   id: TabId
@@ -88,6 +89,7 @@ const OWNER_TABS: TabDef[] = [
   { id: "projects", label: "Projects" },
   { id: "trucks", label: "Trucks" },
   { id: "inventory", label: "Inventory" },
+  { id: "agreements", label: "Agreements" },
   { id: "account", label: "Account" },
 ]
 
@@ -147,6 +149,9 @@ interface SettingsTabsProps {
   initialVendors?: VendorRow[]
   // Trucks (own tab)
   initialTrucks?: TruckRow[]
+  // Phase 14: Agreement templates (owner only)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  initialAgreementTemplates?: any[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -190,6 +195,7 @@ export function SettingsTabs({
   chemicalProductCatalog = [],
   initialVendors = [],
   initialTrucks = [],
+  initialAgreementTemplates = [],
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -681,6 +687,16 @@ export function SettingsTabs({
               <VendorsSettings initialVendors={initialVendors} />
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Agreements tab — owner only */}
+      {isOwner && (
+        <div className={cn("flex flex-col gap-6", activeTab === "agreements" ? "block" : "hidden")}>
+          <AgreementTemplatesTab
+            initialTemplates={initialAgreementTemplates}
+            orgSettings={orgSettings}
+          />
         </div>
       )}
 

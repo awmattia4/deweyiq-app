@@ -27,6 +27,7 @@ import type { VendorRow } from "@/actions/vendor-bills"
 import { getTrucks } from "@/actions/trucks"
 import type { TruckRow } from "@/actions/trucks"
 import type { ChemicalProduct } from "@/actions/chemical-products"
+import { getAgreementTemplates } from "@/actions/agreements"
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -65,7 +66,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult, vendorsResult, trucksResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult, vendorsResult, trucksResult, agreementTemplatesResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -83,8 +84,9 @@ export default async function SettingsPage() {
         getChemicalProducts(),
         getAllVendors(true),
         getTrucks(),
+        getAgreementTemplates(),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, [], [], [], [], null, null]
+    : [null, [], null, [], [], null, null, null, [], null, [], [], [], [], null, null, null]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
@@ -112,6 +114,11 @@ export default async function SettingsPage() {
   const trucksList: TruckRow[] =
     isOwner && trucksResult && typeof trucksResult === "object" && "success" in trucksResult && trucksResult.success
       ? trucksResult.trucks
+      : []
+
+  const agreementTemplateList =
+    isOwner && agreementTemplatesResult && typeof agreementTemplatesResult === "object" && "success" in agreementTemplatesResult && agreementTemplatesResult.success
+      ? (agreementTemplatesResult.data ?? [])
       : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
@@ -255,6 +262,7 @@ export default async function SettingsPage() {
         chemicalProductCatalog={chemicalProductCatalogList}
         initialVendors={vendorList}
         initialTrucks={trucksList}
+        initialAgreementTemplates={agreementTemplateList}
         signOutAction={async () => {
           "use server"
           await signOut()

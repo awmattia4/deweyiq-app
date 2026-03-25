@@ -76,6 +76,11 @@ export interface OrgSettings {
   break_auto_detect_minutes: number
   pay_period_type: string
   overtime_threshold_hours: number
+  // Phase 14: Service agreement settings
+  agreement_notice_period_days: number
+  agreement_renewal_lead_days: number[] | null
+  next_agreement_number: number
+  agreement_number_prefix: string | null
   created_at: Date
   updated_at: Date
 }
@@ -155,6 +160,11 @@ const DEFAULT_SETTINGS: Omit<OrgSettings, "id" | "org_id" | "created_at" | "upda
   break_auto_detect_minutes: 30,
   pay_period_type: "bi_weekly",
   overtime_threshold_hours: 40,
+  // Phase 14 defaults
+  agreement_notice_period_days: 30,
+  agreement_renewal_lead_days: [30, 7],
+  next_agreement_number: 1,
+  agreement_number_prefix: "SA",
 }
 
 // ---------------------------------------------------------------------------
