@@ -244,6 +244,7 @@ export function InventoryPageClient({
             initialItems={inventoryItems}
             allTechs={allTechs}
             isOfficeView={isOffice}
+            warehouseItems={warehouseItems}
           />
         )}
 

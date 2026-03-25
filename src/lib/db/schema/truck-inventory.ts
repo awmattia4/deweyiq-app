@@ -43,8 +43,8 @@ export const truckInventory = pgTable(
     org_id: uuid("org_id")
       .notNull()
       .references(() => orgs.id, { onDelete: "cascade" }),
+    // NULL = warehouse/central stock, non-null = on a tech's truck
     tech_id: uuid("tech_id")
-      .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),
     // Optional link to catalog — null for ad-hoc items
     catalog_item_id: uuid("catalog_item_id").references(() => partsCatalog.id, {

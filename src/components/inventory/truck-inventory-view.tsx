@@ -42,6 +42,7 @@ import {
   deleteTruckInventoryItem,
   transferInventoryItem,
   returnToWarehouse,
+  loadFromWarehouse,
 } from "@/actions/truck-inventory"
 import type { TruckInventoryItem } from "@/actions/truck-inventory"
 
@@ -67,6 +68,8 @@ interface TruckInventoryViewProps {
   /** For office view: list of all techs to switch between / transfer to */
   allTechs?: TechProfile[]
   isOfficeView?: boolean
+  /** Warehouse items — used to show "Load from Warehouse" option when adding */
+  warehouseItems?: TruckInventoryItem[]
 }
 
 const CATEGORIES = ["chemical", "part", "tool", "equipment", "other"] as const
@@ -120,14 +123,16 @@ interface AddItemDialogProps {
   techId: string
   onSuccess: (newItem: TruckInventoryItem) => void
   onClose: () => void
+  warehouseItems?: TruckInventoryItem[]
 }
 
-function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
+function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddItemDialogProps) {
   const [isPending, startTransition] = useTransition()
   const [showScanner, setShowScanner] = useState(false)
   const [lookingUp, setLookingUp] = useState(false)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadingFromWarehouse, setLoadingFromWarehouse] = useState<string | null>(null) // item id being loaded
 
   // Form fields
   const [itemName, setItemName] = useState("")
@@ -279,6 +284,51 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
               <ScanBarcodeIcon className="h-5 w-5 mr-2.5" />
               Scan Barcode to Add
             </Button>
+          )}
+
+          {/* Quick load from warehouse — shows available warehouse items */}
+          {!itemName && !barcode && warehouseItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Load from Warehouse</p>
+              <div className="max-h-32 overflow-y-auto rounded-md border border-border/60 divide-y divide-border/30">
+                {warehouseItems.filter(w => parseFloat(w.quantity) > 0).slice(0, 8).map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors flex items-center justify-between cursor-pointer disabled:opacity-50"
+                    disabled={loadingFromWarehouse === w.id}
+                    onClick={async () => {
+                      setLoadingFromWarehouse(w.id)
+                      try {
+                        const result = await loadFromWarehouse(w.id, techId, 1)
+                        if (result.success) {
+                          // Create a fake TruckInventoryItem for the parent to add
+                          onSuccess({
+                            ...w,
+                            id: crypto.randomUUID(),
+                            tech_id: techId,
+                            quantity: "1",
+                          })
+                          onClose()
+                        } else {
+                          setError(result.error ?? "Failed to load from warehouse")
+                        }
+                      } catch {
+                        setError("Failed to load from warehouse")
+                      } finally {
+                        setLoadingFromWarehouse(null)
+                      }
+                    }}
+                  >
+                    <span className="truncate">{w.item_name}</span>
+                    <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                      {formatQuantity(w.quantity)} {w.unit}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Tap to load 1 unit to your truck</p>
+            </div>
           )}
 
           {barcode && (
@@ -813,6 +863,7 @@ export function TruckInventoryView({
   initialItems,
   allTechs = [],
   isOfficeView = false,
+  warehouseItems = [],
 }: TruckInventoryViewProps) {
   const [items, setItems] = useState<TruckInventoryItem[]>(initialItems)
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -900,6 +951,7 @@ export function TruckInventoryView({
             techId={techId}
             onSuccess={handleItemAdded}
             onClose={() => setShowAddDialog(false)}
+            warehouseItems={warehouseItems}
           />
         )}
       </Dialog>

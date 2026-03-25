@@ -34,7 +34,7 @@ import { notifyUser, notifyOrgRole } from "@/lib/notifications/dispatch"
 export interface TruckInventoryItem {
   id: string
   org_id: string
-  tech_id: string
+  tech_id: string | null
   catalog_item_id: string | null
   chemical_product_id: string | null
   item_name: string
@@ -50,7 +50,7 @@ export interface TruckInventoryItem {
 }
 
 export interface AddTruckInventoryItemInput {
-  tech_id: string
+  tech_id: string | null
   catalog_item_id?: string | null
   chemical_product_id?: string | null
   item_name: string
@@ -259,7 +259,7 @@ export async function updateTruckInventoryItem(
       await db.insert(truckInventoryLog).values({
         org_id: orgId,
         truck_inventory_item_id: itemId,
-        tech_id: current.tech_id,
+        tech_id: current.tech_id ?? token.sub,
         change_type: "adjustment",
         quantity_before: String(qBefore),
         quantity_change: String(qChange),
@@ -777,4 +777,360 @@ export async function deleteTruckLoadTemplate(id: string) {
   await adminDb
     .delete(truckLoadTemplates)
     .where(and(eq(truckLoadTemplates.id, id), eq(truckLoadTemplates.org_id, orgId)))
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse Inventory (tech_id IS NULL)
+// ---------------------------------------------------------------------------
+
+export async function getWarehouseInventory(): Promise<TruckInventoryItem[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  return withRls(token, async (db) => {
+    return db
+      .select()
+      .from(truckInventory)
+      .where(isNull(truckInventory.tech_id))
+      .orderBy(truckInventory.category, truckInventory.item_name)
+  })
+}
+
+export async function loadFromWarehouse(
+  warehouseItemId: string,
+  toTechId: string,
+  quantity: number
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token || !token.org_id) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const now = new Date()
+
+  try {
+    // Fetch warehouse item
+    const [sourceItem] = await adminDb
+      .select()
+      .from(truckInventory)
+      .where(
+        and(
+          eq(truckInventory.id, warehouseItemId),
+          eq(truckInventory.org_id, orgId),
+          isNull(truckInventory.tech_id)
+        )
+      )
+      .limit(1)
+
+    if (!sourceItem) return { success: false, error: "Warehouse item not found" }
+
+    const currentQty = parseFloat(sourceItem.quantity)
+    if (quantity > currentQty) return { success: false, error: "Not enough in warehouse" }
+
+    const newWarehouseQty = Math.max(0, currentQty - quantity)
+
+    // Decrement warehouse item
+    await adminDb
+      .update(truckInventory)
+      .set({ quantity: String(newWarehouseQty), updated_at: now })
+      .where(eq(truckInventory.id, warehouseItemId))
+
+    // Log warehouse transfer out
+    await adminDb.insert(truckInventoryLog).values({
+      org_id: orgId,
+      truck_inventory_item_id: warehouseItemId,
+      tech_id: token.sub,
+      change_type: "transfer_out",
+      quantity_before: String(currentQty),
+      quantity_change: String(-quantity),
+      quantity_after: String(newWarehouseQty),
+      source_type: "transfer",
+      transfer_to_tech_id: toTechId,
+    })
+
+    // Find or create matching item on tech's truck
+    const [existingTarget] = await adminDb
+      .select()
+      .from(truckInventory)
+      .where(
+        and(
+          eq(truckInventory.org_id, orgId),
+          eq(truckInventory.tech_id, toTechId),
+          sourceItem.chemical_product_id
+            ? eq(truckInventory.chemical_product_id, sourceItem.chemical_product_id)
+            : sourceItem.catalog_item_id
+              ? eq(truckInventory.catalog_item_id, sourceItem.catalog_item_id)
+              : eq(truckInventory.item_name, sourceItem.item_name)
+        )
+      )
+      .limit(1)
+
+    if (existingTarget) {
+      const targetQty = parseFloat(existingTarget.quantity)
+      const newTargetQty = targetQty + quantity
+
+      await adminDb
+        .update(truckInventory)
+        .set({ quantity: String(newTargetQty), updated_at: now })
+        .where(eq(truckInventory.id, existingTarget.id))
+
+      await adminDb.insert(truckInventoryLog).values({
+        org_id: orgId,
+        truck_inventory_item_id: existingTarget.id,
+        tech_id: toTechId,
+        change_type: "transfer_in",
+        quantity_before: String(targetQty),
+        quantity_change: String(quantity),
+        quantity_after: String(newTargetQty),
+        source_type: "transfer",
+      })
+    } else {
+      // Create new item on tech's truck
+      const [newItem] = await adminDb
+        .insert(truckInventory)
+        .values({
+          org_id: orgId,
+          tech_id: toTechId,
+          catalog_item_id: sourceItem.catalog_item_id,
+          chemical_product_id: sourceItem.chemical_product_id,
+          item_name: sourceItem.item_name,
+          category: sourceItem.category,
+          quantity: String(quantity),
+          unit: sourceItem.unit,
+          min_threshold: sourceItem.min_threshold,
+          on_truck: true,
+          barcode: sourceItem.barcode,
+        })
+        .returning()
+
+      if (newItem) {
+        await adminDb.insert(truckInventoryLog).values({
+          org_id: orgId,
+          truck_inventory_item_id: newItem.id,
+          tech_id: toTechId,
+          change_type: "transfer_in",
+          quantity_before: "0",
+          quantity_change: String(quantity),
+          quantity_after: String(quantity),
+          source_type: "transfer",
+        })
+      }
+    }
+
+    return { success: true }
+  } catch (err) {
+    console.error("[loadFromWarehouse] Error:", err)
+    return { success: false, error: "Transfer failed" }
+  }
+}
+
+export async function returnToWarehouse(
+  truckItemId: string,
+  fromTechId: string,
+  quantity: number
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token || !token.org_id) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const now = new Date()
+
+  try {
+    // Fetch truck item
+    const [sourceItem] = await adminDb
+      .select()
+      .from(truckInventory)
+      .where(
+        and(
+          eq(truckInventory.id, truckItemId),
+          eq(truckInventory.org_id, orgId),
+          eq(truckInventory.tech_id, fromTechId)
+        )
+      )
+      .limit(1)
+
+    if (!sourceItem) return { success: false, error: "Truck item not found" }
+
+    const currentQty = parseFloat(sourceItem.quantity)
+    if (quantity > currentQty) return { success: false, error: "Not enough on truck" }
+
+    const newTruckQty = Math.max(0, currentQty - quantity)
+
+    // Decrement truck item
+    await adminDb
+      .update(truckInventory)
+      .set({ quantity: String(newTruckQty), updated_at: now })
+      .where(eq(truckInventory.id, truckItemId))
+
+    await adminDb.insert(truckInventoryLog).values({
+      org_id: orgId,
+      truck_inventory_item_id: truckItemId,
+      tech_id: fromTechId,
+      change_type: "transfer_out",
+      quantity_before: String(currentQty),
+      quantity_change: String(-quantity),
+      quantity_after: String(newTruckQty),
+      source_type: "transfer",
+      notes: "Returned to warehouse",
+    })
+
+    // Find or create matching warehouse item
+    const [existingWarehouse] = await adminDb
+      .select()
+      .from(truckInventory)
+      .where(
+        and(
+          eq(truckInventory.org_id, orgId),
+          isNull(truckInventory.tech_id),
+          sourceItem.chemical_product_id
+            ? eq(truckInventory.chemical_product_id, sourceItem.chemical_product_id)
+            : sourceItem.catalog_item_id
+              ? eq(truckInventory.catalog_item_id, sourceItem.catalog_item_id)
+              : eq(truckInventory.item_name, sourceItem.item_name)
+        )
+      )
+      .limit(1)
+
+    if (existingWarehouse) {
+      const whQty = parseFloat(existingWarehouse.quantity)
+      const newWhQty = whQty + quantity
+
+      await adminDb
+        .update(truckInventory)
+        .set({ quantity: String(newWhQty), updated_at: now })
+        .where(eq(truckInventory.id, existingWarehouse.id))
+
+      await adminDb.insert(truckInventoryLog).values({
+        org_id: orgId,
+        truck_inventory_item_id: existingWarehouse.id,
+        tech_id: token.sub,
+        change_type: "transfer_in",
+        quantity_before: String(whQty),
+        quantity_change: String(quantity),
+        quantity_after: String(newWhQty),
+        source_type: "transfer",
+        notes: "Returned from truck",
+      })
+    } else {
+      const [newItem] = await adminDb
+        .insert(truckInventory)
+        .values({
+          org_id: orgId,
+          tech_id: null,
+          catalog_item_id: sourceItem.catalog_item_id,
+          chemical_product_id: sourceItem.chemical_product_id,
+          item_name: sourceItem.item_name,
+          category: sourceItem.category,
+          quantity: String(quantity),
+          unit: sourceItem.unit,
+          min_threshold: "0",
+          on_truck: false,
+          barcode: sourceItem.barcode,
+        })
+        .returning()
+
+      if (newItem) {
+        await adminDb.insert(truckInventoryLog).values({
+          org_id: orgId,
+          truck_inventory_item_id: newItem.id,
+          tech_id: token.sub,
+          change_type: "transfer_in",
+          quantity_before: "0",
+          quantity_change: String(quantity),
+          quantity_after: String(quantity),
+          source_type: "transfer",
+          notes: "Returned from truck",
+        })
+      }
+    }
+
+    return { success: true }
+  } catch (err) {
+    console.error("[returnToWarehouse] Error:", err)
+    return { success: false, error: "Return failed" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inventory Count / Audit
+// ---------------------------------------------------------------------------
+
+export interface CountEntry {
+  itemId: string
+  actualQuantity: number
+}
+
+export async function submitInventoryCount(
+  entries: CountEntry[]
+): Promise<{ success: boolean; adjusted: number; error?: string }> {
+  const token = await getRlsToken()
+  if (!token || !token.org_id) return { success: false, adjusted: 0, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+
+  try {
+    const itemIds = entries.map((e) => e.itemId)
+    if (itemIds.length === 0) return { success: true, adjusted: 0 }
+
+    // Fetch current quantities
+    const currentItems = await adminDb
+      .select({
+        id: truckInventory.id,
+        quantity: truckInventory.quantity,
+      })
+      .from(truckInventory)
+      .where(
+        and(
+          eq(truckInventory.org_id, orgId),
+          inArray(truckInventory.id, itemIds)
+        )
+      )
+
+    const currentMap = new Map(currentItems.map((i) => [i.id, i.quantity]))
+    const now = new Date()
+    let adjusted = 0
+
+    for (const entry of entries) {
+      const currentQtyStr = currentMap.get(entry.itemId)
+      if (currentQtyStr === undefined) continue
+
+      const currentQty = parseFloat(currentQtyStr)
+      const actualQty = entry.actualQuantity
+
+      if (currentQty === actualQty) continue
+
+      const delta = actualQty - currentQty
+
+      await adminDb
+        .update(truckInventory)
+        .set({ quantity: String(actualQty), updated_at: now })
+        .where(eq(truckInventory.id, entry.itemId))
+
+      await adminDb.insert(truckInventoryLog).values({
+        org_id: orgId,
+        truck_inventory_item_id: entry.itemId,
+        tech_id: token.sub,
+        change_type: "adjustment",
+        quantity_before: currentQtyStr,
+        quantity_change: String(delta),
+        quantity_after: String(actualQty),
+        source_type: "manual",
+        notes: "Physical inventory count",
+      })
+
+      // Reset reorder alert if restocked above threshold
+      if (actualQty > currentQty) {
+        await adminDb
+          .update(truckInventory)
+          .set({ reorder_alert_sent_at: null })
+          .where(eq(truckInventory.id, entry.itemId))
+      }
+
+      adjusted++
+    }
+
+    return { success: true, adjusted }
+  } catch (err) {
+    console.error("[submitInventoryCount] Error:", err)
+    return { success: false, adjusted: 0, error: "Count submission failed" }
+  }
 }
