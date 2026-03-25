@@ -129,6 +129,7 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 | Phase 14-service-agreements-contracts P01 | 5 | 2 tasks | 7 files |
 | Phase 14-service-agreements-contracts P03 | 12 | 2 tasks | 5 files |
 | Phase 14-service-agreements-contracts P02 | 7 | 2 tasks | 9 files |
+| Phase 14-service-agreements-contracts P05 | 4 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -486,6 +487,7 @@ Recent decisions affecting current work:
 - [Phase 14-service-agreements-contracts]: Agreement token uses separate AGREEMENT_TOKEN_SECRET — one secret per feature pattern prevents cross-token forgery
 - [Phase 14-service-agreements-contracts]: 180-day JWT expiry for agreements (vs 90d for quotes) — covers full 12-month contract terms
 - [Phase 14-service-agreements-contracts]: Single-page scrollable agreement builder (not wizard) for 2-3 min creation flow
+- [Phase 14-service-agreements-contracts]: Lifecycle action buttons (pause/resume/cancel/amend) rendered disabled with Plan 06 label per plan instructions
 
 ### Pending Todos
 
