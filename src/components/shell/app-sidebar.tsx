@@ -22,6 +22,7 @@ import {
   BookOpenIcon,
   FolderKanbanIcon,
   PackageIcon,
+  ScrollTextIcon,
 } from "lucide-react"
 import { UnreadBadge } from "@/components/inbox/unread-badge"
 import {
@@ -141,6 +142,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Inventory",
     href: "/inventory",
     icon: PackageIcon,
+    roles: ["owner", "office"],
+  },
+  // ── Available in Phase 14 ──────────────────────────────────────────────────
+  {
+    label: "Agreements",
+    href: "/agreements",
+    icon: ScrollTextIcon,
     roles: ["owner", "office"],
   },
   // ── Available in Phase 7 ───────────────────────────────────────────────────
