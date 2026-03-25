@@ -72,7 +72,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "inventory" | "account"
+type TabId = "company" | "service" | "work-orders" | "billing" | "time-tracking" | "projects" | "trucks" | "inventory" | "account"
 
 interface TabDef {
   id: TabId
@@ -86,6 +86,7 @@ const OWNER_TABS: TabDef[] = [
   { id: "billing", label: "Billing" },
   { id: "time-tracking", label: "Time Tracking" },
   { id: "projects", label: "Projects" },
+  { id: "trucks", label: "Trucks" },
   { id: "inventory", label: "Inventory" },
   { id: "account", label: "Account" },
 ]
@@ -144,7 +145,7 @@ interface SettingsTabsProps {
   chemicalProductCatalog?: ChemicalProduct[]
   // Vendors/Suppliers (Inventory tab)
   initialVendors?: VendorRow[]
-  // Trucks (Inventory tab)
+  // Trucks (own tab)
   initialTrucks?: TruckRow[]
   // Sign out form action
   signOutAction: () => Promise<void>
@@ -601,6 +602,26 @@ export function SettingsTabs({
         </div>
       )}
 
+      {/* Trucks tab — owner only */}
+      {isOwner && (
+        <div className={cn("flex flex-col gap-6", activeTab === "trucks" ? "block" : "hidden")}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Trucks</CardTitle>
+              <CardDescription>
+                Create trucks and assign techs to them. Techs on the same truck share one inventory pool — when either tech does a service, chemicals are deducted from the shared truck inventory.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrucksSettings
+                initialTrucks={initialTrucks}
+                allTechs={inventoryTechProfiles}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Inventory tab — owner only */}
       {isOwner && (
         <div className={cn("flex flex-col gap-6", activeTab === "inventory" ? "block" : "hidden")}>
@@ -644,21 +665,6 @@ export function SettingsTabs({
             <CardContent>
               <TruckTemplatesSettings
                 initialTemplates={inventoryTemplates}
-                allTechs={inventoryTechProfiles}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Trucks</CardTitle>
-              <CardDescription>
-                Create trucks and assign techs to them. Techs on the same truck share one inventory pool — when either tech does a service, chemicals are deducted from the shared truck inventory.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TrucksSettings
-                initialTrucks={initialTrucks}
                 allTechs={inventoryTechProfiles}
               />
             </CardContent>
