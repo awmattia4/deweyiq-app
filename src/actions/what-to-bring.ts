@@ -185,13 +185,17 @@ export async function getWhatToBring(
     }
 
     // ── 4. Get tech's truck inventory ──────────────────────────────────────
+    // Shared truck support: get all tech IDs on the same truck
+    const { getTechIdsOnSameTruck } = await import("@/actions/trucks")
+    const truckTechIds = await getTechIdsOnSameTruck(techId, orgId)
+
     const inventoryItems = await db
       .select()
       .from(truckInventory)
       .where(
         and(
           eq(truckInventory.org_id, orgId),
-          eq(truckInventory.tech_id, techId)
+          inArray(truckInventory.tech_id, truckTechIds)
         )
       )
 

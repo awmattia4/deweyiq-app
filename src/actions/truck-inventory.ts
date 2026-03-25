@@ -110,11 +110,17 @@ export async function getTruckInventory(techId: string) {
   const token = await getRlsToken()
   if (!token) return []
 
+  const orgId = token.org_id as string
+
+  // Shared truck support: get all tech IDs on the same truck
+  const { getTechIdsOnSameTruck } = await import("@/actions/trucks")
+  const techIds = await getTechIdsOnSameTruck(techId, orgId)
+
   return withRls(token, async (db) => {
     return db
       .select()
       .from(truckInventory)
-      .where(eq(truckInventory.tech_id, techId))
+      .where(inArray(truckInventory.tech_id, techIds))
       .orderBy(truckInventory.category, truckInventory.item_name)
   })
 }
@@ -337,14 +343,18 @@ export async function decrementTruckInventoryFromDosing(
 
     if (productIds.length === 0) return []
 
-    // Load matching inventory items for this tech
+    // Shared truck support: get all tech IDs on the same truck
+    const { getTechIdsOnSameTruck } = await import("@/actions/trucks")
+    const techIds = await getTechIdsOnSameTruck(techId, orgId)
+
+    // Load matching inventory items for this tech's truck
     const inventoryItems = await adminDb
       .select()
       .from(truckInventory)
       .where(
         and(
           eq(truckInventory.org_id, orgId),
-          eq(truckInventory.tech_id, techId),
+          inArray(truckInventory.tech_id, techIds),
           inArray(truckInventory.chemical_product_id, productIds)
         )
       )

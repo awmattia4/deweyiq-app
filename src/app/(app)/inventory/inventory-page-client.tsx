@@ -213,6 +213,15 @@ export function InventoryPageClient({
   const [shoppingItems] = useState<ShoppingListItem[]>(initialShoppingItems)
   const [warehouseItems] = useState<TruckInventoryItem[]>(initialWarehouseItems)
   const [, startTransition] = useTransition()
+  const [truckInfo, setTruckInfo] = useState<{ truckName: string; coTechs: Array<{ id: string; fullName: string }> } | null>(null)
+
+  // Fetch truck info for the selected tech
+  useEffect(() => {
+    if (!isOffice) return
+    import("@/actions/trucks").then(({ getTruckInfoForCurrentTech }) => {
+      getTruckInfoForCurrentTech(selectedTechId).then(setTruckInfo)
+    })
+  }, [isOffice, selectedTechId])
 
   // Sync hash on tab change
   function handleTabChange(tabId: TabId) {
@@ -270,6 +279,14 @@ export function InventoryPageClient({
       {isOffice && selectedTech && activeTab === "inventory" && (
         <p className="text-sm text-muted-foreground -mt-3">
           Viewing inventory for {selectedTech.fullName}
+          {truckInfo && (
+            <span className="text-xs ml-1.5">
+              — {truckInfo.truckName}
+              {truckInfo.coTechs.length > 0 && (
+                <span> (shared with {truckInfo.coTechs.map((t) => t.fullName).join(", ")})</span>
+              )}
+            </span>
+          )}
         </p>
       )}
 

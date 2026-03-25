@@ -1,14 +1,20 @@
 /**
  * Phase 13: Truck Inventory & Shopping Lists — Truck Inventory Schema
  *
- * Tables: truck_inventory, truck_inventory_log, truck_load_templates, truck_load_template_items
+ * Tables: trucks, tech_truck_assignments, truck_inventory, truck_inventory_log,
+ *   truck_load_templates, truck_load_template_items
  *
+ * trucks: named vehicle entities that techs are assigned to
+ * tech_truck_assignments: many-techs-to-one-truck junction table
  * truck_inventory: per-tech inventory of chemicals, parts, tools, and equipment
+ *   (shared trucks: multiple techs on the same truck see each other's items)
  * truck_inventory_log: audit log of all quantity changes
  * truck_load_templates: office-defined standard truck loads
  * truck_load_template_items: line items within a template
  *
  * RLS:
+ * - trucks: SELECT all org; INSERT/UPDATE/DELETE owner+office
+ * - tech_truck_assignments: SELECT all org; INSERT/UPDATE/DELETE owner+office
  * - truck_inventory: SELECT all org members; INSERT/UPDATE owner+office+tech; DELETE owner+office
  * - truck_inventory_log: SELECT all org members; INSERT owner+office+tech
  * - truck_load_templates: SELECT all org; INSERT/UPDATE/DELETE owner+office
@@ -31,6 +37,119 @@ import { orgs } from "./orgs"
 import { profiles } from "./profiles"
 import { partsCatalog } from "./parts-catalog"
 import { chemicalProducts } from "./chemical-products"
+
+// ---------------------------------------------------------------------------
+// trucks — named vehicle entities
+// ---------------------------------------------------------------------------
+
+export const trucks = pgTable(
+  "trucks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    org_id: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    is_active: boolean("is_active").notNull().default(true),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("trucks_org_idx").on(table.org_id),
+    pgPolicy("trucks_select_policy", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`org_id = (select auth.jwt() ->> 'org_id')::uuid`,
+    }),
+    pgPolicy("trucks_insert_policy", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("trucks_update_policy", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("trucks_delete_policy", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+  ]
+).enableRLS()
+
+// ---------------------------------------------------------------------------
+// tech_truck_assignments — many techs to one truck
+// ---------------------------------------------------------------------------
+
+export const techTruckAssignments = pgTable(
+  "tech_truck_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    org_id: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    tech_id: uuid("tech_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    truck_id: uuid("truck_id")
+      .notNull()
+      .references(() => trucks.id, { onDelete: "cascade" }),
+    assigned_at: timestamp("assigned_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Each tech can only be assigned to one truck at a time
+    index("tech_truck_assignments_org_tech_idx").on(table.org_id, table.tech_id),
+    index("tech_truck_assignments_truck_idx").on(table.truck_id),
+    pgPolicy("tech_truck_select_policy", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`org_id = (select auth.jwt() ->> 'org_id')::uuid`,
+    }),
+    pgPolicy("tech_truck_insert_policy", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("tech_truck_update_policy", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("tech_truck_delete_policy", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+  ]
+).enableRLS()
 
 // ---------------------------------------------------------------------------
 // truck_inventory

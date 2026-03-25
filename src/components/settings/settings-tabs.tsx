@@ -38,7 +38,9 @@ import { ProjectTemplates } from "@/components/settings/project-templates"
 import { SubcontractorSettings } from "@/components/settings/subcontractor-settings"
 import { TruckTemplatesSettings } from "@/components/inventory/truck-templates-settings"
 import { VendorsSettings } from "@/components/settings/vendors-settings"
+import { TrucksSettings } from "@/components/settings/trucks-settings"
 import type { VendorRow } from "@/actions/vendor-bills"
+import type { TruckRow } from "@/actions/trucks"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
@@ -142,6 +144,8 @@ interface SettingsTabsProps {
   chemicalProductCatalog?: ChemicalProduct[]
   // Vendors/Suppliers (Inventory tab)
   initialVendors?: VendorRow[]
+  // Trucks (Inventory tab)
+  initialTrucks?: TruckRow[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -184,6 +188,7 @@ export function SettingsTabs({
   inventoryTemplates = [],
   chemicalProductCatalog = [],
   initialVendors = [],
+  initialTrucks = [],
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -639,6 +644,21 @@ export function SettingsTabs({
             <CardContent>
               <TruckTemplatesSettings
                 initialTemplates={inventoryTemplates}
+                allTechs={inventoryTechProfiles}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Trucks</CardTitle>
+              <CardDescription>
+                Create trucks and assign techs to them. Techs on the same truck share one inventory pool — when either tech does a service, chemicals are deducted from the shared truck inventory.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrucksSettings
+                initialTrucks={initialTrucks}
                 allTechs={inventoryTechProfiles}
               />
             </CardContent>

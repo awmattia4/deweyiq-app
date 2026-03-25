@@ -24,6 +24,8 @@ import { getTruckLoadTemplates } from "@/actions/truck-inventory"
 import { getChemicalProducts } from "@/actions/chemical-products"
 import { getAllVendors } from "@/actions/vendor-bills"
 import type { VendorRow } from "@/actions/vendor-bills"
+import { getTrucks } from "@/actions/trucks"
+import type { TruckRow } from "@/actions/trucks"
 import type { ChemicalProduct } from "@/actions/chemical-products"
 
 export const metadata: Metadata = {
@@ -63,7 +65,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult, vendorsResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult, vendorsResult, trucksResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -80,8 +82,9 @@ export default async function SettingsPage() {
         getTruckLoadTemplates(),
         getChemicalProducts(),
         getAllVendors(true),
+        getTrucks(),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, [], [], [], [], null]
+    : [null, [], null, [], [], null, null, null, [], null, [], [], [], [], null, null]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
@@ -104,6 +107,11 @@ export default async function SettingsPage() {
   const vendorList: VendorRow[] =
     isOwner && vendorsResult && typeof vendorsResult === "object" && "success" in vendorsResult && vendorsResult.success
       ? vendorsResult.vendors
+      : []
+
+  const trucksList: TruckRow[] =
+    isOwner && trucksResult && typeof trucksResult === "object" && "success" in trucksResult && trucksResult.success
+      ? trucksResult.trucks
       : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
@@ -246,6 +254,7 @@ export default async function SettingsPage() {
         inventoryTechProfiles={techProfiles.map(t => ({ id: t.id, fullName: t.fullName }))}
         chemicalProductCatalog={chemicalProductCatalogList}
         initialVendors={vendorList}
+        initialTrucks={trucksList}
         signOutAction={async () => {
           "use server"
           await signOut()
