@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useTransition, useEffect } from "react"
+import { useState, useCallback, useTransition, useEffect, useRef } from "react"
 import { toLocalDateString } from "@/lib/date-utils"
 import {
   DndContext,
@@ -50,6 +50,8 @@ import {
 } from "@/actions/schedule"
 import { MoveStopDialog } from "./move-stop-dialog"
 import { optimizeRoute, type OptimizationResult } from "@/actions/optimize"
+import { setDailyTruckOverride, removeDailyTruckOverride, getDailyOverridesForDate, getTrucks } from "@/actions/trucks"
+import type { TruckRow } from "@/actions/trucks"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -225,6 +227,64 @@ export function RouteBuilder({
 
   // Multi-container DnD state
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
+
+  // Truck override state
+  const [truckOverrideOpen, setTruckOverrideOpen] = useState(false)
+  const [allTrucks, setAllTrucks] = useState<TruckRow[]>([])
+  const [dailyOverrides, setDailyOverrides] = useState<Map<string, { truckId: string | null; truckName: string | null }>>(new Map())
+  const truckDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Load trucks + daily overrides when date changes
+  useEffect(() => {
+    const dateStr = dayIndexToDate(selectedDay, weekOffset)
+    Promise.all([
+      getTrucks(),
+      getDailyOverridesForDate(dateStr),
+    ]).then(([trucksResult, overrides]) => {
+      if (trucksResult.success) setAllTrucks(trucksResult.trucks)
+      const map = new Map<string, { truckId: string | null; truckName: string | null }>()
+      for (const o of overrides) {
+        map.set(o.techId, { truckId: o.truckId, truckName: o.truckName })
+      }
+      setDailyOverrides(map)
+    })
+  }, [selectedDay, weekOffset])
+
+  // Close truck dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (truckDropdownRef.current && !truckDropdownRef.current.contains(e.target as Node)) {
+        setTruckOverrideOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  // Get the effective truck for the selected tech on the current date
+  const selectedTechOverride = dailyOverrides.get(selectedTechId)
+  const selectedTechTruck = selectedTechOverride !== undefined
+    ? (selectedTechOverride.truckName ?? "Solo")
+    : (currentTech?.name.includes("·") ? currentTech.name.split("·")[1]?.trim() : null)
+
+  async function handleTruckOverride(truckId: string | null) {
+    const dateStr = dayIndexToDate(selectedDay, weekOffset)
+    if (truckId === "__reset__") {
+      await removeDailyTruckOverride(selectedTechId, dateStr)
+      toast.success("Truck override removed — back to default")
+    } else {
+      await setDailyTruckOverride(selectedTechId, dateStr, truckId)
+      toast.success(truckId === null ? "Set to solo for today" : "Truck overridden for today")
+    }
+    setTruckOverrideOpen(false)
+    // Refresh overrides
+    const overrides = await getDailyOverridesForDate(dateStr)
+    const map = new Map<string, { truckId: string | null; truckName: string | null }>()
+    for (const o of overrides) {
+      map.set(o.techId, { truckId: o.truckId, truckName: o.truckName })
+    }
+    setDailyOverrides(map)
+  }
 
   // DnD sensors — same as Phase 3 pattern
   const sensors = useSensors(
@@ -656,6 +716,65 @@ export function RouteBuilder({
             onDayChange={handleDayChange}
             onWeekChange={handleWeekChange}
           />
+
+          {/* Truck override — shows when trucks exist */}
+          {allTrucks.length > 0 && (
+            <div className="flex items-center gap-2 mt-1 relative" ref={truckDropdownRef}>
+              <span className="text-xs text-muted-foreground">
+                Truck today:{" "}
+                <span className="font-medium text-foreground">
+                  {selectedTechOverride !== undefined
+                    ? (selectedTechOverride.truckId === null ? "Solo" : selectedTechOverride.truckName ?? "Unknown")
+                    : (selectedTechTruck ?? "Not assigned")}
+                </span>
+                {selectedTechOverride !== undefined && (
+                  <span className="text-amber-400 ml-1 text-[10px]">override</span>
+                )}
+              </span>
+              <button
+                onClick={() => setTruckOverrideOpen(!truckOverrideOpen)}
+                className="text-[11px] text-primary hover:underline cursor-pointer"
+              >
+                Change
+              </button>
+
+              {truckOverrideOpen && (
+                <div className="absolute left-0 top-full mt-1 z-50 rounded-md border border-border bg-popover shadow-lg py-1 min-w-[180px]">
+                  <button
+                    onClick={() => handleTruckOverride(null)}
+                    className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
+                  >
+                    Solo (no sharing)
+                  </button>
+                  {allTrucks.filter((t) => t.is_active).map((truck) => (
+                    <button
+                      key={truck.id}
+                      onClick={() => handleTruckOverride(truck.id)}
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors"
+                    >
+                      {truck.name}
+                      {truck.assignedTechs.length > 0 && (
+                        <span className="text-xs text-muted-foreground ml-1.5">
+                          ({truck.assignedTechs.map((t) => t.fullName).join(", ")})
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  {selectedTechOverride !== undefined && (
+                    <>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={() => handleTruckOverride("__reset__")}
+                        className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        Reset to default
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Toggle unassigned panel */}

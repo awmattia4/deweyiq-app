@@ -9,9 +9,10 @@
  */
 
 import { withRls, getRlsToken, adminDb } from "@/lib/db"
-import { trucks, techTruckAssignments } from "@/lib/db/schema"
+import { trucks, techTruckAssignments, dailyTruckOverrides } from "@/lib/db/schema"
 import { profiles } from "@/lib/db/schema"
-import { eq, and, inArray, asc } from "drizzle-orm"
+import { eq, and, inArray, asc, isNull } from "drizzle-orm"
+import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,16 +35,45 @@ export interface CreateTruckInput {
 // ---------------------------------------------------------------------------
 
 /**
- * Given a tech_id, returns all tech_ids that share the same truck.
- * If the tech is NOT assigned to any truck, returns [techId] (legacy behavior).
+ * Given a tech_id, returns all tech_ids that share the same truck TODAY.
+ *
+ * Checks daily_truck_overrides first (per-day reassignment from schedule page),
+ * then falls back to permanent tech_truck_assignments from Settings.
+ *
+ * If the tech is NOT assigned to any truck, returns [techId] (solo).
  * Uses adminDb for performance — called from auto-decrement which is non-blocking.
  */
 export async function getTechIdsOnSameTruck(
   techId: string,
-  orgId: string
+  orgId: string,
+  date?: string
 ): Promise<string[]> {
   try {
-    // Find which truck this tech is assigned to
+    const effectiveDate = date ?? toLocalDateString()
+
+    // 1. Check daily override for this tech + date
+    const override = await adminDb
+      .select({ truck_id: dailyTruckOverrides.truck_id })
+      .from(dailyTruckOverrides)
+      .where(
+        and(
+          eq(dailyTruckOverrides.tech_id, techId),
+          eq(dailyTruckOverrides.org_id, orgId),
+          eq(dailyTruckOverrides.override_date, effectiveDate)
+        )
+      )
+      .limit(1)
+
+    if (override.length > 0) {
+      if (override[0].truck_id === null) {
+        // Explicit solo override for today
+        return [techId]
+      }
+      // Override to a specific truck — find all techs on that truck today
+      return _getTechIdsForTruckOnDate(override[0].truck_id, orgId, effectiveDate, techId)
+    }
+
+    // 2. Fall back to permanent assignment
     const assignment = await adminDb
       .select({ truck_id: techTruckAssignments.truck_id })
       .from(techTruckAssignments)
@@ -56,30 +86,92 @@ export async function getTechIdsOnSameTruck(
       .limit(1)
 
     if (assignment.length === 0) {
-      // No truck assignment — legacy behavior (solo tech)
       return [techId]
     }
 
     const truckId = assignment[0].truck_id
-
-    // Find ALL techs assigned to this truck
-    const allAssignments = await adminDb
-      .select({ tech_id: techTruckAssignments.tech_id })
-      .from(techTruckAssignments)
-      .where(
-        and(
-          eq(techTruckAssignments.truck_id, truckId),
-          eq(techTruckAssignments.org_id, orgId)
-        )
-      )
-
-    const techIds = allAssignments.map((a) => a.tech_id)
-    return techIds.length > 0 ? techIds : [techId]
+    return _getTechIdsForTruckOnDate(truckId, orgId, effectiveDate, techId)
   } catch (err) {
     console.error("[getTechIdsOnSameTruck] Error:", err)
-    // Fallback to solo tech on error — never break inventory
     return [techId]
   }
+}
+
+/**
+ * Given a truck_id, returns all tech IDs on that truck for a specific date.
+ * Checks daily overrides first — a tech with a solo override or override to
+ * a different truck is excluded from this truck's crew for that day.
+ */
+async function _getTechIdsForTruckOnDate(
+  truckId: string,
+  orgId: string,
+  date: string,
+  requestingTechId: string
+): Promise<string[]> {
+  // Get all permanently assigned techs for this truck
+  const permanentAssignments = await adminDb
+    .select({ tech_id: techTruckAssignments.tech_id })
+    .from(techTruckAssignments)
+    .where(
+      and(
+        eq(techTruckAssignments.truck_id, truckId),
+        eq(techTruckAssignments.org_id, orgId)
+      )
+    )
+
+  const permanentTechIds = permanentAssignments.map((a) => a.tech_id)
+
+  // Get any daily overrides for these techs on this date
+  const overrides = permanentTechIds.length > 0
+    ? await adminDb
+        .select({
+          tech_id: dailyTruckOverrides.tech_id,
+          truck_id: dailyTruckOverrides.truck_id,
+        })
+        .from(dailyTruckOverrides)
+        .where(
+          and(
+            eq(dailyTruckOverrides.org_id, orgId),
+            eq(dailyTruckOverrides.override_date, date),
+            inArray(dailyTruckOverrides.tech_id, permanentTechIds)
+          )
+        )
+    : []
+
+  const overrideMap = new Map(overrides.map((o) => [o.tech_id, o.truck_id]))
+
+  // Filter: keep techs who are still on this truck today
+  const activeTechIds = permanentTechIds.filter((tid) => {
+    const dayOverride = overrideMap.get(tid)
+    if (dayOverride === undefined) return true // no override, still on this truck
+    if (dayOverride === null) return false // solo override, not on any truck today
+    return dayOverride === truckId // overridden to same truck (no change)
+  })
+
+  // Also check if any techs are overridden TO this truck today (from other trucks)
+  const incomingOverrides = await adminDb
+    .select({ tech_id: dailyTruckOverrides.tech_id })
+    .from(dailyTruckOverrides)
+    .where(
+      and(
+        eq(dailyTruckOverrides.org_id, orgId),
+        eq(dailyTruckOverrides.override_date, date),
+        eq(dailyTruckOverrides.truck_id, truckId)
+      )
+    )
+
+  for (const incoming of incomingOverrides) {
+    if (!activeTechIds.includes(incoming.tech_id)) {
+      activeTechIds.push(incoming.tech_id)
+    }
+  }
+
+  // Ensure the requesting tech is always included
+  if (!activeTechIds.includes(requestingTechId)) {
+    activeTechIds.push(requestingTechId)
+  }
+
+  return activeTechIds.length > 0 ? activeTechIds : [requestingTechId]
 }
 
 /**
@@ -148,6 +240,123 @@ export async function getTruckInfoForCurrentTech(
   if (!token) return null
   const orgId = token.org_id as string
   return getTruckInfoForTech(techId, orgId)
+}
+
+// ---------------------------------------------------------------------------
+// Daily truck overrides
+// ---------------------------------------------------------------------------
+
+/**
+ * setDailyTruckOverride — Override a tech's truck for a specific date.
+ * truck_id = null means "solo for this day" (no sharing).
+ * truck_id = some UUID means "on this truck for this day instead of their default".
+ */
+export async function setDailyTruckOverride(
+  techId: string,
+  date: string,
+  truckId: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    // Upsert: insert or update on conflict (org_id, tech_id, override_date)
+    await adminDb
+      .insert(dailyTruckOverrides)
+      .values({
+        org_id: orgId,
+        tech_id: techId,
+        truck_id: truckId,
+        override_date: date,
+      })
+      .onConflictDoUpdate({
+        target: [dailyTruckOverrides.org_id, dailyTruckOverrides.tech_id, dailyTruckOverrides.override_date],
+        set: { truck_id: truckId },
+      })
+
+    return { success: true }
+  } catch (err) {
+    console.error("[setDailyTruckOverride] Error:", err)
+    return { success: false, error: "Failed to set override" }
+  }
+}
+
+/**
+ * removeDailyTruckOverride — Remove a daily override, reverting to the permanent assignment.
+ */
+export async function removeDailyTruckOverride(
+  techId: string,
+  date: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await adminDb
+      .delete(dailyTruckOverrides)
+      .where(
+        and(
+          eq(dailyTruckOverrides.org_id, orgId),
+          eq(dailyTruckOverrides.tech_id, techId),
+          eq(dailyTruckOverrides.override_date, date)
+        )
+      )
+
+    return { success: true }
+  } catch (err) {
+    console.error("[removeDailyTruckOverride] Error:", err)
+    return { success: false, error: "Failed to remove override" }
+  }
+}
+
+/**
+ * getDailyOverridesForDate — Returns all overrides for a specific date.
+ * Used by the schedule page to show which techs have truck changes today.
+ */
+export async function getDailyOverridesForDate(
+  date: string
+): Promise<Array<{ techId: string; truckId: string | null; truckName: string | null }>> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  const orgId = token.org_id as string
+
+  try {
+    const overrides = await adminDb
+      .select({
+        tech_id: dailyTruckOverrides.tech_id,
+        truck_id: dailyTruckOverrides.truck_id,
+        truck_name: trucks.name,
+      })
+      .from(dailyTruckOverrides)
+      .leftJoin(trucks, eq(dailyTruckOverrides.truck_id, trucks.id))
+      .where(
+        and(
+          eq(dailyTruckOverrides.org_id, orgId),
+          eq(dailyTruckOverrides.override_date, date)
+        )
+      )
+
+    return overrides.map((o) => ({
+      techId: o.tech_id,
+      truckId: o.truck_id,
+      truckName: o.truck_name,
+    }))
+  } catch {
+    return []
+  }
 }
 
 // ---------------------------------------------------------------------------

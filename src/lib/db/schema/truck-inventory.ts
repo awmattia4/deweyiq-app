@@ -15,6 +15,7 @@
  * RLS:
  * - trucks: SELECT all org; INSERT/UPDATE/DELETE owner+office
  * - tech_truck_assignments: SELECT all org; INSERT/UPDATE/DELETE owner+office
+ * - daily_truck_overrides: SELECT all org; INSERT/UPDATE/DELETE owner+office
  * - truck_inventory: SELECT all org members; INSERT/UPDATE owner+office+tech; DELETE owner+office
  * - truck_inventory_log: SELECT all org members; INSERT owner+office+tech
  * - truck_load_templates: SELECT all org; INSERT/UPDATE/DELETE owner+office
@@ -141,6 +142,64 @@ export const techTruckAssignments = pgTable(
       `,
     }),
     pgPolicy("tech_truck_delete_policy", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+  ]
+).enableRLS()
+
+// ---------------------------------------------------------------------------
+// daily_truck_overrides — per-day truck reassignment
+// ---------------------------------------------------------------------------
+
+export const dailyTruckOverrides = pgTable(
+  "daily_truck_overrides",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    org_id: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    tech_id: uuid("tech_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    // NULL = solo (no truck sharing for this day)
+    truck_id: uuid("truck_id")
+      .references(() => trucks.id, { onDelete: "cascade" }),
+    override_date: text("override_date").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("daily_truck_overrides_lookup_idx").on(table.org_id, table.tech_id, table.override_date),
+    pgPolicy("daily_truck_overrides_select_policy", {
+      for: "select",
+      to: authenticatedRole,
+      using: sql`org_id = (select auth.jwt() ->> 'org_id')::uuid`,
+    }),
+    pgPolicy("daily_truck_overrides_insert_policy", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("daily_truck_overrides_update_policy", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+      withCheck: sql`
+        org_id = (select auth.jwt() ->> 'org_id')::uuid
+        AND (select auth.jwt() ->> 'user_role') IN ('owner', 'office')
+      `,
+    }),
+    pgPolicy("daily_truck_overrides_delete_policy", {
       for: "delete",
       to: authenticatedRole,
       using: sql`
