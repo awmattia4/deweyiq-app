@@ -115,6 +115,8 @@ function AddWarehouseItemDialog({ onSuccess, onClose }: AddWarehouseItemDialogPr
   const [unit, setUnit] = useState("oz")
   const [thresholdStr, setThresholdStr] = useState("0")
   const [barcode, setBarcode] = useState("")
+  const [catalogItemId, setCatalogItemId] = useState<string | null>(null)
+  const [chemicalProductId, setChemicalProductId] = useState<string | null>(null)
 
   const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; category: string; unit: string; source: string }>>([])
   const [showResults, setShowResults] = useState(false)
@@ -156,6 +158,13 @@ function AddWarehouseItemDialog({ onSuccess, onClose }: AddWarehouseItemDialogPr
     setCategory(mapCatalogCategory(item.category))
     setUnit(item.unit)
     setShowResults(false)
+    if (item.source === "parts_catalog") {
+      setCatalogItemId(item.id)
+      setChemicalProductId(null)
+    } else if (item.source === "chemical_products") {
+      setChemicalProductId(item.id)
+      setCatalogItemId(null)
+    }
   }
 
   async function handleBarcodeScan(code: string) {
@@ -186,6 +195,8 @@ function AddWarehouseItemDialog({ onSuccess, onClose }: AddWarehouseItemDialogPr
         }
 
         if (result.catalog_unit) setUnit(result.catalog_unit)
+        if (result.catalog_item_id) setCatalogItemId(result.catalog_item_id)
+        if (result.chemical_product_id) setChemicalProductId(result.chemical_product_id)
       } else {
         setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
@@ -213,6 +224,8 @@ function AddWarehouseItemDialog({ onSuccess, onClose }: AddWarehouseItemDialogPr
       try {
         const result = await addTruckInventoryItem({
           tech_id: null,
+          catalog_item_id: catalogItemId,
+          chemical_product_id: chemicalProductId,
           item_name: itemName.trim(),
           category,
           quantity,
@@ -386,6 +399,22 @@ function AddWarehouseItemDialog({ onSuccess, onClose }: AddWarehouseItemDialogPr
                   />
                 </div>
               </div>
+              {/* Warning: unlinked chemical */}
+              {category === "chemical" && !chemicalProductId && itemName && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+                  <p className="text-sm text-amber-400 font-medium">Not linked to a chemical product</p>
+                  <p className="text-xs text-amber-400/70 mt-0.5">
+                    When loaded to a truck, this item won&apos;t auto-decrement from dosing.
+                    Search for the chemical from the catalog above, or add it in Settings &gt; Inventory &gt; Chemical Products first.
+                  </p>
+                </div>
+              )}
+
+              {(catalogItemId || chemicalProductId) && (
+                <p className="text-xs text-emerald-400">
+                  Linked to catalog — {chemicalProductId ? "will auto-decrement from dosing when on truck" : "tracked in parts catalog"}
+                </p>
+              )}
             </div>
 
             <DialogFooter>

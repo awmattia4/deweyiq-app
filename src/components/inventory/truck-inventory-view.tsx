@@ -141,6 +141,10 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
   const [unit, setUnit] = useState("oz")
   const [thresholdStr, setThresholdStr] = useState("0")
   const [barcode, setBarcode] = useState("")
+  // Catalog linkage — tracks whether item is linked to a product for auto-decrement
+  const [catalogItemId, setCatalogItemId] = useState<string | null>(null)
+  const [chemicalProductId, setChemicalProductId] = useState<string | null>(null)
+  const isLinked = !!catalogItemId || !!chemicalProductId
 
   // Catalog search
   const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; category: string; unit: string; source: string }>>([])
@@ -150,6 +154,11 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
   function handleNameChange(value: string) {
     setItemName(value)
     if (scanMessage) setScanMessage(null)
+    // Clear linkage when manually typing (user deviated from catalog selection)
+    if (catalogItemId || chemicalProductId) {
+      setCatalogItemId(null)
+      setChemicalProductId(null)
+    }
     // Debounced catalog search
     if (searchTimer.current) clearTimeout(searchTimer.current)
     if (value.length >= 2) {
@@ -185,6 +194,14 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
     setUnit(item.unit)
     setShowResults(false)
     if (scanMessage) setScanMessage(null)
+    // Capture catalog linkage for auto-decrement
+    if (item.source === "parts_catalog") {
+      setCatalogItemId(item.id)
+      setChemicalProductId(null)
+    } else if (item.source === "chemical_products") {
+      setChemicalProductId(item.id)
+      setCatalogItemId(null)
+    }
   }
 
   // Barcode scan → UPC lookup → autofill
@@ -220,6 +237,10 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
         if (result.catalog_unit) {
           setUnit(result.catalog_unit)
         }
+
+        // Capture catalog linkage
+        if (result.catalog_item_id) setCatalogItemId(result.catalog_item_id)
+        if (result.chemical_product_id) setChemicalProductId(result.chemical_product_id)
       } else {
         setScanMessage(`Barcode ${code} scanned but no product found — enter the name manually`)
       }
@@ -247,6 +268,8 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
       try {
         const result = await addTruckInventoryItem({
           tech_id: techId,
+          catalog_item_id: catalogItemId,
+          chemical_product_id: chemicalProductId,
           item_name: itemName.trim(),
           category,
           quantity,
@@ -476,13 +499,30 @@ function AddItemDialog({ techId, onSuccess, onClose, warehouseItems = [] }: AddI
             </div>
           </div>
 
+          {/* Warning: unlinked chemical won't auto-decrement */}
+          {category === "chemical" && !chemicalProductId && itemName && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+              <p className="text-sm text-amber-400 font-medium">Not linked to a chemical product</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">
+                This item won&apos;t auto-decrement when techs log dosing at stops.
+                Search for and select the chemical from the catalog above, or add it in Settings &gt; Inventory &gt; Chemical Products first.
+              </p>
+            </div>
+          )}
+
+          {/* Linked confirmation */}
+          {isLinked && (
+            <p className="text-xs text-emerald-400">
+              Linked to catalog — {chemicalProductId ? "will auto-decrement from dosing" : "tracked in parts catalog"}
+            </p>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
+          <Button variant="outline" onClick={onClose} disabled={isPending} className="cursor-pointer">
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending}>
+          <Button onClick={handleSubmit} disabled={isPending} className="cursor-pointer">
             {isPending ? "Adding..." : "Add Item"}
           </Button>
         </DialogFooter>
