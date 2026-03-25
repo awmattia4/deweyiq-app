@@ -71,7 +71,11 @@ export function openInMaps(address: string): void {
       ? `https://maps.apple.com/?q=${encoded}`
       : `https://www.google.com/maps/search/?api=1&query=${encoded}`
 
-  window.open(url, "_blank", "noopener,noreferrer")
+  // Use location.href instead of window.open — in iOS PWA, window.open
+  // creates an SFSafariViewController overlay that stays blank behind Maps.
+  // location.href lets iOS intercept the maps URL directly without the overlay,
+  // so swiping back from Maps returns straight to the PWA.
+  window.location.href = url
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
