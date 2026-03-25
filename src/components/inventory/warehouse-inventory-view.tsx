@@ -555,55 +555,161 @@ interface WarehouseItemRowProps {
   item: TruckInventoryItem
   allTechs: TechProfile[]
   onUpdate: (updated: TruckInventoryItem) => void
+  onDelete: (id: string) => void
 }
 
-function WarehouseItemRow({ item, allTechs, onUpdate }: WarehouseItemRowProps) {
+function WarehouseItemRow({ item, allTechs, onUpdate, onDelete }: WarehouseItemRowProps) {
   const [loadDialogOpen, setLoadDialogOpen] = useState(false)
+  const [restocking, setRestocking] = useState(false)
+  const [restockStr, setRestockStr] = useState("")
+  const [, startTransition] = useTransition()
 
   const qty = parseFloat(item.quantity)
   const threshold = parseFloat(item.min_threshold)
   const belowThreshold = threshold > 0 && qty <= threshold
+  const isEmpty = qty <= 0
+
+  function handleRestock() {
+    const addQty = parseFloat(restockStr)
+    if (isNaN(addQty) || addQty <= 0) return
+    const newQty = qty + addQty
+    startTransition(async () => {
+      try {
+        const { updateTruckInventoryItem } = await import("@/actions/truck-inventory")
+        const updated = await updateTruckInventoryItem(item.id, { quantity: newQty })
+        if (updated) onUpdate(updated)
+        setRestocking(false)
+        setRestockStr("")
+      } catch (err) {
+        console.error("Restock failed:", err)
+      }
+    })
+  }
+
+  function handleRemove() {
+    startTransition(async () => {
+      try {
+        const { deleteTruckInventoryItem } = await import("@/actions/truck-inventory")
+        await deleteTruckInventoryItem(item.id)
+        onDelete(item.id)
+      } catch (err) {
+        console.error("Remove failed:", err)
+      }
+    })
+  }
 
   return (
     <>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
-          belowThreshold
-            ? "border-amber-500/40 bg-amber-500/5"
-            : "border-border bg-card"
+          "flex flex-col gap-2 rounded-lg border px-3 py-2.5 transition-colors",
+          isEmpty
+            ? "border-red-500/30 bg-red-500/5"
+            : belowThreshold
+              ? "border-amber-500/40 bg-amber-500/5"
+              : "border-border bg-card"
         )}
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">{item.item_name}</span>
-            {belowThreshold && (
-              <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
-                Low
-              </Badge>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium truncate">{item.item_name}</span>
+              {isEmpty && (
+                <Badge variant="outline" className="text-[10px] border-red-500/60 text-red-400 shrink-0">
+                  Out of Stock
+                </Badge>
+              )}
+              {!isEmpty && belowThreshold && (
+                <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
+                  Low
+                </Badge>
+              )}
+            </div>
+            {!isEmpty && belowThreshold && threshold > 0 && (
+              <p className="text-[11px] text-amber-400/80 mt-0.5">
+                Threshold: {formatQuantity(item.min_threshold)} {item.unit}
+              </p>
             )}
           </div>
-          {belowThreshold && threshold > 0 && (
-            <p className="text-[11px] text-amber-400/80 mt-0.5">
-              Threshold: {formatQuantity(item.min_threshold)} {item.unit}
-            </p>
-          )}
+
+          <span className={cn(
+            "text-sm font-mono text-right shrink-0",
+            isEmpty ? "text-red-400" : "text-muted-foreground"
+          )}>
+            {formatQuantity(item.quantity)} {item.unit}
+          </span>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+              onClick={() => setRestocking(!restocking)}
+            >
+              Restock
+            </Button>
+            {!isEmpty && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+                onClick={() => setLoadDialogOpen(true)}
+              >
+                Load to Truck
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive cursor-pointer"
+              onClick={handleRemove}
+            >
+              Remove
+            </Button>
+          </div>
         </div>
 
-        <span className="text-sm font-mono text-right shrink-0 text-muted-foreground">
-          {formatQuantity(item.quantity)} {item.unit}
-        </span>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground shrink-0 cursor-pointer"
-          onClick={() => setLoadDialogOpen(true)}
-          disabled={qty <= 0}
-        >
-          Load to Truck
-        </Button>
+        {/* Inline restock input */}
+        {restocking && (
+          <div className="flex items-center gap-2 pl-0">
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={restockStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (/^\d*\.?\d*$/.test(v)) setRestockStr(v)
+              }}
+              onBlur={() => {
+                const p = parseFloat(restockStr)
+                if (!isNaN(p) && !restockStr.endsWith(".")) setRestockStr(String(p))
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleRestock()}
+              placeholder={`Add quantity (${item.unit})`}
+              className="h-8 text-sm flex-1"
+              autoFocus
+            />
+            <Button
+              size="sm"
+              className="h-8 cursor-pointer"
+              onClick={handleRestock}
+              disabled={!restockStr || parseFloat(restockStr) <= 0}
+            >
+              Add
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 cursor-pointer"
+              onClick={() => { setRestocking(false); setRestockStr("") }}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
       </div>
 
       <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
@@ -640,6 +746,10 @@ export function WarehouseInventoryView({ initialItems, allTechs }: WarehouseInve
 
   function handleItemUpdated(updated: TruckInventoryItem) {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+  }
+
+  function handleItemDeleted(id: string) {
+    setItems((prev) => prev.filter((i) => i.id !== id))
   }
 
   function handleItemAdded(newItem: TruckInventoryItem) {
@@ -694,6 +804,7 @@ export function WarehouseInventoryView({ initialItems, allTechs }: WarehouseInve
                   item={item}
                   allTechs={allTechs}
                   onUpdate={handleItemUpdated}
+                  onDelete={handleItemDeleted}
                 />
               ))}
             </div>
