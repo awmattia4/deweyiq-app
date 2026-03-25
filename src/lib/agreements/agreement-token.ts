@@ -40,6 +40,8 @@ function getSecretKey(): Uint8Array {
 
 interface AgreementTokenPayload extends JWTPayload {
   agreementId: string
+  /** Optional: present when token was issued for an amendment re-sign */
+  amendmentId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -48,14 +50,22 @@ interface AgreementTokenPayload extends JWTPayload {
 
 /**
  * Signs a JWT token for a given agreement ID.
+ * Optionally embeds an amendmentId for amendment re-sign flows.
  *
  * @param agreementId - The agreement UUID
+ * @param amendmentId - Optional amendment UUID (major amendment re-sign)
  * @returns Signed JWT string (HS256, 180-day expiry)
  */
-export async function signAgreementToken(agreementId: string): Promise<string> {
+export async function signAgreementToken(
+  agreementId: string,
+  amendmentId?: string
+): Promise<string> {
   const secretKey = getSecretKey()
 
-  const token = await new SignJWT({ agreementId })
+  const payload: { agreementId: string; amendmentId?: string } = { agreementId }
+  if (amendmentId) payload.amendmentId = amendmentId
+
+  const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("180d")
@@ -72,11 +82,11 @@ export async function signAgreementToken(agreementId: string): Promise<string> {
  * Verifies a signed JWT token and returns the payload.
  *
  * @param token - JWT string to verify
- * @returns { agreementId: string } on success, null on any error (expired, invalid, malformed)
+ * @returns { agreementId, amendmentId? } on success, null on error
  */
 export async function verifyAgreementToken(
   token: string
-): Promise<{ agreementId: string } | null> {
+): Promise<{ agreementId: string; amendmentId?: string } | null> {
   try {
     const secretKey = getSecretKey()
     const { payload } = await jwtVerify(token, secretKey)
@@ -90,7 +100,10 @@ export async function verifyAgreementToken(
       return null
     }
 
-    return { agreementId: agreementPayload.agreementId }
+    return {
+      agreementId: agreementPayload.agreementId,
+      ...(agreementPayload.amendmentId ? { amendmentId: agreementPayload.amendmentId } : {}),
+    }
   } catch {
     // Expired, invalid signature, malformed — return null
     return null

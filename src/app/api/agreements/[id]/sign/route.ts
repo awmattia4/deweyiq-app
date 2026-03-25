@@ -26,6 +26,7 @@ import { adminDb } from "@/lib/db"
 import {
   serviceAgreements,
   agreementPoolEntries,
+  agreementAmendments,
   scheduleRules,
   customers,
   profiles,
@@ -106,7 +107,42 @@ export async function POST(
       return NextResponse.json({ error: "Agreement not found." }, { status: 404 })
     }
 
-    // ── 6. Idempotency guard ──────────────────────────────────────────────
+    // ── 6. Detect amendment sign vs. original sign ────────────────────────
+    const isAmendmentSign = Boolean(tokenPayload.amendmentId)
+
+    if (isAmendmentSign) {
+      // Amendment sign: agreement must be 'active' with a pending amendment
+      if (agreement.status !== "active") {
+        return NextResponse.json(
+          { error: "This agreement is not in an active state." },
+          { status: 409 }
+        )
+      }
+      // Verify the pending_amendment_id matches
+      const fullAgreementRows = await adminDb
+        .select({ pending_amendment_id: serviceAgreements.pending_amendment_id })
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, agreementId))
+        .limit(1)
+      const pendingAmendmentId = fullAgreementRows[0]?.pending_amendment_id
+      if (!pendingAmendmentId) {
+        return NextResponse.json(
+          { error: "No pending amendment found for this agreement." },
+          { status: 409 }
+        )
+      }
+
+      const now = new Date()
+      if (action === "accept") {
+        await _handleAmendmentAccept(agreement, pendingAmendmentId, now)
+      } else {
+        // Decline the amendment (reject it, leave agreement active)
+        await _handleAmendmentDecline(agreement, pendingAmendmentId, body, now)
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    // ── 7. Original sign idempotency guard ────────────────────────────────
     if (agreement.status !== "sent") {
       return NextResponse.json(
         { error: "This agreement has already been processed." },
@@ -116,7 +152,7 @@ export async function POST(
 
     const now = new Date()
 
-    // ── 7. Dispatch to handler ────────────────────────────────────────────
+    // ── 8. Dispatch to handler ────────────────────────────────────────────
     if (action === "accept") {
       await _handleAccept(req, agreement, body, now)
     } else {
@@ -287,6 +323,84 @@ async function _handleAccept(
         .where(eq(customers.id, agreement.customer_id))
     }
   }
+}
+
+// ── _handleAmendmentAccept ────────────────────────────────────────────────────
+
+/**
+ * Customer approved a major amendment:
+ * - Mark amendment as signed
+ * - Clear pending_amendment_id on agreement
+ * - Agreement stays 'active'
+ */
+async function _handleAmendmentAccept(
+  agreement: AgreementRow,
+  amendmentId: string,
+  now: Date
+): Promise<void> {
+  const activityEntry = JSON.stringify([{
+    action: "amendment_signed",
+    actor: "customer",
+    at: now.toISOString(),
+    note: "Customer approved amendment.",
+  }])
+
+  // Mark amendment signed
+  await adminDb
+    .update(agreementAmendments)
+    .set({ status: "signed", signed_at: now })
+    .where(eq(agreementAmendments.id, amendmentId))
+
+  // Clear pending_amendment_id + append log
+  await adminDb
+    .update(serviceAgreements)
+    .set({
+      pending_amendment_id: null,
+      updated_at: now,
+      activity_log: sql`COALESCE(activity_log, '[]'::jsonb) || ${activityEntry}::jsonb`,
+    })
+    .where(eq(serviceAgreements.id, agreement.id))
+}
+
+// ── _handleAmendmentDecline ───────────────────────────────────────────────────
+
+/**
+ * Customer rejected a major amendment:
+ * - Mark amendment as rejected
+ * - Clear pending_amendment_id on agreement
+ * - Agreement stays 'active' (changes NOT applied — they were already applied on create,
+ *   but this signals the office that the customer rejected)
+ */
+async function _handleAmendmentDecline(
+  agreement: AgreementRow,
+  amendmentId: string,
+  body: SignBody,
+  now: Date
+): Promise<void> {
+  const declineReason = body.declineReason?.trim() ?? null
+
+  const activityEntry = JSON.stringify([{
+    action: "amendment_rejected",
+    actor: "customer",
+    at: now.toISOString(),
+    note: `Customer rejected amendment. Reason: ${declineReason ?? "No reason provided"}`,
+  }])
+
+  // Mark amendment rejected
+  await adminDb
+    .update(agreementAmendments)
+    .set({ status: "rejected", rejected_at: now })
+    .where(eq(agreementAmendments.id, amendmentId))
+
+  // Clear pending_amendment_id + append log
+  await adminDb
+    .update(serviceAgreements)
+    .set({
+      pending_amendment_id: null,
+      updated_at: now,
+      activity_log: sql`COALESCE(activity_log, '[]'::jsonb) || ${activityEntry}::jsonb`,
+    })
+    .where(eq(serviceAgreements.id, agreement.id))
 }
 
 // ── _handleDecline ─────────────────────────────────────────────────────────────

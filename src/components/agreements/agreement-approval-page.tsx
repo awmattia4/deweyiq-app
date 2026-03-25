@@ -46,8 +46,12 @@ interface AgreementApprovalPageProps {
   customerName: string
   serviceAddress: string | null
   poolEntries: AgreementPoolEntry[]
-  termsAndConditions: string | null
-  cancellationPolicy: string | null
+  termsAndConditions?: string | null
+  cancellationPolicy?: string | null
+  /** When true, renders amendment-specific UI (no pool entry list) */
+  isAmendment?: boolean
+  amendmentChangeSummary?: string
+  amendmentVersionNumber?: number
 }
 
 type SignMode = "type" | "draw"
@@ -164,6 +168,9 @@ export function AgreementApprovalPage({
   poolEntries,
   termsAndConditions,
   cancellationPolicy,
+  isAmendment = false,
+  amendmentChangeSummary,
+  amendmentVersionNumber,
 }: AgreementApprovalPageProps) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [signMode, setSignMode] = useState<SignMode>("type")
@@ -289,9 +296,13 @@ export function AgreementApprovalPage({
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Agreement Signed</h2>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+          {isAmendment ? "Amendment Approved" : "Agreement Signed"}
+        </h2>
         <p className="text-gray-600 max-w-sm mx-auto">
-          Thank you, {customerName.split(" ")[0]}. Your agreement has been signed and your service has been scheduled. {companyName} will be in touch soon.
+          {isAmendment
+            ? `Thank you. The amendment to your service agreement has been approved. ${companyName} will apply the changes to your service.`
+            : `Thank you, ${customerName.split(" ")[0]}. Your agreement has been signed and your service has been scheduled. ${companyName} will be in touch soon.`}
         </p>
       </div>
     )
@@ -314,14 +325,23 @@ export function AgreementApprovalPage({
 
       {/* ── Agreement Header ──────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        {isAmendment && amendmentChangeSummary && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+            <p className="text-sm font-semibold text-amber-800 mb-1">
+              Amendment v{amendmentVersionNumber} — Changes Requiring Your Approval
+            </p>
+            <p className="text-sm text-amber-700 whitespace-pre-wrap">{amendmentChangeSummary}</p>
+          </div>
+        )}
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Service Agreement</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isAmendment ? `Amendment to Agreement ${agreementNumber}` : "Service Agreement"}
+            </h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Agreement {agreementNumber}
-              {startDate
-                ? ` · Effective ${new Date(startDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
-                : ""}
+              {isAmendment
+                ? `Please review the changes below and approve or decline.`
+                : `Agreement ${agreementNumber}${startDate ? ` · Effective ${new Date(startDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : ""}`}
             </p>
           </div>
           <a

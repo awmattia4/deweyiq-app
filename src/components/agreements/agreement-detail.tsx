@@ -7,7 +7,26 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { sendAgreement, deleteAgreement } from "@/actions/agreements"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  sendAgreement,
+  deleteAgreement,
+  pauseAgreement,
+  resumeAgreement,
+  cancelAgreement,
+  renewAgreement,
+  amendAgreement,
+  type AmendmentChanges,
+} from "@/actions/agreements"
+import { AmendmentDialog } from "@/components/agreements/amendment-dialog"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +112,8 @@ interface Agreement {
 interface AgreementDetailProps {
   agreement: Agreement
   isOwner: boolean
+  /** Notice period in days from org_settings — 0 = immediate cancellation */
+  noticePeriodDays?: number
 }
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -202,13 +223,23 @@ function formatActionLabel(action: string): string {
     created: "Agreement created",
     updated: "Agreement updated",
     sent: "Sent to customer",
+    agreement_sent: "Sent to customer",
     signed: "Signed by customer",
+    agreement_signed: "Signed by customer",
     declined: "Declined by customer",
+    agreement_declined: "Declined by customer",
     cancelled: "Agreement cancelled",
+    agreement_cancelled: "Cancellation recorded",
     paused: "Agreement paused",
+    agreement_paused: "Agreement paused",
     resumed: "Agreement resumed",
+    agreement_resumed: "Agreement resumed",
     expired: "Agreement expired",
+    agreement_expired: "Agreement expired",
     amended: "Amendment created",
+    amendment_signed: "Amendment approved by customer",
+    amendment_rejected: "Amendment rejected by customer",
+    renewed: "Agreement renewed",
   }
   return labels[action] ?? action
 }
@@ -243,14 +274,42 @@ function ExpandableText({ title, content }: { title: string; content: string | n
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
+export function AgreementDetail({ agreement, isOwner, noticePeriodDays = 30 }: AgreementDetailProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [localAgreement, setLocalAgreement] = useState(agreement)
   const [error, setError] = useState<string | null>(null)
 
+  // Pause dialog
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false)
+  const [pauseReason, setPauseReason] = useState("")
+
+  // Cancel dialog
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+
+  // Amendment dialog
+  const [amendDialogOpen, setAmendDialogOpen] = useState(false)
+  const [isAmending, setIsAmending] = useState(false)
+
   const status = localAgreement.status
   const monthlyTotal = computeMonthlyTotal(localAgreement.poolEntries)
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyFreshData(freshData: Record<string, any>) {
+    if (freshData) {
+      setLocalAgreement(freshData as Agreement)
+    }
+  }
+
+  // Calculate the effective cancellation date for notice period display
+  function getCancellationEffectiveDate(): string {
+    if (noticePeriodDays === 0) return "immediately"
+    const d = new Date()
+    d.setDate(d.getDate() + noticePeriodDays)
+    return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+  }
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
@@ -287,6 +346,77 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
 
   function handleDownloadPdf() {
     window.open(`/api/agreements/${localAgreement.id}/pdf`, "_blank")
+  }
+
+  function handlePause() {
+    setError(null)
+    startTransition(async () => {
+      const result = await pauseAgreement(localAgreement.id, pauseReason.trim() || undefined)
+      if (result.success && result.data) {
+        applyFreshData(result.data)
+        setPauseDialogOpen(false)
+        setPauseReason("")
+      } else {
+        setError(result.error ?? "Failed to pause agreement")
+        setPauseDialogOpen(false)
+      }
+    })
+  }
+
+  function handleResume() {
+    if (!confirm("Resume this agreement? Schedule rules will be reactivated with today as the new anchor date.")) return
+    setError(null)
+    startTransition(async () => {
+      const result = await resumeAgreement(localAgreement.id)
+      if (result.success && result.data) {
+        applyFreshData(result.data)
+      } else {
+        setError(result.error ?? "Failed to resume agreement")
+      }
+    })
+  }
+
+  function handleCancel() {
+    setError(null)
+    startTransition(async () => {
+      const result = await cancelAgreement(localAgreement.id)
+      if (result.success && result.data) {
+        applyFreshData(result.data)
+        setCancelDialogOpen(false)
+      } else {
+        setError(result.error ?? "Failed to cancel agreement")
+        setCancelDialogOpen(false)
+      }
+    })
+  }
+
+  function handleRenew() {
+    setError(null)
+    startTransition(async () => {
+      const result = await renewAgreement(localAgreement.id)
+      if (result.success && result.data) {
+        router.push(`/agreements/${result.data.id}`)
+      } else {
+        setError(result.error ?? "Failed to renew agreement")
+      }
+    })
+  }
+
+  async function handleAmend(changes: AmendmentChanges, changeSummary: string) {
+    setError(null)
+    setIsAmending(true)
+    try {
+      const result = await amendAgreement(localAgreement.id, changes, changeSummary)
+      if (result.success && result.data) {
+        applyFreshData(result.data)
+        setAmendDialogOpen(false)
+      } else {
+        setError(result.error ?? "Failed to amend agreement")
+        setAmendDialogOpen(false)
+      }
+    } finally {
+      setIsAmending(false)
+    }
   }
 
   // ── Activity log (reverse chronological) ──────────────────────────────────
@@ -553,10 +683,11 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled
+                    onClick={() => setCancelDialogOpen(true)}
+                    disabled={isPending}
                     className="w-full text-destructive hover:text-destructive"
                   >
-                    Cancel (Plan 06)
+                    Cancel
                   </Button>
                 </>
               )}
@@ -573,19 +704,32 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
                   >
                     Download PDF
                   </Button>
-                  <Button size="sm" variant="outline" disabled className="w-full">
-                    Pause (Plan 06)
-                  </Button>
-                  <Button size="sm" variant="outline" disabled className="w-full">
-                    Amend (Plan 06)
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPauseDialogOpen(true)}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    Pause
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled
+                    onClick={() => setAmendDialogOpen(true)}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    Amend
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCancelDialogOpen(true)}
+                    disabled={isPending}
                     className="w-full text-destructive hover:text-destructive"
                   >
-                    Cancel (Plan 06)
+                    Cancel
                   </Button>
                 </>
               )}
@@ -593,8 +737,13 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
               {/* Paused actions */}
               {status === "paused" && (
                 <>
-                  <Button size="sm" variant="outline" disabled className="w-full">
-                    Resume (Plan 06)
+                  <Button
+                    size="sm"
+                    onClick={handleResume}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    {isPending ? "Resuming…" : "Resume"}
                   </Button>
                   <Button
                     size="sm"
@@ -608,10 +757,11 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled
+                    onClick={() => setCancelDialogOpen(true)}
+                    disabled={isPending}
                     className="w-full text-destructive hover:text-destructive"
                   >
-                    Cancel (Plan 06)
+                    Cancel
                   </Button>
                 </>
               )}
@@ -628,8 +778,14 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
                   >
                     Download PDF
                   </Button>
-                  <Button size="sm" variant="outline" disabled className="w-full">
-                    Renew (Plan 06)
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRenew}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    {isPending ? "Creating…" : "Renew"}
                   </Button>
                 </>
               )}
@@ -646,8 +802,14 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
                   >
                     Download PDF
                   </Button>
-                  <Button size="sm" variant="outline" disabled className="w-full">
-                    Create New from This (Plan 06)
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRenew}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    {isPending ? "Creating…" : "Create New from This"}
                   </Button>
                 </>
               )}
@@ -774,6 +936,104 @@ export function AgreementDetail({ agreement, isOwner }: AgreementDetailProps) {
           </Card>
         </div>
       </div>
+
+      {/* ── Pause Dialog ─────────────────────────────────────────────────── */}
+      <Dialog open={pauseDialogOpen} onOpenChange={setPauseDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pause Agreement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-muted-foreground">
+              Pausing will deactivate all schedule rules and suspend billing for this customer.
+              You can resume at any time.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-sm">Reason (optional)</Label>
+              <Textarea
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                placeholder="e.g. Customer on vacation until March"
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setPauseDialogOpen(false); setPauseReason("") }}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handlePause} disabled={isPending}>
+              {isPending ? "Pausing…" : "Pause Agreement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cancel Dialog ─────────────────────────────────────────────────── */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Agreement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            {noticePeriodDays > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  This agreement will be cancelled effective{" "}
+                  <strong>{getCancellationEffectiveDate()}</strong> ({noticePeriodDays}-day notice period).
+                  Service will continue until that date.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Schedule rules and billing will remain active until the effective date.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This agreement will be cancelled <strong>immediately</strong>. All schedule rules
+                will be deactivated and no further invoices will be generated.
+              </p>
+            )}
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              This action cannot be undone.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCancelDialogOpen(false)}
+              disabled={isPending}
+            >
+              Keep Agreement
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={isPending}
+            >
+              {isPending ? "Cancelling…" : "Cancel Agreement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Amendment Dialog ──────────────────────────────────────────────── */}
+      <AmendmentDialog
+        open={amendDialogOpen}
+        onOpenChange={setAmendDialogOpen}
+        agreementNumber={localAgreement.agreement_number}
+        termType={localAgreement.term_type}
+        poolEntries={localAgreement.poolEntries}
+        onSubmit={handleAmend}
+        isSubmitting={isAmending}
+      />
     </div>
   )
 }

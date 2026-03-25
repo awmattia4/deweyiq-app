@@ -14,6 +14,7 @@ import { adminDb } from "@/lib/db"
 import {
   serviceAgreements,
   agreementPoolEntries,
+  agreementAmendments,
   customers,
   orgs,
   pools,
@@ -49,7 +50,7 @@ export default async function AgreementTokenPage({ params }: Props) {
     )
   }
 
-  const { agreementId } = tokenPayload
+  const { agreementId, amendmentId } = tokenPayload
 
   // ── 2. Fetch agreement via adminDb ─────────────────────────────────────────
   const agreementRows = await adminDb
@@ -72,6 +73,64 @@ export default async function AgreementTokenPage({ params }: Props) {
   }
 
   // ── 3. Status gates ────────────────────────────────────────────────────────
+
+  // Amendment flow: active agreement with a pending amendment
+  if (agreement.status === "active" && amendmentId && agreement.pending_amendment_id === amendmentId) {
+    // Fetch amendment details
+    const amendmentRows = await adminDb
+      .select({
+        id: agreementAmendments.id,
+        version_number: agreementAmendments.version_number,
+        change_summary: agreementAmendments.change_summary,
+        status: agreementAmendments.status,
+      })
+      .from(agreementAmendments)
+      .where(eq(agreementAmendments.id, amendmentId))
+      .limit(1)
+
+    const amendment = amendmentRows[0]
+    if (!amendment || amendment.status !== "pending_signature") {
+      return (
+        <PageShell>
+          <StatusCard
+            variant="info"
+            title="Amendment already processed"
+            message="This amendment has already been signed or rejected."
+          />
+        </PageShell>
+      )
+    }
+
+    // Fetch org branding for amendment page
+    const orgRows = await adminDb
+      .select({ name: orgs.name, logo_url: orgs.logo_url })
+      .from(orgs)
+      .where(eq(orgs.id, agreement.org_id))
+      .limit(1)
+    const org = orgRows[0]
+
+    return (
+      <PageShell companyName={org?.name ?? "Your Service Provider"} logoUrl={org?.logo_url ?? null}>
+        <AgreementApprovalPage
+          token={token}
+          agreementId={agreementId}
+          agreementNumber={agreement.agreement_number}
+          termType={agreement.term_type}
+          startDate={agreement.start_date}
+          endDate={agreement.end_date}
+          autoRenew={agreement.auto_renew}
+          companyName={org?.name ?? "Your Service Provider"}
+          customerName=""
+          serviceAddress={null}
+          poolEntries={[]}
+          isAmendment
+          amendmentChangeSummary={amendment.change_summary ?? ""}
+          amendmentVersionNumber={amendment.version_number}
+        />
+      </PageShell>
+    )
+  }
+
   if (agreement.status === "active") {
     return (
       <PageShell>
