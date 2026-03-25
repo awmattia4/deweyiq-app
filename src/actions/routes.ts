@@ -481,3 +481,56 @@ export async function getRouteAreaCoordinates(
     return null
   }
 }
+
+// ─── Crew route ────────────────────────────────────────────────────────────────
+
+export interface CrewMemberRoute {
+  techId: string
+  techName: string
+  stops: RouteStop[]
+}
+
+/**
+ * getCrewRoute — Fetches route stops for crewmates on the same truck.
+ *
+ * Security: Uses RLS token from the authenticated user. Only fetches stops
+ * for techs that are verified to be on the same truck via tech_truck_assignments.
+ * A tech can ONLY see routes of techs on their own truck — not arbitrary techs.
+ *
+ * Returns null if the tech is not assigned to any truck or has no crewmates.
+ */
+export async function getCrewRoute(): Promise<CrewMemberRoute[] | null> {
+  const token = await getRlsToken()
+  if (!token) return null
+
+  const orgId = token.org_id as string
+  const userId = token.sub as string
+  if (!orgId || !userId) return null
+
+  try {
+    const { getTruckInfoForTech } = await import("@/actions/trucks")
+    const truckInfo = await getTruckInfoForTech(userId, orgId)
+    if (!truckInfo || truckInfo.coTechs.length === 0) return null
+
+    const today = toLocalDateString()
+
+    // Fetch each crewmate's route in parallel
+    const crewRoutes = await Promise.all(
+      truckInfo.coTechs.map(async (coTech): Promise<CrewMemberRoute> => {
+        const stops = await fetchStopsForTech(token, orgId, coTech.id, today)
+        return {
+          techId: coTech.id,
+          techName: coTech.fullName,
+          stops,
+        }
+      })
+    )
+
+    // Only return crewmates who actually have stops today
+    const withStops = crewRoutes.filter((cr) => cr.stops.length > 0)
+    return withStops.length > 0 ? withStops : null
+  } catch (error) {
+    console.error("[getCrewRoute] Error:", error)
+    return null
+  }
+}

@@ -2,12 +2,14 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { CalendarDaysIcon, MapIcon } from "lucide-react"
 import { getCurrentUser } from "@/actions/auth"
-import { getTodayStops, getRouteStartedStatus, getRouteAreaCoordinates } from "@/actions/routes"
+import { getTodayStops, getRouteStartedStatus, getRouteAreaCoordinates, getCrewRoute } from "@/actions/routes"
+import type { CrewMemberRoute } from "@/actions/routes"
 import { getTimeTrackingEnabled } from "@/actions/time-tracking"
 import { getPredictiveAlertsForPools } from "@/actions/alerts"
 import { fetchWeatherForecast, classifyWeatherDay } from "@/lib/weather/open-meteo"
 import type { WeatherType } from "@/lib/weather/open-meteo"
 import { StopList } from "@/components/field/stop-list"
+import { CrewRouteView } from "@/components/field/crew-route-view"
 import type { StopPredictiveAlert } from "@/components/field/stop-card"
 import { RouteProgress } from "@/components/field/route-progress"
 import { GpsBroadcaster } from "@/components/field/gps-broadcaster"
@@ -73,7 +75,7 @@ export default async function RoutesPage() {
   // Also fetch project data for field users (tech/owner only)
   const todayDateString = toLocalDateString(new Date())
 
-  const [stops, routeAlreadyStarted, timeTrackingEnabled, techProjectsResult, briefingResult, prepDataResult] = await Promise.all([
+  const [stops, routeAlreadyStarted, timeTrackingEnabled, techProjectsResult, briefingResult, prepDataResult, crewRouteResult] = await Promise.all([
     getTodayStops(),
     user.role === "tech" ? getRouteStartedStatus() : Promise.resolve(false),
     isFieldUser ? getTimeTrackingEnabled() : Promise.resolve(false),
@@ -82,6 +84,8 @@ export default async function RoutesPage() {
     isFieldUser ? getTechProjectBriefing() : Promise.resolve({ todayPhases: [], materialsNeeded: [], subsOnSite: [], upcomingInspections: [] } as ProjectBriefingData),
     // Prep tab data — only for field users with an ID
     isFieldUser ? getWhatToBring(user.id, todayDateString).catch(() => null) : Promise.resolve(null),
+    // Crew route — shows crewmate's stops if tech shares a truck
+    isFieldUser ? getCrewRoute().catch(() => null) : Promise.resolve(null),
   ])
 
   // Normalize project data (handle error gracefully — don't break the page)
@@ -93,6 +97,17 @@ export default async function RoutesPage() {
     : briefingResult
 
   const prepData: WhatToBringResult | null = prepDataResult
+  const crewRoutes: CrewMemberRoute[] | null = crewRouteResult ?? null
+
+  // Get truck name for crew display
+  let crewTruckName = "Shared Truck"
+  if (crewRoutes && crewRoutes.length > 0) {
+    try {
+      const { getTruckInfoForTech } = await import("@/actions/trucks")
+      const truckInfo = await getTruckInfoForTech(user.id, user.org_id)
+      if (truckInfo) crewTruckName = truckInfo.truckName
+    } catch { /* non-blocking */ }
+  }
 
   const todayLabel = todayDateString
 
@@ -164,6 +179,11 @@ export default async function RoutesPage() {
 
       {/* ── Stop list ────────────────────────────────────────────────────── */}
       <StopList initialStops={stops} weather={todayWeather} predictiveAlerts={predictiveAlerts} disableReorder={user.role !== "tech"} />
+
+      {/* ── Crew route (shared truck) ────────────────────────────────────── */}
+      {crewRoutes && crewRoutes.length > 0 && (
+        <CrewRouteView crewRoutes={crewRoutes} truckName={crewTruckName} />
+      )}
 
       {/* ── Tech context footer ──────────────────────────────────────────── */}
       {user.role === "tech" && (

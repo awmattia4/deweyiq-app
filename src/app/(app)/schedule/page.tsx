@@ -147,9 +147,32 @@ export default async function SchedulePage() {
       }
 
       // Tech list for route builder tabs: include tech + owner roles
+      // Fetch truck assignments to show truck context on each tech tab
+      let truckAssignmentMap = new Map<string, string>()
+      try {
+        const { getTrucks } = await import("@/actions/trucks")
+        const trucksResult = await getTrucks()
+        if (trucksResult.success) {
+          for (const truck of trucksResult.trucks) {
+            if (!truck.is_active) continue
+            for (const tech of truck.assignedTechs) {
+              truckAssignmentMap.set(tech.id, truck.name)
+            }
+          }
+        }
+      } catch { /* non-blocking */ }
+
       techList = techRows
         .filter((p) => p.role === "tech" || p.role === "owner")
-        .map((p) => ({ id: p.id, name: p.full_name ?? "Unknown Tech" }))
+        .map((p) => {
+          const truckName = truckAssignmentMap.get(p.id)
+          return {
+            id: p.id,
+            name: truckName
+              ? `${p.full_name ?? "Unknown Tech"} · ${truckName}`
+              : (p.full_name ?? "Unknown Tech"),
+          }
+        })
     }
   } catch (err) {
     console.error("[SchedulePage] Failed to fetch selector data:", err)
