@@ -598,36 +598,36 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
         <Tabs defaultValue="chemistry" className="flex flex-col flex-1">
           {/* Tab list — horizontally scrollable on narrow viewports */}
           {/* Tab list — each trigger meets 44px min-height (FIELD-11) */}
-          <TabsList variant="line" className="w-full grid grid-cols-4 rounded-none border-b border-border/60 bg-transparent h-auto px-0 py-0 gap-0 shrink-0">
+          <div className="w-full grid grid-cols-4 border-b border-border/60 shrink-0" role="tablist">
             <TabsTrigger
               value="chemistry"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
+              className="h-auto! rounded-none! border-none! shadow-none! bg-transparent! dark:bg-transparent! dark:border-none! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2! data-[state=active]:border-primary! data-[state=active]:-mb-px cursor-pointer"
             >
               <FlaskConicalIcon className="h-4 w-4 shrink-0" />
               Chem
             </TabsTrigger>
             <TabsTrigger
               value="tasks"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
+              className="h-auto! rounded-none! border-none! shadow-none! bg-transparent! dark:bg-transparent! dark:border-none! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2! data-[state=active]:border-primary! data-[state=active]:-mb-px cursor-pointer"
             >
               <ClipboardListIcon className="h-4 w-4 shrink-0" />
               Tasks
             </TabsTrigger>
             <TabsTrigger
               value="photos"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
+              className="h-auto! rounded-none! border-none! shadow-none! bg-transparent! dark:bg-transparent! dark:border-none! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2! data-[state=active]:border-primary! data-[state=active]:-mb-px cursor-pointer"
             >
               <CameraIcon className="h-4 w-4 shrink-0" />
               Photos
             </TabsTrigger>
             <TabsTrigger
               value="notes"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
+              className="h-auto! rounded-none! border-none! shadow-none! bg-transparent! dark:bg-transparent! dark:border-none! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground data-[state=active]:border-b-2! data-[state=active]:border-primary! data-[state=active]:-mb-px cursor-pointer"
             >
               <FileTextIcon className="h-4 w-4 shrink-0" />
               Notes
             </TabsTrigger>
-          </TabsList>
+          </div>
 
           {/* ── Chemistry tab ─────────────────────────────────────────────── */}
           {/* Fade transition on tab switch (150ms) */}
