@@ -373,24 +373,26 @@ export async function decrementTruckInventoryFromDosing(
       )
       if (!inventoryItem) continue
 
-      const currentQty = parseFloat(inventoryItem.quantity)
       const minThreshold = parseFloat(inventoryItem.min_threshold)
 
       // Convert dosing amount to inventory unit if needed
       const convertedAmount = convertUnits(dosing.amount, dosing.unit, inventoryItem.unit)
 
-      // Calculate new quantity — clamp to 0
-      const newQty = Math.max(0, currentQty - convertedAmount)
-      const actualDeducted = currentQty - newQty  // may be less than convertedAmount if clamped
-
-      // Update inventory quantity
-      await adminDb
+      // Atomic decrement — prevents lost updates when two techs on the same
+      // truck complete stops simultaneously and both decrement the same chemical.
+      // Uses SQL GREATEST(0, quantity - amount) instead of read-then-write.
+      const [updated] = await adminDb
         .update(truckInventory)
         .set({
-          quantity: String(newQty),
+          quantity: sql`GREATEST(0, ${truckInventory.quantity}::numeric - ${String(convertedAmount)}::numeric)::text`,
           updated_at: now,
         })
         .where(eq(truckInventory.id, inventoryItem.id))
+        .returning({ quantity: truckInventory.quantity })
+
+      const newQty = parseFloat(updated?.quantity ?? "0")
+      const currentQty = newQty + convertedAmount // approximate pre-decrement value
+      const actualDeducted = Math.min(convertedAmount, parseFloat(inventoryItem.quantity))
 
       // Log the auto-decrement
       await adminDb.insert(truckInventoryLog).values({
@@ -398,7 +400,7 @@ export async function decrementTruckInventoryFromDosing(
         truck_inventory_item_id: inventoryItem.id,
         tech_id: techId,
         change_type: "auto_decrement",
-        quantity_before: String(currentQty),
+        quantity_before: String(parseFloat(inventoryItem.quantity)),
         quantity_change: String(-actualDeducted),
         quantity_after: String(newQty),
         source_type: "service_visit",
