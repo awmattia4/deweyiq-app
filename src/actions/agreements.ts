@@ -1678,6 +1678,434 @@ export async function renewAgreement(
 }
 
 // ---------------------------------------------------------------------------
+// getAgreementCompliance
+// ---------------------------------------------------------------------------
+
+export interface PoolComplianceResult {
+  pool_id: string
+  pool_name: string
+  entry_id: string
+  frequency: string
+  custom_interval_days: number | null
+  expected_stops: number
+  actual_stops: number
+  frequency_status: "compliant" | "warning" | "breach"
+  billing_status: "compliant" | "mismatch" | "unchecked"
+  details: string
+}
+
+/**
+ * Computes compliance for a single active agreement over a rolling 30-day window.
+ *
+ * Checks:
+ * 1. Service frequency: counts completed route_stops vs expected based on agreement frequency
+ * 2. Billing: for flat_monthly — compares agreement monthly_amount vs invoiced total
+ *
+ * Only checks status = 'active' agreements (avoids false positives during pauses).
+ *
+ * Uses withRls() — called from user-facing pages.
+ */
+export async function getAgreementCompliance(
+  agreementId: string
+): Promise<{
+  success: boolean
+  data?: PoolComplianceResult[]
+  error?: string
+}> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    const data = await withRls(token, async (db) => {
+      // Verify agreement is active
+      const agreement = await db.query.serviceAgreements.findFirst({
+        where: and(
+          eq(serviceAgreements.id, agreementId),
+          eq(serviceAgreements.status, "active")
+        ),
+        columns: { id: true, customer_id: true, status: true },
+      })
+
+      if (!agreement) return []
+
+      // Fetch pool entries for this agreement
+      const entries = await db
+        .select({
+          id: agreementPoolEntries.id,
+          pool_id: agreementPoolEntries.pool_id,
+          pool_name: pools.name,
+          frequency: agreementPoolEntries.frequency,
+          custom_interval_days: agreementPoolEntries.custom_interval_days,
+          pricing_model: agreementPoolEntries.pricing_model,
+          monthly_amount: agreementPoolEntries.monthly_amount,
+          per_visit_amount: agreementPoolEntries.per_visit_amount,
+        })
+        .from(agreementPoolEntries)
+        .innerJoin(pools, eq(pools.id, agreementPoolEntries.pool_id))
+        .where(eq(agreementPoolEntries.agreement_id, agreementId))
+
+      if (entries.length === 0) return []
+
+      // Rolling 30-day window
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const windowStart = toLocalDateString(thirtyDaysAgo)
+      const windowEnd = toLocalDateString(now)
+
+      // Count completed stops per pool over the last 30 days
+      // "complete" status = stop was finished; exclude "skipped" and "holiday"
+      const stopCountRows = await db
+        .select({
+          pool_id: routeStops.pool_id,
+          completed_count: count(routeStops.id),
+        })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.status, "complete"),
+            lte(routeStops.scheduled_date, windowEnd),
+            sql`${routeStops.scheduled_date} >= ${windowStart}`,
+            inArray(
+              routeStops.pool_id,
+              entries.map((e) => e.pool_id)
+            )
+          )
+        )
+        .groupBy(routeStops.pool_id)
+
+      const stopCountMap = new Map(
+        stopCountRows.map((r) => [r.pool_id, Number(r.completed_count)])
+      )
+
+      // Billing compliance: sum invoices for this customer in the last 30 days
+      const invoiceRows = await db
+        .select({
+          total_sum: sql<string>`SUM(${invoices.total})`,
+        })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.customer_id, agreement.customer_id),
+            inArray(invoices.status, ["sent", "paid"]),
+            sql`${invoices.created_at} >= ${thirtyDaysAgo.toISOString()}`
+          )
+        )
+
+      const totalBilled = parseFloat(invoiceRows[0]?.total_sum ?? "0") || 0
+
+      // Build compliance results per pool entry
+      const results: PoolComplianceResult[] = entries.map((entry) => {
+        // Expected stops over 30 days based on frequency
+        let expectedStops: number
+        if (entry.frequency === "weekly") {
+          expectedStops = 4
+        } else if (entry.frequency === "biweekly") {
+          expectedStops = 2
+        } else if (entry.frequency === "monthly") {
+          expectedStops = 1
+        } else if (entry.frequency === "custom" && entry.custom_interval_days) {
+          expectedStops = Math.floor(30 / entry.custom_interval_days)
+        } else {
+          expectedStops = 1
+        }
+
+        const actualStops = stopCountMap.get(entry.pool_id) ?? 0
+        const deficit = expectedStops - actualStops
+
+        let frequencyStatus: "compliant" | "warning" | "breach"
+        let details: string
+
+        if (deficit <= 1) {
+          // Allow 1 miss buffer
+          frequencyStatus = "compliant"
+          details = `${actualStops}/${expectedStops} stops completed in last 30 days`
+        } else if (deficit === 2) {
+          frequencyStatus = "warning"
+          details = `${actualStops}/${expectedStops} stops completed — ${deficit} behind schedule`
+        } else {
+          frequencyStatus = "breach"
+          details = `${actualStops}/${expectedStops} stops completed — ${deficit} stops missed (critical breach)`
+        }
+
+        // Billing compliance (flat_monthly only — simplest to check)
+        let billingStatus: "compliant" | "mismatch" | "unchecked" = "unchecked"
+        if (entry.pricing_model === "flat_monthly" && entry.monthly_amount) {
+          const expectedMonthly = parseFloat(entry.monthly_amount)
+          // totalBilled is for the whole customer; per-pool check uses the entry amount
+          // We flag if billed amount is off by more than $1
+          const billingDiff = Math.abs(totalBilled - expectedMonthly)
+          if (totalBilled === 0) {
+            billingStatus = "unchecked" // No invoices in window — can't determine
+          } else if (billingDiff > 1) {
+            billingStatus = "mismatch"
+            details +=
+              `. Billing: expected $${expectedMonthly.toFixed(2)}/mo, found $${totalBilled.toFixed(2)} invoiced`
+          } else {
+            billingStatus = "compliant"
+          }
+        } else if (entry.pricing_model === "per_visit") {
+          const perVisit = parseFloat(entry.per_visit_amount ?? "0")
+          const expectedTotal = actualStops * perVisit
+          if (totalBilled > 0 && perVisit > 0) {
+            const billingDiff = Math.abs(totalBilled - expectedTotal)
+            if (billingDiff > 1) {
+              billingStatus = "mismatch"
+              details += `. Billing: expected $${expectedTotal.toFixed(2)} (${actualStops} visits × $${perVisit.toFixed(2)}), found $${totalBilled.toFixed(2)} invoiced`
+            } else {
+              billingStatus = "compliant"
+            }
+          }
+        }
+
+        return {
+          pool_id: entry.pool_id,
+          pool_name: entry.pool_name,
+          entry_id: entry.id,
+          frequency: entry.frequency,
+          custom_interval_days: entry.custom_interval_days,
+          expected_stops: expectedStops,
+          actual_stops: actualStops,
+          frequency_status: frequencyStatus,
+          billing_status: billingStatus,
+          details,
+        }
+      })
+
+      return results
+    })
+
+    return { success: true, data }
+  } catch (err) {
+    console.error("[getAgreementCompliance]", err)
+    return { success: false, error: "Failed to compute compliance" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getAgreementsWithCompliance (bulk)
+// ---------------------------------------------------------------------------
+
+export interface AgreementComplianceSummary {
+  agreement_id: string
+  overall_status: "compliant" | "warning" | "breach"
+  breach_count: number
+  warning_count: number
+  pool_results: PoolComplianceResult[]
+}
+
+/**
+ * Bulk compliance check: computes compliance for ALL active agreements in the org.
+ *
+ * Uses a single pass with LEFT JOINs and GROUP BY to avoid N+1 queries.
+ * Returns a map from agreement_id → compliance summary.
+ *
+ * Used by the agreement manager list view.
+ */
+export async function getAgreementsWithCompliance(): Promise<{
+  success: boolean
+  data?: Map<string, AgreementComplianceSummary>
+  error?: string
+}> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    const data = await withRls(token, async (db) => {
+      // Fetch all active agreements
+      const activeAgreements = await db.query.serviceAgreements.findMany({
+        where: eq(serviceAgreements.status, "active"),
+        columns: { id: true, customer_id: true },
+      })
+
+      if (activeAgreements.length === 0) return new Map<string, AgreementComplianceSummary>()
+
+      // Get compliance for each active agreement
+      // We batch the inner queries rather than doing N+1 calls
+      const agreementIds = activeAgreements.map((a) => a.id)
+
+      // Fetch all pool entries for active agreements in one query
+      const allEntries = await db
+        .select({
+          agreement_id: agreementPoolEntries.agreement_id,
+          id: agreementPoolEntries.id,
+          pool_id: agreementPoolEntries.pool_id,
+          pool_name: pools.name,
+          frequency: agreementPoolEntries.frequency,
+          custom_interval_days: agreementPoolEntries.custom_interval_days,
+          pricing_model: agreementPoolEntries.pricing_model,
+          monthly_amount: agreementPoolEntries.monthly_amount,
+          per_visit_amount: agreementPoolEntries.per_visit_amount,
+        })
+        .from(agreementPoolEntries)
+        .innerJoin(pools, eq(pools.id, agreementPoolEntries.pool_id))
+        .where(inArray(agreementPoolEntries.agreement_id, agreementIds))
+
+      if (allEntries.length === 0) return new Map<string, AgreementComplianceSummary>()
+
+      const poolIds = [...new Set(allEntries.map((e) => e.pool_id))]
+
+      // Rolling 30-day window
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const windowStart = toLocalDateString(thirtyDaysAgo)
+      const windowEnd = toLocalDateString(now)
+
+      // Bulk stop counts per pool over last 30 days
+      const stopCountRows = await db
+        .select({
+          pool_id: routeStops.pool_id,
+          completed_count: count(routeStops.id),
+        })
+        .from(routeStops)
+        .where(
+          and(
+            eq(routeStops.status, "complete"),
+            lte(routeStops.scheduled_date, windowEnd),
+            sql`${routeStops.scheduled_date} >= ${windowStart}`,
+            inArray(routeStops.pool_id, poolIds)
+          )
+        )
+        .groupBy(routeStops.pool_id)
+
+      const stopCountMap = new Map(
+        stopCountRows.map((r) => [r.pool_id, Number(r.completed_count)])
+      )
+
+      // Bulk invoice totals per customer over last 30 days
+      const customerIds = [...new Set(activeAgreements.map((a) => a.customer_id))]
+      const invoiceRows = await db
+        .select({
+          customer_id: invoices.customer_id,
+          total_sum: sql<string>`SUM(${invoices.total})`,
+        })
+        .from(invoices)
+        .where(
+          and(
+            inArray(invoices.customer_id, customerIds),
+            inArray(invoices.status, ["sent", "paid"]),
+            sql`${invoices.created_at} >= ${thirtyDaysAgo.toISOString()}`
+          )
+        )
+        .groupBy(invoices.customer_id)
+
+      const billedMap = new Map(
+        invoiceRows.map((r) => [r.customer_id, parseFloat(r.total_sum ?? "0") || 0])
+      )
+
+      // Group entries by agreement
+      const entriesByAgreement = new Map<string, typeof allEntries>()
+      for (const entry of allEntries) {
+        const list = entriesByAgreement.get(entry.agreement_id) ?? []
+        list.push(entry)
+        entriesByAgreement.set(entry.agreement_id, list)
+      }
+
+      // Build compliance map
+      const complianceMap = new Map<string, AgreementComplianceSummary>()
+
+      for (const agreement of activeAgreements) {
+        const entries = entriesByAgreement.get(agreement.id) ?? []
+        const totalBilled = billedMap.get(agreement.customer_id) ?? 0
+        const poolResults: PoolComplianceResult[] = []
+
+        for (const entry of entries) {
+          let expectedStops: number
+          if (entry.frequency === "weekly") {
+            expectedStops = 4
+          } else if (entry.frequency === "biweekly") {
+            expectedStops = 2
+          } else if (entry.frequency === "monthly") {
+            expectedStops = 1
+          } else if (entry.frequency === "custom" && entry.custom_interval_days) {
+            expectedStops = Math.floor(30 / entry.custom_interval_days)
+          } else {
+            expectedStops = 1
+          }
+
+          const actualStops = stopCountMap.get(entry.pool_id) ?? 0
+          const deficit = expectedStops - actualStops
+
+          let frequencyStatus: "compliant" | "warning" | "breach"
+          let details: string
+
+          if (deficit <= 1) {
+            frequencyStatus = "compliant"
+            details = `${actualStops}/${expectedStops} stops in last 30 days`
+          } else if (deficit === 2) {
+            frequencyStatus = "warning"
+            details = `${actualStops}/${expectedStops} stops — ${deficit} behind`
+          } else {
+            frequencyStatus = "breach"
+            details = `${actualStops}/${expectedStops} stops — ${deficit} missed`
+          }
+
+          let billingStatus: "compliant" | "mismatch" | "unchecked" = "unchecked"
+          if (entry.pricing_model === "flat_monthly" && entry.monthly_amount) {
+            const expectedMonthly = parseFloat(entry.monthly_amount)
+            if (totalBilled > 0) {
+              billingStatus =
+                Math.abs(totalBilled - expectedMonthly) > 1 ? "mismatch" : "compliant"
+            }
+          } else if (entry.pricing_model === "per_visit" && entry.per_visit_amount) {
+            const expectedTotal = actualStops * parseFloat(entry.per_visit_amount)
+            if (totalBilled > 0 && expectedTotal > 0) {
+              billingStatus =
+                Math.abs(totalBilled - expectedTotal) > 1 ? "mismatch" : "compliant"
+            }
+          }
+
+          poolResults.push({
+            pool_id: entry.pool_id,
+            pool_name: entry.pool_name,
+            entry_id: entry.id,
+            frequency: entry.frequency,
+            custom_interval_days: entry.custom_interval_days,
+            expected_stops: expectedStops,
+            actual_stops: actualStops,
+            frequency_status: frequencyStatus,
+            billing_status: billingStatus,
+            details,
+          })
+        }
+
+        // Overall status: worst of all pool results
+        const breachCount = poolResults.filter((r) => r.frequency_status === "breach").length
+        const warningCount = poolResults.filter((r) => r.frequency_status === "warning").length
+        const billingMismatches = poolResults.filter(
+          (r) => r.billing_status === "mismatch"
+        ).length
+
+        let overallStatus: "compliant" | "warning" | "breach"
+        if (breachCount > 0 || billingMismatches > 0) {
+          overallStatus = "breach"
+        } else if (warningCount > 0) {
+          overallStatus = "warning"
+        } else {
+          overallStatus = "compliant"
+        }
+
+        complianceMap.set(agreement.id, {
+          agreement_id: agreement.id,
+          overall_status: overallStatus,
+          breach_count: breachCount + billingMismatches,
+          warning_count: warningCount,
+          pool_results: poolResults,
+        })
+      }
+
+      return complianceMap
+    })
+
+    return { success: true, data }
+  } catch (err) {
+    console.error("[getAgreementsWithCompliance]", err)
+    return { success: false, error: "Failed to compute bulk compliance" }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // runAgreementRenewalScan
 // ---------------------------------------------------------------------------
 

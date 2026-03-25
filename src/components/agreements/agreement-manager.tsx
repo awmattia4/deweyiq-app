@@ -26,6 +26,8 @@ type AgreementStatus =
   | "cancelled"
   | "declined"
 
+type ComplianceStatus = "compliant" | "warning" | "breach"
+
 interface PoolEntry {
   id: string
   pricing_model: string
@@ -57,9 +59,17 @@ interface CustomerOption {
   full_name: string
 }
 
+interface ComplianceSummary {
+  overall_status: string
+  breach_count: number
+  warning_count: number
+}
+
 interface AgreementManagerProps {
   agreements: Agreement[]
   customers: CustomerOption[]
+  /** Map of agreement_id → compliance summary (active agreements only) */
+  complianceData?: Record<string, ComplianceSummary>
 }
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
@@ -151,18 +161,45 @@ const ALL_STATUSES: AgreementStatus[] = [
   "declined",
 ]
 
-export function AgreementManager({ agreements, customers }: AgreementManagerProps) {
+// ─── Compliance helpers ───────────────────────────────────────────────────────
+
+const COMPLIANCE_BADGE_CLASS: Record<ComplianceStatus, string> = {
+  compliant: "bg-green-500/15 text-green-700 dark:text-green-400",
+  warning: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+  breach: "bg-red-500/15 text-red-700 dark:text-red-400",
+}
+
+const COMPLIANCE_LABELS: Record<ComplianceStatus, string> = {
+  compliant: "Compliant",
+  warning: "Warning",
+  breach: "Breach",
+}
+
+export function AgreementManager({ agreements, customers, complianceData = {} }: AgreementManagerProps) {
   const router = useRouter()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | AgreementStatus>("all")
   const [customerFilter, setCustomerFilter] = useState<string>("all")
+  const [complianceFilter, setComplianceFilter] = useState<"all" | "issues">("all")
+
+  // Count agreements with compliance issues (warnings or breaches)
+  const complianceIssueCount = useMemo(() => {
+    return agreements.filter((a) => {
+      const c = complianceData[a.id]
+      return c && (c.overall_status === "warning" || c.overall_status === "breach")
+    }).length
+  }, [agreements, complianceData])
 
   const filtered = useMemo(() => {
     return agreements
       .filter((a) => {
         if (statusFilter !== "all" && a.status !== statusFilter) return false
         if (customerFilter !== "all" && a.customer.id !== customerFilter) return false
+        if (complianceFilter === "issues") {
+          const c = complianceData[a.id]
+          if (!c || c.overall_status === "compliant") return false
+        }
         if (searchQuery) {
           const q = searchQuery.toLowerCase()
           const matchesNumber = a.agreement_number.toLowerCase().includes(q)
@@ -179,10 +216,37 @@ export function AgreementManager({ agreements, customers }: AgreementManagerProp
         const bDate = new Date(b.created_at ?? 0).getTime()
         return bDate - aDate
       })
-  }, [agreements, statusFilter, customerFilter, searchQuery])
+  }, [agreements, statusFilter, customerFilter, searchQuery, complianceFilter, complianceData])
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ── Compliance summary bar ─────────────────────────────────────── */}
+      {complianceIssueCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-2.5 text-sm">
+          <span className="text-yellow-700 dark:text-yellow-400 font-medium">
+            {complianceIssueCount} {complianceIssueCount === 1 ? "agreement" : "agreements"} with compliance issues
+          </span>
+          {complianceFilter !== "issues" && (
+            <button
+              type="button"
+              onClick={() => setComplianceFilter("issues")}
+              className="ml-auto text-xs text-yellow-700 dark:text-yellow-400 underline hover:no-underline"
+            >
+              Show only
+            </button>
+          )}
+          {complianceFilter === "issues" && (
+            <button
+              type="button"
+              onClick={() => setComplianceFilter("all")}
+              className="ml-auto text-xs text-muted-foreground underline hover:no-underline"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Action bar ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
@@ -231,6 +295,22 @@ export function AgreementManager({ agreements, customers }: AgreementManagerProp
               </SelectContent>
             </Select>
           )}
+
+          {/* Compliance filter */}
+          {Object.keys(complianceData).length > 0 && (
+            <Select
+              value={complianceFilter}
+              onValueChange={(v) => setComplianceFilter(v as "all" | "issues")}
+            >
+              <SelectTrigger className="sm:w-44">
+                <SelectValue placeholder="All agreements" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All agreements</SelectItem>
+                <SelectItem value="issues">Compliance issues only</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* New Agreement button */}
@@ -259,6 +339,8 @@ export function AgreementManager({ agreements, customers }: AgreementManagerProp
             const poolCount = agreement.poolEntries.length
             const expiringSoon =
               agreement.status === "active" && isExpiringSoon(agreement.end_date)
+            const compliance = complianceData[agreement.id]
+            const complianceStatus = compliance?.overall_status as ComplianceStatus | undefined
 
             // Determine most relevant date to display
             let dateLabel = ""
@@ -305,6 +387,14 @@ export function AgreementManager({ agreements, customers }: AgreementManagerProp
                       variant="outline"
                     >
                       Expires soon
+                    </Badge>
+                  )}
+                  {complianceStatus && complianceStatus !== "compliant" && (
+                    <Badge
+                      className={`text-xs font-medium ${COMPLIANCE_BADGE_CLASS[complianceStatus]}`}
+                      variant="outline"
+                    >
+                      {COMPLIANCE_LABELS[complianceStatus]}
                     </Badge>
                   )}
                 </div>

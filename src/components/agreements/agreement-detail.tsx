@@ -25,6 +25,7 @@ import {
   renewAgreement,
   amendAgreement,
   type AmendmentChanges,
+  type PoolComplianceResult,
 } from "@/actions/agreements"
 import { AmendmentDialog } from "@/components/agreements/amendment-dialog"
 
@@ -114,6 +115,8 @@ interface AgreementDetailProps {
   isOwner: boolean
   /** Notice period in days from org_settings — 0 = immediate cancellation */
   noticePeriodDays?: number
+  /** Compliance results for active agreements — per pool entry frequency/billing status */
+  complianceResults?: PoolComplianceResult[]
 }
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -274,7 +277,7 @@ function ExpandableText({ title, content }: { title: string; content: string | n
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AgreementDetail({ agreement, isOwner, noticePeriodDays = 30 }: AgreementDetailProps) {
+export function AgreementDetail({ agreement, isOwner, noticePeriodDays = 30, complianceResults }: AgreementDetailProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [localAgreement, setLocalAgreement] = useState(agreement)
@@ -571,6 +574,73 @@ export function AgreementDetail({ agreement, isOwner, noticePeriodDays = 30 }: A
               )}
             </CardContent>
           </Card>
+
+          {/* Compliance (active agreements only) */}
+          {status === "active" && complianceResults && complianceResults.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold">
+                  Compliance
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    — last 30 days
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {complianceResults.map((result, idx) => {
+                  const freqColor =
+                    result.frequency_status === "breach"
+                      ? "text-red-600 dark:text-red-400"
+                      : result.frequency_status === "warning"
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-green-600 dark:text-green-400"
+                  const billingColor =
+                    result.billing_status === "mismatch"
+                      ? "text-red-600 dark:text-red-400"
+                      : result.billing_status === "compliant"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-muted-foreground"
+
+                  return (
+                    <div key={result.pool_id}>
+                      {idx > 0 && <Separator className="mb-4" />}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">{result.pool_name}</p>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p className="text-muted-foreground mb-0.5">Service frequency</p>
+                            <p className={`font-medium ${freqColor}`}>
+                              {result.actual_stops}/{result.expected_stops} stops
+                              {result.frequency_status === "compliant"
+                                ? " — on track"
+                                : result.frequency_status === "warning"
+                                  ? " — behind schedule"
+                                  : " — critical breach"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground mb-0.5">Billing</p>
+                            <p className={`font-medium ${billingColor}`}>
+                              {result.billing_status === "compliant"
+                                ? "Matches agreement"
+                                : result.billing_status === "mismatch"
+                                  ? "Billing mismatch"
+                                  : "No invoices yet"}
+                            </p>
+                          </div>
+                        </div>
+                        {(result.frequency_status === "breach" || result.billing_status === "mismatch") && (
+                          <p className="text-xs text-muted-foreground bg-destructive/5 border border-destructive/20 rounded p-2">
+                            {result.details}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Terms & Conditions */}
           {(localAgreement.terms_and_conditions ||
