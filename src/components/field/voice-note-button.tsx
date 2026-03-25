@@ -454,17 +454,17 @@ export function VoiceNoteButton({
         {/* State label */}
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">
-            {recordingState === "idle" && "Voice Note"}
+            {recordingState === "idle" && "Voice Entry"}
             {recordingState === "recording" && "Recording..."}
             {recordingState === "processing" && "Extracting data..."}
             {recordingState === "done" && "Done — review below"}
             {recordingState === "error" && "Recording failed"}
           </span>
           <span className="text-xs text-muted-foreground">
-            {recordingState === "idle" && "Tap to speak observations"}
+            {recordingState === "idle" && "Auto-fills chemistry, tasks & notes"}
             {recordingState === "recording" && "Tap again to stop"}
             {recordingState === "processing" && "Claude is analyzing your notes"}
-            {recordingState === "done" && "Tap Apply to fill in the form"}
+            {recordingState === "done" && "Apply to fill chemistry, tasks & notes"}
             {recordingState === "error" && (errorMessage ?? "Tap to try again")}
           </span>
         </div>
