@@ -803,113 +803,115 @@ function InventoryRow({ item, onUpdate, onDelete, onTransfer, onReturnToWarehous
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+        "flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 transition-colors",
         belowThreshold
           ? "border-amber-500/40 bg-amber-500/5"
           : "border-border bg-card"
       )}
     >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium truncate">{item.item_name}</span>
-          {belowThreshold && (
-            <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
-              Low
-            </Badge>
+      {/* Row 1: full item name */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">{item.item_name}</span>
+        {belowThreshold && (
+          <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
+            Low
+          </Badge>
+        )}
+      </div>
+      {belowThreshold && parseFloat(item.min_threshold) > 0 && (
+        <p className="text-[11px] text-amber-400/80">
+          Threshold: {formatQuantity(item.min_threshold)} {item.unit}
+        </p>
+      )}
+
+      {/* Row 2: quantity + actions */}
+      <div className="flex items-center gap-2">
+        {/* Quantity input */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isEditing ? (
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={quantityStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (/^-?\d*\.?\d*$/.test(v)) setQuantityStr(v)
+              }}
+              onBlur={() => {
+                setIsEditing(false)
+                // Flush on blur as safety net (MEMORY.md pattern)
+                if (!quantityStr.endsWith(".") && !quantityStr.endsWith("-")) {
+                  flushQuantityUpdate(quantityStr)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setIsEditing(false)
+                  flushQuantityUpdate(quantityStr)
+                }
+              }}
+              className="w-20 h-8 text-right text-sm"
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="text-sm font-mono hover:text-primary transition-colors"
+              title="Click to edit quantity"
+            >
+              {quantityStr} {item.unit}
+            </button>
           )}
         </div>
-        {belowThreshold && parseFloat(item.min_threshold) > 0 && (
-          <p className="text-[11px] text-amber-400/80 mt-0.5">
-            Threshold: {formatQuantity(item.min_threshold)} {item.unit}
-          </p>
-        )}
-      </div>
 
-      {/* Quantity input */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {isEditing ? (
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={quantityStr}
-            onChange={(e) => {
-              const v = e.target.value
-              if (/^-?\d*\.?\d*$/.test(v)) setQuantityStr(v)
-            }}
-            onBlur={() => {
-              setIsEditing(false)
-              // Flush on blur as safety net (MEMORY.md pattern)
-              if (!quantityStr.endsWith(".") && !quantityStr.endsWith("-")) {
-                flushQuantityUpdate(quantityStr)
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setIsEditing(false)
-                flushQuantityUpdate(quantityStr)
-              }
-            }}
-            className="w-20 h-8 text-right text-sm"
-            autoFocus
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className="text-sm font-mono text-right w-16 hover:text-primary transition-colors"
-            title="Click to edit quantity"
-          >
-            {quantityStr} {item.unit}
-          </button>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-muted-foreground"
-          onClick={handleMarkUsed}
-          disabled={parseFloat(item.quantity) <= 0}
-        >
-          -{useAmount} {item.unit}
-        </Button>
-        {!isOfficeView && onReturnToWarehouse && (
+        {/* Actions */}
+        <div className="flex items-center gap-1 ml-auto shrink-0">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
-            onClick={() => onReturnToWarehouse(item)}
+            className="h-7 px-2 text-xs text-muted-foreground"
+            onClick={handleMarkUsed}
             disabled={parseFloat(item.quantity) <= 0}
           >
-            Return
+            -{useAmount} {item.unit}
           </Button>
-        )}
-        {isOfficeView && onTransfer && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
-            onClick={() => onTransfer(item)}
-          >
-            Transfer
-          </Button>
-        )}
-        {isOfficeView && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-            onClick={handleDelete}
-          >
-            Remove
-          </Button>
-        )}
+          {!isOfficeView && onReturnToWarehouse && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+              onClick={() => onReturnToWarehouse(item)}
+              disabled={parseFloat(item.quantity) <= 0}
+            >
+              Return
+            </Button>
+          )}
+          {isOfficeView && onTransfer && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground cursor-pointer"
+              onClick={() => onTransfer(item)}
+            >
+              Transfer
+            </Button>
+          )}
+          {isOfficeView && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={handleDelete}
+            >
+              Remove
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

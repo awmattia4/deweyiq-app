@@ -610,36 +610,36 @@ function WarehouseItemRow({ item, allTechs, onUpdate, onDelete }: WarehouseItemR
               : "border-border bg-card"
         )}
       >
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{item.item_name}</span>
-              {isEmpty && (
-                <Badge variant="outline" className="text-[10px] border-red-500/60 text-red-400 shrink-0">
-                  Out of Stock
-                </Badge>
-              )}
-              {!isEmpty && belowThreshold && (
-                <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
-                  Low
-                </Badge>
-              )}
-            </div>
-            {!isEmpty && belowThreshold && threshold > 0 && (
-              <p className="text-[11px] text-amber-400/80 mt-0.5">
-                Threshold: {formatQuantity(item.min_threshold)} {item.unit}
-              </p>
-            )}
-          </div>
+        {/* Row 1: full item name */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{item.item_name}</span>
+          {isEmpty && (
+            <Badge variant="outline" className="text-[10px] border-red-500/60 text-red-400 shrink-0">
+              Out of Stock
+            </Badge>
+          )}
+          {!isEmpty && belowThreshold && (
+            <Badge variant="outline" className="text-[10px] border-amber-500/60 text-amber-400 shrink-0">
+              Low
+            </Badge>
+          )}
+        </div>
+        {!isEmpty && belowThreshold && threshold > 0 && (
+          <p className="text-[11px] text-amber-400/80">
+            Threshold: {formatQuantity(item.min_threshold)} {item.unit}
+          </p>
+        )}
 
+        {/* Row 2: quantity + actions */}
+        <div className="flex items-center gap-2">
           <span className={cn(
-            "text-sm font-mono text-right shrink-0",
+            "text-sm font-mono shrink-0",
             isEmpty ? "text-red-400" : "text-muted-foreground"
           )}>
             {formatQuantity(item.quantity)} {item.unit}
           </span>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 ml-auto shrink-0">
             <Button
               type="button"
               variant="ghost"
