@@ -601,28 +601,28 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
           <TabsList variant="line" className="w-full grid grid-cols-4 rounded-none border-b border-border/60 bg-transparent h-auto px-0 py-0 gap-0 shrink-0">
             <TabsTrigger
               value="chemistry"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:bottom-0!"
+              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
             >
               <FlaskConicalIcon className="h-4 w-4 shrink-0" />
               Chem
             </TabsTrigger>
             <TabsTrigger
               value="tasks"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:bottom-0!"
+              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
             >
               <ClipboardListIcon className="h-4 w-4 shrink-0" />
               Tasks
             </TabsTrigger>
             <TabsTrigger
               value="photos"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:bottom-0!"
+              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
             >
               <CameraIcon className="h-4 w-4 shrink-0" />
               Photos
             </TabsTrigger>
             <TabsTrigger
               value="notes"
-              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:bottom-0!"
+              className="rounded-none border-none shadow-none! bg-transparent! min-h-[44px] py-2 text-xs data-[state=active]:text-foreground cursor-pointer after:-bottom-px!"
             >
               <FileTextIcon className="h-4 w-4 shrink-0" />
               Notes
