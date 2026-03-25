@@ -234,9 +234,6 @@ export function InventoryPageClient({
 
   function handleTechChange(techId: string) {
     setSelectedTechId(techId)
-    // Clear items immediately so remounted TruckInventoryView doesn't show stale data
-    // from the previous tech while the fetch is in progress
-    setInventoryItems([])
     startTransition(async () => {
       try {
         const items = await getTruckInventory(techId)
@@ -316,7 +313,6 @@ export function InventoryPageClient({
       <div>
         {activeTab === "inventory" && (
           <TruckInventoryView
-            key={selectedTechId}
             techId={selectedTechId}
             initialItems={inventoryItems}
             allTechs={allTechs}

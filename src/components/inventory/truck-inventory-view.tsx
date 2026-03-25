@@ -14,7 +14,7 @@
  * - Mark used (quick decrement)
  */
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { ScanBarcodeIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
@@ -932,6 +932,11 @@ export function TruckInventoryView({
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [transferItem, setTransferItem] = useState<TruckInventoryItem | null>(null)
   const [returnItem, setReturnItem] = useState<TruckInventoryItem | null>(null)
+
+  // Sync internal state when parent provides fresh items (tech switch)
+  useEffect(() => {
+    setItems(initialItems)
+  }, [initialItems])
 
   const groups = groupByCategory(items)
   const lowCount = items.filter(isBelowThreshold).length
