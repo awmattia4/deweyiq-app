@@ -598,33 +598,33 @@ export function StopWorkflow({ stopId, visitId, context }: StopWorkflowProps) {
         <Tabs defaultValue="chemistry" className="flex flex-col flex-1">
           {/* Tab list — horizontally scrollable on narrow viewports */}
           {/* Tab list — each trigger meets 44px min-height (FIELD-11) */}
-          <TabsList className="w-full overflow-x-auto justify-start rounded-none border-b border-border/60 bg-transparent h-auto px-4 py-0 gap-0 shrink-0">
+          <TabsList className="w-full grid grid-cols-4 rounded-none border-b border-border/60 bg-transparent h-auto px-0 py-0 gap-0 shrink-0">
             <TabsTrigger
               value="chemistry"
-              className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
+              className="flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
             >
-              <FlaskConicalIcon className="h-4 w-4" />
-              Chemistry
+              <FlaskConicalIcon className="h-4 w-4 shrink-0" />
+              Chem
             </TabsTrigger>
             <TabsTrigger
               value="tasks"
-              className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
+              className="flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
             >
-              <ClipboardListIcon className="h-4 w-4" />
+              <ClipboardListIcon className="h-4 w-4 shrink-0" />
               Tasks
             </TabsTrigger>
             <TabsTrigger
               value="photos"
-              className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
+              className="flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
             >
-              <CameraIcon className="h-4 w-4" />
+              <CameraIcon className="h-4 w-4 shrink-0" />
               Photos
             </TabsTrigger>
             <TabsTrigger
               value="notes"
-              className="flex items-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3 min-h-[44px] py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
+              className="flex items-center justify-center gap-1.5 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent min-h-[44px] py-2 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground cursor-pointer whitespace-nowrap transition-colors duration-150"
             >
-              <FileTextIcon className="h-4 w-4" />
+              <FileTextIcon className="h-4 w-4 shrink-0" />
               Notes
             </TabsTrigger>
           </TabsList>
