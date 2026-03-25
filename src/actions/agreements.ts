@@ -25,8 +25,11 @@ import {
   orgs,
   pools,
   scheduleRules,
+  profiles,
+  routeStops,
+  invoices,
 } from "@/lib/db/schema"
-import { eq, and, desc, inArray, sql, count } from "drizzle-orm"
+import { eq, and, desc, inArray, sql, count, lte, isNotNull } from "drizzle-orm"
 import { createElement } from "react"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { render as renderEmail } from "@react-email/render"
@@ -36,6 +39,7 @@ import { AgreementDocument } from "@/lib/pdf/agreement-pdf"
 import type { AgreementDocumentProps, AgreementPoolEntryPdfData } from "@/lib/pdf/agreement-pdf"
 import { AgreementEmail } from "@/lib/emails/agreement-email"
 import { AgreementAmendmentEmail } from "@/lib/emails/agreement-amendment-email"
+import { AgreementRenewalEmail } from "@/lib/emails/agreement-renewal-email"
 import { toLocalDateString } from "@/lib/date-utils"
 
 // ---------------------------------------------------------------------------
@@ -1674,81 +1678,412 @@ export async function renewAgreement(
 }
 
 // ---------------------------------------------------------------------------
+// runAgreementRenewalScan
+// ---------------------------------------------------------------------------
+
+/**
+ * Cron-only: scans ALL orgs for agreements approaching expiry and sends
+ * renewal reminder emails to office/owner users.
+ *
+ * Uses adminDb (no user session — called from cron route).
+ *
+ * Logic:
+ * 1. Load all active agreements with a non-null end_date
+ * 2. For each org, read agreement_renewal_lead_days (default [30, 7])
+ * 3. For each agreement: if days_until_expiry matches a lead day AND
+ *    renewal_reminder_sent_at is null or was set >24h ago → send reminder
+ * 4. Prevent duplicates: after sending, update renewal_reminder_sent_at
+ */
+export async function runAgreementRenewalScan(): Promise<{
+  success: boolean
+  remindersProcessed?: number
+  remindersSent?: number
+  error?: string
+}> {
+  try {
+    const todayStr = toLocalDateString()
+    const now = new Date()
+    const resendApiKey = process.env.RESEND_API_KEY
+    const isDev = process.env.NODE_ENV === "development"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
+
+    // 1. Fetch all active agreements with end_date (across ALL orgs via adminDb)
+    const activeAgreements = await adminDb
+      .select({
+        id: serviceAgreements.id,
+        org_id: serviceAgreements.org_id,
+        agreement_number: serviceAgreements.agreement_number,
+        customer_id: serviceAgreements.customer_id,
+        end_date: serviceAgreements.end_date,
+        auto_renew: serviceAgreements.auto_renew,
+        term_type: serviceAgreements.term_type,
+        renewal_reminder_sent_at: serviceAgreements.renewal_reminder_sent_at,
+        activity_log: serviceAgreements.activity_log,
+      })
+      .from(serviceAgreements)
+      .where(
+        and(
+          eq(serviceAgreements.status, "active"),
+          isNotNull(serviceAgreements.end_date)
+        )
+      )
+
+    if (activeAgreements.length === 0) {
+      return { success: true, remindersProcessed: 0, remindersSent: 0 }
+    }
+
+    // 2. Get unique org IDs to batch-fetch settings + profiles
+    const orgIds = [...new Set(activeAgreements.map((a) => a.org_id))]
+
+    // Fetch org settings (for lead days)
+    const orgSettingsRows = await adminDb
+      .select({
+        org_id: orgSettings.org_id,
+        agreement_renewal_lead_days: orgSettings.agreement_renewal_lead_days,
+      })
+      .from(orgSettings)
+      .where(inArray(orgSettings.org_id, orgIds))
+
+    const orgSettingsMap = new Map(
+      orgSettingsRows.map((row) => [
+        row.org_id,
+        (row.agreement_renewal_lead_days as number[] | null) ?? [30, 7],
+      ])
+    )
+
+    // Fetch org names for email
+    const orgRows = await adminDb
+      .select({ id: orgs.id, name: orgs.name })
+      .from(orgs)
+      .where(inArray(orgs.id, orgIds))
+
+    const orgNameMap = new Map(orgRows.map((r) => [r.id, r.name]))
+
+    // Fetch office/owner profiles for each org (recipients)
+    const officeProfiles = await adminDb
+      .select({
+        org_id: profiles.org_id,
+        email: profiles.email,
+        role: profiles.role,
+      })
+      .from(profiles)
+      .where(
+        and(
+          inArray(profiles.org_id, orgIds),
+          inArray(profiles.role, ["owner", "office"])
+        )
+      )
+
+    // Group office emails by org
+    const officeEmailsMap = new Map<string, string[]>()
+    for (const p of officeProfiles) {
+      const existing = officeEmailsMap.get(p.org_id) ?? []
+      existing.push(p.email)
+      officeEmailsMap.set(p.org_id, existing)
+    }
+
+    // Fetch customer names for email content
+    const customerIds = [...new Set(activeAgreements.map((a) => a.customer_id))]
+    const customerRows = await adminDb
+      .select({ id: customers.id, full_name: customers.full_name })
+      .from(customers)
+      .where(inArray(customers.id, customerIds))
+
+    const customerNameMap = new Map(customerRows.map((r) => [r.id, r.full_name]))
+
+    // Fetch pool entry counts per agreement
+    const poolEntryCounts = await adminDb
+      .select({
+        agreement_id: agreementPoolEntries.agreement_id,
+        pool_count: count(agreementPoolEntries.id),
+        monthly_sum: sql<string>`SUM(
+          CASE
+            WHEN ${agreementPoolEntries.pricing_model} IN ('flat_monthly', 'tiered')
+              THEN COALESCE(${agreementPoolEntries.monthly_amount}::numeric, 0)
+            WHEN ${agreementPoolEntries.pricing_model} = 'per_visit'
+              THEN COALESCE(${agreementPoolEntries.per_visit_amount}::numeric, 0)
+            ELSE 0
+          END
+        )`,
+      })
+      .from(agreementPoolEntries)
+      .where(
+        inArray(
+          agreementPoolEntries.agreement_id,
+          activeAgreements.map((a) => a.id)
+        )
+      )
+      .groupBy(agreementPoolEntries.agreement_id)
+
+    const poolCountMap = new Map(
+      poolEntryCounts.map((r) => [
+        r.agreement_id,
+        { count: Number(r.pool_count), monthly: parseFloat(r.monthly_sum ?? "0") },
+      ])
+    )
+
+    // 3. Process each agreement
+    let remindersProcessed = 0
+    let remindersSent = 0
+    const oneDayMs = 24 * 60 * 60 * 1000
+
+    for (const agreement of activeAgreements) {
+      if (!agreement.end_date) continue
+
+      // Calculate days until expiry
+      const endDateObj = new Date(agreement.end_date + "T00:00:00")
+      const diffMs = endDateObj.getTime() - now.getTime()
+      const daysUntilExpiry = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+      const leadDays = orgSettingsMap.get(agreement.org_id) ?? [30, 7]
+
+      // Only send on days that exactly match a configured lead day
+      if (!leadDays.includes(daysUntilExpiry)) continue
+
+      remindersProcessed++
+
+      // Duplicate prevention: skip if sent within the last 24 hours
+      if (agreement.renewal_reminder_sent_at) {
+        const sentAt = new Date(agreement.renewal_reminder_sent_at).getTime()
+        if (now.getTime() - sentAt < oneDayMs) {
+          continue
+        }
+      }
+
+      // Determine recipients
+      const recipients = officeEmailsMap.get(agreement.org_id) ?? []
+      if (recipients.length === 0) continue
+
+      const companyName = orgNameMap.get(agreement.org_id) ?? "Pool Company"
+      const customerName = customerNameMap.get(agreement.customer_id) ?? "Unknown Customer"
+      const poolInfo = poolCountMap.get(agreement.id) ?? { count: 0, monthly: 0 }
+
+      const monthlyFormatted =
+        poolInfo.monthly > 0
+          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+              poolInfo.monthly
+            )
+          : ""
+
+      const endDateFormatted = new Date(agreement.end_date + "T00:00:00").toLocaleDateString(
+        "en-US",
+        { month: "long", day: "numeric", year: "numeric" }
+      )
+
+      const agreementUrl = `${appUrl}/agreements/${agreement.id}`
+
+      // Send email
+      try {
+        const emailHtml = await renderEmail(
+          createElement(AgreementRenewalEmail, {
+            companyName,
+            customerName,
+            agreementNumber: agreement.agreement_number,
+            endDate: endDateFormatted,
+            daysUntilExpiry,
+            autoRenew: agreement.auto_renew ?? false,
+            termType: agreement.term_type,
+            poolCount: poolInfo.count,
+            monthlyAmount: monthlyFormatted,
+            agreementUrl,
+          })
+        )
+
+        if (!resendApiKey) {
+          if (isDev) {
+            console.log("\n--- [DEV] Agreement Renewal Reminder ---")
+            console.log(`To: ${recipients.join(", ")}`)
+            console.log(`Agreement: ${agreement.agreement_number} (${daysUntilExpiry} days)`)
+            console.log(`Customer: ${customerName}`)
+            console.log(`Auto-renew: ${agreement.auto_renew}`)
+            console.log("---------------------------------------\n")
+          }
+        } else {
+          const resend = new Resend(resendApiKey)
+          const fromAddress = isDev
+            ? "DeweyIQ Dev <onboarding@resend.dev>"
+            : `DeweyIQ <notifications@deweyiq.com>`
+
+          await resend.emails.send({
+            from: fromAddress,
+            to: isDev ? ["delivered@resend.dev"] : recipients,
+            subject: `Agreement Renewal Reminder: ${agreement.agreement_number} expires in ${daysUntilExpiry} days`,
+            html: emailHtml,
+          })
+        }
+
+        // Update renewal_reminder_sent_at + activity log
+        const existingLog =
+          (agreement.activity_log as Array<{
+            action: string
+            actor: string
+            at: string
+            note?: string
+          }>) ?? []
+
+        await adminDb
+          .update(serviceAgreements)
+          .set({
+            renewal_reminder_sent_at: now,
+            activity_log: sql`${JSON.stringify([
+              ...existingLog,
+              logEntry(
+                "system",
+                "renewal_reminder_sent",
+                `Renewal reminder sent — ${daysUntilExpiry} days until expiry`
+              ),
+            ])}::jsonb`,
+            updated_at: now,
+          })
+          .where(eq(serviceAgreements.id, agreement.id))
+
+        remindersSent++
+      } catch (emailErr) {
+        console.error(
+          `[runAgreementRenewalScan] Failed to send reminder for ${agreement.agreement_number}:`,
+          emailErr
+        )
+      }
+    }
+
+    return { success: true, remindersProcessed, remindersSent }
+  } catch (err) {
+    console.error("[runAgreementRenewalScan]", err)
+    return { success: false, error: "Renewal scan failed" }
+  }
+}
+
 // checkExpiredAgreements
 // ---------------------------------------------------------------------------
 
 /**
- * Utility: transitions all past-due active agreements to 'expired'.
+ * Utility: transitions all past-due active agreements to 'expired' or auto-renews them.
  * Called by the cron job in Plan 07.
- * Finds agreements where status = 'active', auto_renew = false, end_date <= today.
+ *
+ * - auto_renew = true: extend end_date by the term duration (6 or 12 months),
+ *   set renewed_at = now, log "Auto-renewed"
+ * - auto_renew = false: transition to 'expired', deactivate schedule rules
+ *
+ * Uses adminDb since this runs from a cron route (no user session).
  */
 export async function checkExpiredAgreements(): Promise<{
   success: boolean
   expired_count?: number
+  renewed_count?: number
   error?: string
 }> {
-  const token = await getRlsToken()
-  if (!token) return { success: false, error: "Not authenticated" }
-
-  const userRole = token.user_role as string | undefined
-  if (userRole !== "owner") {
-    return { success: false, error: "Only owners can run expiration check" }
-  }
-
   try {
     const todayStr = toLocalDateString()
+    const now = new Date()
 
-    const result = await withRls(token, async (db) => {
-      // Find all active non-auto-renew agreements with end_date <= today
-      const expiredAgreements = await db.query.serviceAgreements.findMany({
-        where: and(
-          eq(serviceAgreements.status, "active"),
-          eq(serviceAgreements.auto_renew, false)
-        ),
-        columns: {
-          id: true,
-          end_date: true,
-          customer_id: true,
-          activity_log: true,
-        },
-        with: {
-          poolEntries: {
-            columns: { id: true, schedule_rule_id: true },
-          },
-        },
+    // Find all active agreements with end_date <= today (across ALL orgs)
+    const expiredCandidates = await adminDb
+      .select({
+        id: serviceAgreements.id,
+        org_id: serviceAgreements.org_id,
+        customer_id: serviceAgreements.customer_id,
+        auto_renew: serviceAgreements.auto_renew,
+        term_type: serviceAgreements.term_type,
+        end_date: serviceAgreements.end_date,
+        activity_log: serviceAgreements.activity_log,
       })
-
-      const toExpire = expiredAgreements.filter(
-        (a) => a.end_date && a.end_date <= todayStr
+      .from(serviceAgreements)
+      .where(
+        and(
+          eq(serviceAgreements.status, "active"),
+          isNotNull(serviceAgreements.end_date),
+          lte(serviceAgreements.end_date, todayStr)
+        )
       )
 
-      const now = new Date()
-      let expiredCount = 0
+    if (expiredCandidates.length === 0) {
+      return { success: true, expired_count: 0, renewed_count: 0 }
+    }
 
-      for (const agreement of toExpire) {
-        const existingLog = (agreement.activity_log as Array<{ action: string; actor: string; at: string; note?: string }>) ?? []
-        const newLog = [
-          ...existingLog,
-          logEntry("system", "agreement_expired", `Agreement expired on ${todayStr}`),
-        ]
+    // Fetch pool entries for schedule rule deactivation (non-auto-renew only)
+    const agreementIds = expiredCandidates.map((a) => a.id)
+    const entryRows = await adminDb
+      .select({
+        agreement_id: agreementPoolEntries.agreement_id,
+        id: agreementPoolEntries.id,
+        schedule_rule_id: agreementPoolEntries.schedule_rule_id,
+      })
+      .from(agreementPoolEntries)
+      .where(inArray(agreementPoolEntries.agreement_id, agreementIds))
 
-        // Deactivate schedule rules
-        const ruleIds = agreement.poolEntries
+    // Group entries by agreement
+    const entriesByAgreement = new Map<string, typeof entryRows>()
+    for (const entry of entryRows) {
+      const existing = entriesByAgreement.get(entry.agreement_id) ?? []
+      existing.push(entry)
+      entriesByAgreement.set(entry.agreement_id, existing)
+    }
+
+    let expiredCount = 0
+    let renewedCount = 0
+
+    for (const agreement of expiredCandidates) {
+      const existingLog =
+        (agreement.activity_log as Array<{
+          action: string
+          actor: string
+          at: string
+          note?: string
+        }>) ?? []
+
+      if (agreement.auto_renew) {
+        // ── Auto-renew: extend end_date by term duration ──────────────────
+        let monthsToAdd = 12
+        if (agreement.term_type === "6_month") monthsToAdd = 6
+        else if (agreement.term_type === "12_month") monthsToAdd = 12
+
+        const currentEnd = new Date(agreement.end_date! + "T00:00:00")
+        currentEnd.setMonth(currentEnd.getMonth() + monthsToAdd)
+        const newEndDate = toLocalDateString(currentEnd)
+
+        await adminDb
+          .update(serviceAgreements)
+          .set({
+            end_date: newEndDate,
+            renewed_at: now,
+            renewal_reminder_sent_at: null, // reset so reminders fire again for new term
+            activity_log: sql`${JSON.stringify([
+              ...existingLog,
+              logEntry(
+                "system",
+                "auto_renewed",
+                `Auto-renewed for another ${monthsToAdd}-month period. New end date: ${newEndDate}`
+              ),
+            ])}::jsonb`,
+            updated_at: now,
+          })
+          .where(eq(serviceAgreements.id, agreement.id))
+
+        revalidatePath(`/agreements/${agreement.id}`)
+        revalidatePath(`/customers/${agreement.customer_id}`)
+        renewedCount++
+      } else {
+        // ── Expire: deactivate schedule rules, set status ─────────────────
+        const entries = entriesByAgreement.get(agreement.id) ?? []
+        const ruleIds = entries
           .map((e) => e.schedule_rule_id)
           .filter((ruleId): ruleId is string => Boolean(ruleId))
 
         if (ruleIds.length > 0) {
-          await db
+          await adminDb
             .update(scheduleRules)
             .set({ active: false, updated_at: now })
             .where(inArray(scheduleRules.id, ruleIds))
         }
 
-        await db
+        await adminDb
           .update(serviceAgreements)
           .set({
             status: "expired",
-            activity_log: sql`${JSON.stringify(newLog)}::jsonb`,
+            activity_log: sql`${JSON.stringify([
+              ...existingLog,
+              logEntry("system", "agreement_expired", `Agreement expired on ${todayStr}`),
+            ])}::jsonb`,
             updated_at: now,
           })
           .where(eq(serviceAgreements.id, agreement.id))
@@ -1757,11 +2092,9 @@ export async function checkExpiredAgreements(): Promise<{
         revalidatePath(`/customers/${agreement.customer_id}`)
         expiredCount++
       }
+    }
 
-      return { success: true, expired_count: expiredCount }
-    })
-
-    return result
+    return { success: true, expired_count: expiredCount, renewed_count: renewedCount }
   } catch (err) {
     console.error("[checkExpiredAgreements]", err)
     return { success: false, error: "Failed to check expired agreements" }
