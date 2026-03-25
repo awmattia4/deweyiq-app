@@ -227,16 +227,12 @@ export function InventoryPageClient({
   }
 
   // If persisted tech differs from server-loaded default, fetch their inventory on mount
+  // No startTransition — we need this to complete before user sees stale data
   useEffect(() => {
-    if (isOffice && selectedTechId !== (defaultTechId ?? currentUserId)) {
-      startTransition(async () => {
-        try {
-          const items = await getTruckInventory(selectedTechId)
-          setInventoryItems(items as TruckInventoryItem[])
-        } catch (err) {
-          console.error("Failed to fetch inventory for saved tech:", err)
-        }
-      })
+    if (isOffice && selectedTechId !== defaultTechId) {
+      getTruckInventory(selectedTechId)
+        .then((items) => setInventoryItems(items as TruckInventoryItem[]))
+        .catch((err) => console.error("Failed to fetch inventory for saved tech:", err))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
