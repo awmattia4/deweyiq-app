@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 11: Payroll, Team Management & Full Accounting** - Native payroll (direct deposit, checks, tax filing, W-2/1099), time tracking, PTO, certifications, full double-entry accounting, bank reconciliation via Plaid, payment reconciliation, financial statements — complete QuickBooks replacement (completed 2026-03-16)
 - [x] **Phase 12: Projects & Renovations** - Full project management for new pool construction, renovations, and remodels — lead pipeline, site surveys, multi-tier proposals, deposits, progress billing, permits, subcontractors, material procurement, change orders, inspections, warranties, and a dedicated tech project mode with task checklists, time tracking, and photo documentation (completed 2026-03-17)
 - [ ] **Phase 13: Truck Inventory & Shopping Lists** - Per-tech truck inventory with auto-decrement, shopping lists with full procurement lifecycle, purchasing dashboard, chemical usage tracking, and "What to Bring" pre-route summaries
-- [ ] **Phase 14: Service Agreements & Contracts** - Recurring service agreements with e-signature, auto-schedule/billing setup, agreement lifecycle (pause/resume/cancel/renew), customer portal access, and compliance tracking
+- [x] **Phase 14: Service Agreements & Contracts** - Recurring service agreements with e-signature, auto-schedule/billing setup, agreement lifecycle (pause/resume/cancel/renew), customer portal access, and compliance tracking (completed 2026-03-25)
 - [ ] **Phase 15: Intelligent Billing Automation** - Per-customer per-visit rates, smart pricing suggestions, bulk shop fee application, billing anomaly detection, and invoice generation preview
 - [ ] **Phase 16: UI Polish & Launch Readiness** - Comprehensive audit and perfection of every screen, component, and interaction — cursor states, hover effects, button text visibility, spacing/typography consistency, mobile responsiveness, accessibility (keyboard nav, screen readers, contrast), loading skeletons, empty states, error pages, dark mode consistency, page transitions, toast notifications, and performance optimization
 - [ ] **Phase 17: Marketing Site & Subscription Billing** - Conversion-optimized public marketing site with interactive app demos, competitor comparisons, ROI calculator, frictionless multi-step sign-up, plus Stripe subscription billing with tiered pricing, checkout, billing management UI, usage enforcement, and failed payment handling
@@ -810,7 +810,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 11. Payroll, Team Mgmt & Accounting | 0/23 | Not started | - |
 | 12. Projects & Renovations | 0/16 | Not started | - |
 | 13. Truck Inventory & Shopping Lists | 0/4 | Not started | - |
-| 14. Service Agreements & Contracts | 0/9 | Not started | - |
+| 14. Service Agreements & Contracts | 0/9 | Complete    | 2026-03-25 |
 | 15. Intelligent Billing Automation | 0/0 | Not started | - |
 | 16. UI Polish & Launch Readiness | 0/0 | Not started | - |
 | 17. Marketing Site & Subscription Billing | 0/14 | Not started | - |
