@@ -331,6 +331,7 @@ export function InventoryPageClient({
       <div>
         {activeTab === "inventory" && (
           <TruckInventoryView
+            key={selectedTechId}
             techId={selectedTechId}
             initialItems={inventoryItems}
             allTechs={allTechs}
