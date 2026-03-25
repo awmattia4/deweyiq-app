@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,6 +103,12 @@ export function PoolEntryForm({
   const [perVisitAmountStr, setPerVisitAmountStr] = useState<string>(value.per_visit_amount ?? "")
   const [tieredBaseStr, setTieredBaseStr] = useState<string>(value.tiered_base_amount ?? "")
   const [tieredOverageStr, setTieredOverageStr] = useState<string>(value.tiered_overage_amount ?? "")
+
+  // Sync local string state when value prop changes externally (e.g. template apply)
+  useEffect(() => { setMonthlyAmountStr(value.monthly_amount ?? "") }, [value.monthly_amount])
+  useEffect(() => { setPerVisitAmountStr(value.per_visit_amount ?? "") }, [value.per_visit_amount])
+  useEffect(() => { setTieredBaseStr(value.tiered_base_amount ?? "") }, [value.tiered_base_amount])
+  useEffect(() => { setTieredOverageStr(value.tiered_overage_amount ?? "") }, [value.tiered_overage_amount])
 
   function update(partial: Partial<PoolEntryData>) {
     onChange({ ...value, ...partial })

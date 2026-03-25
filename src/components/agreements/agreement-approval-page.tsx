@@ -13,7 +13,7 @@
  * After any action: shows confirmation state inline — no page redirect.
  */
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import SignatureCanvas from "react-signature-canvas"
 import { Loader2 } from "lucide-react"
 
@@ -531,22 +531,14 @@ export function AgreementApprovalPage({
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Draw Your Signature
               </label>
-              <div className="border border-gray-300 rounded-lg overflow-hidden bg-white">
-                <SignatureCanvas
-                  ref={sigCanvasRef}
-                  penColor="#1e293b"
-                  canvasProps={{
-                    width: 560,
-                    height: 140,
-                    className: "w-full h-[140px] touch-none",
-                  }}
-                  onEnd={() => {
-                    if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-                      setCanvasHasContent(true)
-                    }
-                  }}
-                />
-              </div>
+              <SignatureCanvasWrapper
+                sigCanvasRef={sigCanvasRef}
+                onEnd={() => {
+                  if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
+                    setCanvasHasContent(true)
+                  }
+                }}
+              />
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs text-gray-500">
                   By signing above, you agree to the terms of this Service Agreement.
@@ -650,6 +642,48 @@ export function AgreementApprovalPage({
         </div>
       )}
 
+    </div>
+  )
+}
+
+// ── Responsive signature canvas wrapper ─────────────────────────────────────
+
+function SignatureCanvasWrapper({
+  sigCanvasRef,
+  onEnd,
+}: {
+  sigCanvasRef: React.RefObject<SignatureCanvas | null>
+  onEnd: () => void
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [canvasWidth, setCanvasWidth] = useState(560)
+
+  const updateWidth = useCallback(() => {
+    if (containerRef.current) {
+      setCanvasWidth(containerRef.current.offsetWidth)
+    }
+  }, [])
+
+  useEffect(() => {
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    if (containerRef.current) observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [updateWidth])
+
+  return (
+    <div ref={containerRef} className="border border-gray-300 rounded-lg overflow-hidden bg-white">
+      <SignatureCanvas
+        ref={sigCanvasRef}
+        penColor="#1e293b"
+        clearOnResize={false}
+        canvasProps={{
+          width: canvasWidth,
+          height: 140,
+          className: "w-full h-[140px] touch-none",
+        }}
+        onEnd={onEnd}
+      />
     </div>
   )
 }

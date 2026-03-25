@@ -10,6 +10,7 @@
  */
 import {
   boolean,
+  index,
   integer,
   jsonb,
   numeric,
@@ -166,6 +167,7 @@ export const agreementPoolEntries = pgTable(
     }),
   },
   (table) => [
+    index("agreement_pool_entries_agreement_id_idx").on(table.agreement_id),
     pgPolicy("agreement_pool_entries_select_policy", {
       for: "select",
       to: authenticatedRole,
@@ -250,6 +252,7 @@ export const agreementAmendments = pgTable(
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("agreement_amendments_agreement_id_idx").on(table.agreement_id),
     pgPolicy("agreement_amendments_select_policy", {
       for: "select",
       to: authenticatedRole,

@@ -1,0 +1,2 @@
+CREATE INDEX "agreement_amendments_agreement_id_idx" ON "agreement_amendments" USING btree ("agreement_id");--> statement-breakpoint
+CREATE INDEX "agreement_pool_entries_agreement_id_idx" ON "agreement_pool_entries" USING btree ("agreement_id");

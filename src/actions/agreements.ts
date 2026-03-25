@@ -333,6 +333,7 @@ export async function getAgreement(id: string): Promise<{
                 columns: {
                   id: true,
                   name: true,
+                  type: true,
                 },
               },
             },
@@ -1830,7 +1831,7 @@ export async function getAgreementCompliance(
 
         // Billing compliance (flat_monthly only — simplest to check)
         let billingStatus: "compliant" | "mismatch" | "unchecked" = "unchecked"
-        if (entry.pricing_model === "flat_monthly" && entry.monthly_amount) {
+        if (entry.pricing_model === "monthly_flat" && entry.monthly_amount) {
           const expectedMonthly = parseFloat(entry.monthly_amount)
           // totalBilled is for the whole customer; per-pool check uses the entry amount
           // We flag if billed amount is off by more than $1
@@ -2042,7 +2043,7 @@ export async function getAgreementsWithCompliance(): Promise<{
           }
 
           let billingStatus: "compliant" | "mismatch" | "unchecked" = "unchecked"
-          if (entry.pricing_model === "flat_monthly" && entry.monthly_amount) {
+          if (entry.pricing_model === "monthly_flat" && entry.monthly_amount) {
             const expectedMonthly = parseFloat(entry.monthly_amount)
             if (totalBilled > 0) {
               billingStatus =
@@ -2226,7 +2227,7 @@ export async function runAgreementRenewalScan(): Promise<{
         pool_count: count(agreementPoolEntries.id),
         monthly_sum: sql<string>`SUM(
           CASE
-            WHEN ${agreementPoolEntries.pricing_model} IN ('flat_monthly', 'tiered')
+            WHEN ${agreementPoolEntries.pricing_model} IN ('monthly_flat', 'tiered')
               THEN COALESCE(${agreementPoolEntries.monthly_amount}::numeric, 0)
             WHEN ${agreementPoolEntries.pricing_model} = 'per_visit'
               THEN COALESCE(${agreementPoolEntries.per_visit_amount}::numeric, 0)
@@ -2317,6 +2318,7 @@ export async function runAgreementRenewalScan(): Promise<{
           })
         )
 
+        let emailSent = false
         if (!resendApiKey) {
           if (isDev) {
             console.log("\n--- [DEV] Agreement Renewal Reminder ---")
@@ -2325,7 +2327,9 @@ export async function runAgreementRenewalScan(): Promise<{
             console.log(`Customer: ${customerName}`)
             console.log(`Auto-renew: ${agreement.auto_renew}`)
             console.log("---------------------------------------\n")
+            emailSent = true // In dev, treat log as "sent"
           }
+          // In production without API key: skip — don't mark as sent
         } else {
           const resend = new Resend(resendApiKey)
           const fromAddress = isDev
@@ -2338,34 +2342,37 @@ export async function runAgreementRenewalScan(): Promise<{
             subject: `Agreement Renewal Reminder: ${agreement.agreement_number} expires in ${daysUntilExpiry} days`,
             html: emailHtml,
           })
+          emailSent = true
         }
 
-        // Update renewal_reminder_sent_at + activity log
-        const existingLog =
-          (agreement.activity_log as Array<{
-            action: string
-            actor: string
-            at: string
-            note?: string
-          }>) ?? []
+        // Only mark as sent if email was actually delivered (or logged in dev)
+        if (emailSent) {
+          const existingLog =
+            (agreement.activity_log as Array<{
+              action: string
+              actor: string
+              at: string
+              note?: string
+            }>) ?? []
 
-        await adminDb
-          .update(serviceAgreements)
-          .set({
-            renewal_reminder_sent_at: now,
-            activity_log: sql`${JSON.stringify([
-              ...existingLog,
-              logEntry(
-                "system",
-                "renewal_reminder_sent",
-                `Renewal reminder sent — ${daysUntilExpiry} days until expiry`
-              ),
-            ])}::jsonb`,
-            updated_at: now,
-          })
-          .where(eq(serviceAgreements.id, agreement.id))
+          await adminDb
+            .update(serviceAgreements)
+            .set({
+              renewal_reminder_sent_at: now,
+              activity_log: sql`${JSON.stringify([
+                ...existingLog,
+                logEntry(
+                  "system",
+                  "renewal_reminder_sent",
+                  `Renewal reminder sent — ${daysUntilExpiry} days until expiry`
+                ),
+              ])}::jsonb`,
+              updated_at: now,
+            })
+            .where(eq(serviceAgreements.id, agreement.id))
 
-        remindersSent++
+          remindersSent++
+        }
       } catch (emailErr) {
         console.error(
           `[runAgreementRenewalScan] Failed to send reminder for ${agreement.agreement_number}:`,
@@ -2705,7 +2712,7 @@ export async function amendAgreement(
 
         // 6. Generate amendment token and send email
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
-        const amendmentToken = await signAgreementToken(id)
+        const amendmentToken = await signAgreementToken(id, newAmendment.id)
         const approvalUrl = `${appUrl}/agreement/${amendmentToken}?amendment=${newAmendment.id}`
 
         // Fetch org branding

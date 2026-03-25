@@ -31,7 +31,7 @@ import {
   customers,
   profiles,
 } from "@/lib/db/schema"
-import { eq, inArray, sql } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { Resend } from "resend"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -142,17 +142,30 @@ export async function POST(
       return NextResponse.json({ success: true })
     }
 
-    // ── 7. Original sign idempotency guard ────────────────────────────────
-    if (agreement.status !== "sent") {
+    // ── 7. Atomic idempotency guard — UPDATE only if status is still 'sent' ──
+    const now = new Date()
+    const targetStatus = action === "accept" ? "active" : "declined"
+
+    // Attempt to atomically claim this agreement
+    const claimResult = await adminDb
+      .update(serviceAgreements)
+      .set({ status: targetStatus, updated_at: now })
+      .where(
+        and(
+          eq(serviceAgreements.id, agreement.id),
+          eq(serviceAgreements.status, sql`'sent'`)
+        )
+      )
+      .returning({ id: serviceAgreements.id })
+
+    if (claimResult.length === 0) {
       return NextResponse.json(
         { error: "This agreement has already been processed." },
         { status: 409 }
       )
     }
 
-    const now = new Date()
-
-    // ── 8. Dispatch to handler ────────────────────────────────────────────
+    // ── 8. Dispatch to handler (status already set) ───────────────────────
     if (action === "accept") {
       await _handleAccept(req, agreement, body, now)
     } else {
@@ -198,7 +211,7 @@ async function _handleAccept(
     null
   const userAgent = req.headers.get("user-agent") ?? null
 
-  // ── a) Update agreement → active ─────────────────────────────────────────
+  // ── a) Update agreement signature metadata (status already set by atomic claim) ──
   const activityEntry = JSON.stringify([{
     action: "agreement_signed",
     actor: "customer",
@@ -209,7 +222,6 @@ async function _handleAccept(
   await adminDb
     .update(serviceAgreements)
     .set({
-      status: "active",
       signed_at: now,
       signature_name: signatureName,
       signature_image_base64: signatureImageBase64,
@@ -412,7 +424,7 @@ async function _handleDecline(
 ): Promise<void> {
   const declineReason = body.declineReason?.trim() ?? null
 
-  // ── a) Update agreement → declined ───────────────────────────────────────
+  // ── a) Update agreement decline metadata (status already set by atomic claim) ──
   const activityEntry = JSON.stringify([{
     action: "agreement_declined",
     actor: "customer",
@@ -423,7 +435,6 @@ async function _handleDecline(
   await adminDb
     .update(serviceAgreements)
     .set({
-      status: "declined",
       declined_at: now,
       decline_reason: declineReason,
       updated_at: now,

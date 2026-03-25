@@ -183,7 +183,7 @@ function formatFrequency(frequency: string, preferredDay: number | null): string
 
 function formatPricing(entry: PoolEntry): string {
   switch (entry.pricing_model) {
-    case "flat_monthly":
+    case "monthly_flat":
       return entry.monthly_amount
         ? `$${parseFloat(entry.monthly_amount).toFixed(2)}/mo (Flat)`
         : "Flat monthly"
@@ -211,7 +211,7 @@ function formatCurrency(amount: number): string {
 
 function computeMonthlyTotal(entries: PoolEntry[]): number {
   return entries.reduce((sum, entry) => {
-    if (entry.pricing_model === "flat_monthly" || entry.pricing_model === "tiered") {
+    if (entry.pricing_model === "monthly_flat" || entry.pricing_model === "tiered") {
       return sum + parseFloat(entry.monthly_amount ?? "0")
     }
     if (entry.pricing_model === "per_visit") {

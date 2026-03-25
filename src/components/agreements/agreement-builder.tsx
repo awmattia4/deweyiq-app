@@ -19,7 +19,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { PoolEntryForm } from "@/components/agreements/pool-entry-form"
 import type { PoolEntryData, ChecklistTask } from "@/components/agreements/pool-entry-form"
-import { createAgreement } from "@/actions/agreements"
+import { createAgreement, sendAgreement } from "@/actions/agreements"
 import { toLocalDateString } from "@/lib/date-utils"
 import type { AgreementTemplateInput } from "@/actions/agreements"
 
@@ -337,14 +337,18 @@ export function AgreementBuilder({ customers, checklistTasks, templates }: Agree
         return
       }
 
-      toast.success(`Agreement ${result.data?.agreement_number} created`)
-
-      // Plan 03 will wire the send flow; for now just redirect to detail page
-      if (saveAndSend) {
-        router.push(`/agreements/${result.data?.id}`)
+      if (saveAndSend && result.data?.id) {
+        const sendResult = await sendAgreement(result.data.id)
+        if (sendResult.success) {
+          toast.success(`Agreement ${result.data.agreement_number} created and sent`)
+        } else {
+          toast.success(`Agreement created but send failed: ${sendResult.error}`)
+        }
       } else {
-        router.push(`/agreements/${result.data?.id}`)
+        toast.success(`Agreement ${result.data?.agreement_number} created as draft`)
       }
+
+      router.push(`/agreements/${result.data?.id}`)
     })
   }
 

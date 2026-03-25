@@ -101,13 +101,45 @@ export default async function AgreementTokenPage({ params }: Props) {
       )
     }
 
-    // Fetch org branding for amendment page
-    const orgRows = await adminDb
-      .select({ name: orgs.name, logo_url: orgs.logo_url })
-      .from(orgs)
-      .where(eq(orgs.id, agreement.org_id))
-      .limit(1)
-    const org = orgRows[0]
+    // Fetch org branding, customer, and pool entries for amendment page
+    const [orgRows2, customerRows2, entryRows2] = await Promise.all([
+      adminDb
+        .select({ name: orgs.name, logo_url: orgs.logo_url })
+        .from(orgs)
+        .where(eq(orgs.id, agreement.org_id))
+        .limit(1),
+      adminDb
+        .select({ full_name: customers.full_name, address: customers.address })
+        .from(customers)
+        .where(eq(customers.id, agreement.customer_id))
+        .limit(1),
+      adminDb
+        .select({
+          id: agreementPoolEntries.id,
+          pool_id: agreementPoolEntries.pool_id,
+          frequency: agreementPoolEntries.frequency,
+          preferred_day_of_week: agreementPoolEntries.preferred_day_of_week,
+          pricing_model: agreementPoolEntries.pricing_model,
+          monthly_amount: agreementPoolEntries.monthly_amount,
+          per_visit_amount: agreementPoolEntries.per_visit_amount,
+          tiered_threshold_visits: agreementPoolEntries.tiered_threshold_visits,
+          tiered_base_amount: agreementPoolEntries.tiered_base_amount,
+          tiered_overage_amount: agreementPoolEntries.tiered_overage_amount,
+          notes: agreementPoolEntries.notes,
+          pool_name: pools.name,
+          pool_type: pools.type,
+        })
+        .from(agreementPoolEntries)
+        .innerJoin(
+          pools,
+          and(
+            eq(pools.id, agreementPoolEntries.pool_id),
+            eq(agreementPoolEntries.agreement_id, agreementId)
+          )
+        ),
+    ])
+    const org = orgRows2[0]
+    const amendCustomer = customerRows2[0]
 
     return (
       <PageShell companyName={org?.name ?? "Your Service Provider"} logoUrl={org?.logo_url ?? null}>
@@ -120,9 +152,22 @@ export default async function AgreementTokenPage({ params }: Props) {
           endDate={agreement.end_date}
           autoRenew={agreement.auto_renew}
           companyName={org?.name ?? "Your Service Provider"}
-          customerName=""
-          serviceAddress={null}
-          poolEntries={[]}
+          customerName={amendCustomer?.full_name ?? "Customer"}
+          serviceAddress={amendCustomer?.address ?? null}
+          poolEntries={entryRows2.map((e) => ({
+            id: e.id,
+            poolName: e.pool_name,
+            poolType: e.pool_type ?? "pool",
+            frequency: e.frequency,
+            preferredDayOfWeek: e.preferred_day_of_week,
+            pricingModel: e.pricing_model,
+            monthlyAmount: e.monthly_amount,
+            perVisitAmount: e.per_visit_amount,
+            tieredThresholdVisits: e.tiered_threshold_visits,
+            tieredBaseAmount: e.tiered_base_amount,
+            tieredOverageAmount: e.tiered_overage_amount,
+            notes: e.notes,
+          }))}
           isAmendment
           amendmentChangeSummary={amendment.change_summary ?? ""}
           amendmentVersionNumber={amendment.version_number}
@@ -167,18 +212,8 @@ export default async function AgreementTokenPage({ params }: Props) {
     )
   }
 
-  // Check end_date expiration (offer expired)
-  if (agreement.end_date && new Date(agreement.end_date) < new Date()) {
-    return (
-      <PageShell>
-        <StatusCard
-          variant="warning"
-          title="Agreement offer has expired"
-          message={`This agreement offer expired on ${new Date(agreement.end_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}. Please contact your service provider for an updated agreement.`}
-        />
-      </PageShell>
-    )
-  }
+  // Note: end_date is the contract term end, not an offer expiry.
+  // The JWT token's own expiry (180 days) handles stale links.
 
   // ── 4. Fetch customer ──────────────────────────────────────────────────────
   const customerRows = await adminDb

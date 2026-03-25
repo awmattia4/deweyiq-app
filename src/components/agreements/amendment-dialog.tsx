@@ -10,7 +10,7 @@
  * Shows a classification badge that updates as the user makes changes.
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -82,7 +82,7 @@ const DAYS_OF_WEEK = [
 ]
 
 const PRICING_MODELS = [
-  { value: "flat_monthly", label: "Flat Monthly" },
+  { value: "monthly_flat", label: "Flat Monthly" },
   { value: "per_visit", label: "Per Visit" },
 ]
 
@@ -127,6 +127,28 @@ export function AmendmentDialog({
     hasMajorChanges ||
     Boolean(newTermType && newTermType !== termType)
 
+  // Track whether user has manually edited the summary
+  const [userEditedSummary, setUserEditedSummary] = useState(false)
+
+  // Auto-generate summary when changes happen (avoids stale closure)
+  useEffect(() => {
+    if (userEditedSummary) return
+    const parts: string[] = []
+    if (newTermType && newTermType !== termType) {
+      const label = TERM_TYPES.find((t) => t.value === newTermType)?.label ?? newTermType
+      parts.push(`Term changed to ${label}`)
+    }
+    if (Object.keys(priceChanges).length > 0) {
+      parts.push(`Pricing updated for ${Object.keys(priceChanges).length} pool(s)`)
+    }
+    if (Object.keys(frequencyChanges).length > 0) {
+      parts.push(`Service frequency updated for ${Object.keys(frequencyChanges).length} pool(s)`)
+    }
+    if (parts.length > 0) {
+      setChangeSummary(parts.join(". "))
+    }
+  }, [newTermType, priceChanges, frequencyChanges, termType, userEditedSummary])
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function updatePriceChange(
@@ -138,7 +160,6 @@ export function AmendmentDialog({
       ...prev,
       [entryId]: { ...(prev[entryId] ?? {}), [field]: value },
     }))
-    updateSummary()
   }
 
   function updateFrequencyChange(
@@ -153,31 +174,6 @@ export function AmendmentDialog({
         [field]: field === "preferred_day_of_week" && value !== null ? parseInt(value) : value,
       },
     }))
-    updateSummary()
-  }
-
-  function updateSummary() {
-    // Auto-generate summary (can be overridden)
-    setTimeout(() => {
-      const parts: string[] = []
-      if (newTermType && newTermType !== termType) {
-        const label = TERM_TYPES.find((t) => t.value === newTermType)?.label ?? newTermType
-        parts.push(`Term changed to ${label}`)
-      }
-      if (Object.keys(priceChanges).length > 0) {
-        parts.push(`Pricing updated for ${Object.keys(priceChanges).length} pool(s)`)
-      }
-      if (Object.keys(frequencyChanges).length > 0) {
-        parts.push(`Service frequency updated for ${Object.keys(frequencyChanges).length} pool(s)`)
-      }
-      if (parts.length > 0) {
-        setChangeSummary((prev) => {
-          // Only auto-fill if user hasn't typed a custom summary
-          if (!prev) return parts.join(". ")
-          return prev
-        })
-      }
-    }, 0)
   }
 
   function buildChanges(): AmendmentChanges {
@@ -210,6 +206,7 @@ export function AmendmentDialog({
     setPriceChanges({})
     setFrequencyChanges({})
     setChangeSummary("")
+    setUserEditedSummary(false)
     onOpenChange(false)
   }
 
@@ -254,7 +251,7 @@ export function AmendmentDialog({
             <p className="text-xs text-muted-foreground">
               Current: <span className="font-medium">{TERM_TYPES.find((t) => t.value === termType)?.label ?? termType}</span>
             </p>
-            <Select value={newTermType} onValueChange={(v) => { setNewTermType(v); updateSummary() }}>
+            <Select value={newTermType} onValueChange={(v) => setNewTermType(v)}>
               <SelectTrigger className="h-8">
                 <SelectValue placeholder="Select new term type (leave blank to keep current)" />
               </SelectTrigger>
@@ -306,7 +303,7 @@ export function AmendmentDialog({
                     </SelectContent>
                   </Select>
 
-                  {(priceChanges[entry.id]?.pricing_model ?? entry.pricing_model) === "flat_monthly" ? (
+                  {(priceChanges[entry.id]?.pricing_model ?? entry.pricing_model) === "monthly_flat" ? (
                     <div className="relative flex-1">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
                       <input
@@ -400,7 +397,7 @@ export function AmendmentDialog({
             </Label>
             <Textarea
               value={changeSummary}
-              onChange={(e) => setChangeSummary(e.target.value)}
+              onChange={(e) => { setChangeSummary(e.target.value); setUserEditedSummary(true) }}
               placeholder="Describe what is changing and why..."
               rows={3}
               className="text-sm"

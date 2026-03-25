@@ -109,7 +109,7 @@ const STATUS_ORDER: Record<AgreementStatus, number> = {
 
 function computeMonthlyTotal(entries: PoolEntry[]): number {
   return entries.reduce((sum, entry) => {
-    if (entry.pricing_model === "flat_monthly" || entry.pricing_model === "tiered") {
+    if (entry.pricing_model === "monthly_flat" || entry.pricing_model === "tiered") {
       return sum + parseFloat(entry.monthly_amount ?? "0")
     }
     if (entry.pricing_model === "per_visit") {
