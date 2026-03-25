@@ -765,6 +765,79 @@ export async function updateTruckLoadTemplate(
 }
 
 // ---------------------------------------------------------------------------
+// replaceTemplateItems — replace all items on an existing template
+// ---------------------------------------------------------------------------
+
+export async function replaceTemplateItems(
+  templateId: string,
+  items: Array<{
+    catalog_item_id?: string | null
+    chemical_product_id?: string | null
+    item_name: string
+    category: string
+    default_quantity: number
+    unit: string
+    min_threshold?: number
+    sort_order?: number
+  }>
+) {
+  const token = await getRlsToken()
+  if (!token || !token.org_id) throw new Error("Not authenticated")
+
+  const orgId = token.org_id as string
+
+  // Delete existing items for this template
+  await adminDb
+    .delete(truckLoadTemplateItems)
+    .where(
+      and(
+        eq(truckLoadTemplateItems.template_id, templateId),
+        eq(truckLoadTemplateItems.org_id, orgId)
+      )
+    )
+
+  // Insert new items
+  if (items.length > 0) {
+    await adminDb.insert(truckLoadTemplateItems).values(
+      items.map((item, idx) => ({
+        org_id: orgId,
+        template_id: templateId,
+        catalog_item_id: item.catalog_item_id ?? null,
+        chemical_product_id: item.chemical_product_id ?? null,
+        item_name: item.item_name,
+        category: item.category,
+        default_quantity: String(item.default_quantity ?? 1),
+        unit: item.unit,
+        min_threshold: String(item.min_threshold ?? 0),
+        sort_order: item.sort_order ?? idx,
+      }))
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTemplateItems — load items for an existing template
+// ---------------------------------------------------------------------------
+
+export async function getTemplateItems(templateId: string) {
+  const token = await getRlsToken()
+  if (!token || !token.org_id) return []
+
+  const orgId = token.org_id as string
+
+  return adminDb
+    .select()
+    .from(truckLoadTemplateItems)
+    .where(
+      and(
+        eq(truckLoadTemplateItems.template_id, templateId),
+        eq(truckLoadTemplateItems.org_id, orgId)
+      )
+    )
+    .orderBy(truckLoadTemplateItems.sort_order)
+}
+
+// ---------------------------------------------------------------------------
 // deleteTruckLoadTemplate
 // ---------------------------------------------------------------------------
 
