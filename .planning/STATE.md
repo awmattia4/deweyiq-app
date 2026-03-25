@@ -126,6 +126,7 @@ Progress: [████████████] 67% (12 of 18 phases complete)
 | Phase 13-truck-inventory-shopping-lists P01 | 13 | 2 tasks | 17 files |
 | Phase 13-truck-inventory-shopping-lists P02 | 17 | 2 tasks | 13 files |
 | Phase 13 P03 | 20 | 2 tasks | 9 files |
+| Phase 14-service-agreements-contracts P01 | 5 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -478,6 +479,8 @@ Recent decisions affecting current work:
 - [Phase 13]: Used adminDb for PO number increment — avoids RLS re-auth overhead for org_settings counter update
 - [Phase 13]: QBO item CRUD cast to any — node-quickbooks JS methods exist at runtime but have no TypeScript declarations for Item type
 - [Phase 13]: Dynamic import of syncQboItemToDeweyIq in handleQboWebhook to break potential circular dependency
+- [Phase 14-service-agreements-contracts]: Used adminDb for agreement number sequence increment to let office staff create agreements without hitting owner-only org_settings RLS
+- [Phase 14-service-agreements-contracts]: agreement_pool_entries and agreement_amendments RLS uses EXISTS subquery against service_agreements.org_id since those tables have no direct org_id column
 
 ### Pending Todos
 
