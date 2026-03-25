@@ -71,6 +71,10 @@ export * from "./truck-inventory"
 export * from "./shopping-lists"
 export * from "./barcode-catalog"
 
+// Phase 14 tables — Service Agreements & Contracts
+export * from "./service-agreements"
+export * from "./agreement-templates"
+
 // Phase 02-03 relational definitions (all cross-table relations in one place)
 // CRITICAL: relations must be exported here for db.query.* relational queries to work.
 // If xyzRelations is not exported, Drizzle's relational query builder silently fails.

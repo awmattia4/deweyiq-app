@@ -134,6 +134,18 @@ export const orgSettings = pgTable(
     // Phase 13: Purchase Order number sequence
     next_po_number: integer("next_po_number").notNull().default(1),
 
+    // Phase 14: Service Agreements settings
+    // Days of notice required before cancelling an active agreement
+    agreement_notice_period_days: integer("agreement_notice_period_days").notNull().default(30),
+    // Days before expiry to send renewal reminders — array allows multiple reminders (e.g. 30 and 7 days out)
+    agreement_renewal_lead_days: jsonb("agreement_renewal_lead_days")
+      .$type<number[]>()
+      .default(sql`'[30, 7]'::jsonb`),
+    // Sequence counter for agreement number generation
+    next_agreement_number: integer("next_agreement_number").notNull().default(1),
+    // Prefix for agreement numbers (e.g. "SA" → "SA-0001")
+    agreement_number_prefix: text("agreement_number_prefix").default("SA"),
+
     // Phase 10-16: Broadcast history — last 10 broadcasts stored as JSONB for simplicity.
     // No complex queries needed on broadcast history; JSONB avoids a separate table.
     broadcast_history: jsonb("broadcast_history")

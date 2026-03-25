@@ -98,6 +98,8 @@ import {
 import { shoppingListItems, purchaseOrders, poLineItems } from "./shopping-lists"
 import { barcodeCatalogLinks } from "./barcode-catalog"
 import { partsCatalog } from "./parts-catalog"
+import { serviceAgreements, agreementPoolEntries, agreementAmendments } from "./service-agreements"
+import { agreementTemplates } from "./agreement-templates"
 
 // orgs has many customers, profiles (already in profiles.ts via FK, no existing relation)
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -117,6 +119,8 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   // Phase 8
   portalMessages: many(portalMessages),
   serviceRequests: many(serviceRequests),
+  // Phase 14
+  serviceAgreements: many(serviceAgreements),
 }))
 
 export const poolsRelations = relations(pools, ({ one, many }) => ({
@@ -1020,4 +1024,45 @@ export const barcodeCatalogLinksRelations = relations(barcodeCatalogLinks, ({ on
     fields: [barcodeCatalogLinks.created_by_id],
     references: [profiles.id],
   }),
+}))
+
+// Phase 14 relations — Service Agreements & Contracts
+
+export const serviceAgreementsRelations = relations(serviceAgreements, ({ one, many }) => ({
+  org: one(orgs, { fields: [serviceAgreements.org_id], references: [orgs.id] }),
+  customer: one(customers, { fields: [serviceAgreements.customer_id], references: [customers.id] }),
+  template: one(agreementTemplates, {
+    fields: [serviceAgreements.template_id],
+    references: [agreementTemplates.id],
+  }),
+  poolEntries: many(agreementPoolEntries),
+  amendments: many(agreementAmendments),
+}))
+
+export const agreementPoolEntriesRelations = relations(agreementPoolEntries, ({ one }) => ({
+  agreement: one(serviceAgreements, {
+    fields: [agreementPoolEntries.agreement_id],
+    references: [serviceAgreements.id],
+  }),
+  pool: one(pools, { fields: [agreementPoolEntries.pool_id], references: [pools.id] }),
+  scheduleRule: one(scheduleRules, {
+    fields: [agreementPoolEntries.schedule_rule_id],
+    references: [scheduleRules.id],
+  }),
+}))
+
+export const agreementAmendmentsRelations = relations(agreementAmendments, ({ one }) => ({
+  agreement: one(serviceAgreements, {
+    fields: [agreementAmendments.agreement_id],
+    references: [serviceAgreements.id],
+  }),
+  changedBy: one(profiles, {
+    fields: [agreementAmendments.changed_by_id],
+    references: [profiles.id],
+  }),
+}))
+
+export const agreementTemplatesRelations = relations(agreementTemplates, ({ one, many }) => ({
+  org: one(orgs, { fields: [agreementTemplates.org_id], references: [orgs.id] }),
+  agreements: many(serviceAgreements),
 }))
