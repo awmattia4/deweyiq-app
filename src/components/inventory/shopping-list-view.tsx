@@ -227,9 +227,19 @@ function AddItemDialog({ techId, onSuccess, onClose }: AddItemDialogProps) {
     }
   }
 
+  function mapCatalogCategory(cat: string): string {
+    const c = cat.toLowerCase()
+    if (c === "chemical" || c.includes("chlorine") || c.includes("pool")) return "chemical"
+    if (c === "tool") return "tool"
+    if (c === "equipment") return "equipment"
+    if (c === "pump" || c === "filter" || c === "plumbing" || c === "electrical") return "part"
+    if (c === "other" || c === "labor") return "other"
+    return "part"
+  }
+
   function selectCatalogItem(item: typeof searchResults[0]) {
     setItemName(item.name)
-    setCategory(item.category)
+    setCategory(mapCatalogCategory(item.category))
     setUnit(item.unit)
     setShowResults(false)
   }

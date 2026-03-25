@@ -18,7 +18,7 @@ import { SpendingInsights } from "@/components/inventory/spending-insights"
 import { ChemicalUsagePanel } from "@/components/inventory/chemical-usage-panel"
 import { WarehouseInventoryView } from "@/components/inventory/warehouse-inventory-view"
 import { InventoryCountFlow } from "@/components/inventory/inventory-count-flow"
-import { getTruckInventory } from "@/actions/truck-inventory"
+import { getTruckInventory, getWarehouseInventory } from "@/actions/truck-inventory"
 import {
   Select,
   SelectContent,
@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import type { TruckInventoryItem } from "@/actions/truck-inventory"
 import type { ShoppingListItem } from "@/actions/shopping-lists"
 import type { PurchasingDashboardData, SpendingInsightsData } from "@/actions/purchasing"
@@ -86,6 +87,74 @@ const EMPTY_CHEMICAL: ChemicalUsageReport = {
   entries: [],
   period: "month",
   groupBy: "tech",
+}
+
+// ---------------------------------------------------------------------------
+// Count Tab — target selector for office (tech truck / warehouse)
+// ---------------------------------------------------------------------------
+
+function CountTabContent({
+  isOffice,
+  currentUserId,
+  allTechs,
+  inventoryItems,
+  warehouseItems,
+  onComplete,
+}: {
+  isOffice: boolean
+  currentUserId: string
+  allTechs: Array<{ id: string; fullName: string }>
+  inventoryItems: TruckInventoryItem[]
+  warehouseItems: TruckInventoryItem[]
+  onComplete: (techId: string | null) => void
+}) {
+  const [countTarget, setCountTarget] = useState<string>(isOffice ? "warehouse" : currentUserId)
+
+  const targetItems = countTarget === "warehouse"
+    ? warehouseItems
+    : countTarget === "all"
+      ? [...inventoryItems, ...warehouseItems]
+      : inventoryItems
+
+  const targetTechId = countTarget === "warehouse" ? null : countTarget === "all" ? null : countTarget
+  const targetLabel = countTarget === "warehouse"
+    ? "Warehouse"
+    : countTarget === "all"
+      ? "All Inventory"
+      : isOffice
+        ? (allTechs.find((t) => t.id === countTarget)?.fullName ?? "Truck") + "'s Truck"
+        : "My Truck"
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isOffice && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Count Target</Label>
+          <Select value={countTarget} onValueChange={setCountTarget}>
+            <SelectTrigger className="w-full sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="warehouse">Warehouse</SelectItem>
+              {allTechs.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.fullName}&apos;s Truck
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <InventoryCountFlow
+        key={countTarget}
+        items={targetItems}
+        techId={targetTechId}
+        label={targetLabel}
+        onComplete={() => onComplete(targetTechId)}
+      />
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -276,20 +345,19 @@ export function InventoryPageClient({
         )}
 
         {activeTab === "count" && (
-          <InventoryCountFlow
-            items={isOffice ? inventoryItems : inventoryItems}
-            techId={isOffice ? selectedTechId : currentUserId}
-            label={
-              isOffice
-                ? (selectedTech?.fullName ? `${selectedTech.fullName}'s Truck` : "Selected Truck")
-                : "My Truck"
-            }
-            onComplete={() => {
-              // Refresh inventory after count
+          <CountTabContent
+            isOffice={isOffice}
+            currentUserId={currentUserId}
+            allTechs={allTechs}
+            inventoryItems={inventoryItems}
+            warehouseItems={warehouseItems}
+            onComplete={(techId) => {
               startTransition(async () => {
                 try {
-                  const items = await getTruckInventory(isOffice ? selectedTechId : currentUserId)
-                  setInventoryItems(items as TruckInventoryItem[])
+                  if (techId) {
+                    const items = await getTruckInventory(techId)
+                    setInventoryItems(items as TruckInventoryItem[])
+                  }
                 } catch (err) {
                   console.error("Failed to refresh inventory after count:", err)
                 }
