@@ -723,10 +723,20 @@ function InventoryRow({ item, onUpdate, onDelete, onTransfer, onReturnToWarehous
     })
   }
 
+  // Smart decrement based on unit — chemicals use smaller amounts
+  const useAmount = (() => {
+    const u = item.unit.toLowerCase()
+    if (u === "gallon") return 0.5
+    if (u === "lbs" || u === "lb") return 0.5
+    if (u === "floz" || u === "oz") return 4
+    if (u === "quart") return 0.5
+    return 1
+  })()
+
   function handleMarkUsed() {
     const current = parseFloat(item.quantity)
     if (current <= 0) return
-    const newQty = Math.max(0, current - 1)
+    const newQty = Math.max(0, current - useAmount)
     setQuantityStr(String(newQty))
     startTransition(async () => {
       try {
@@ -824,7 +834,7 @@ function InventoryRow({ item, onUpdate, onDelete, onTransfer, onReturnToWarehous
           onClick={handleMarkUsed}
           disabled={parseFloat(item.quantity) <= 0}
         >
-          Use 1
+          -{useAmount} {item.unit}
         </Button>
         {!isOfficeView && onReturnToWarehouse && (
           <Button
