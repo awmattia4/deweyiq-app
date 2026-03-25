@@ -325,7 +325,12 @@ export function VoiceNoteButton({
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === "no-speech") {
-        // Silence — not an error
+        // Silence — reset to idle so the mic button isn't stuck red.
+        // On some browsers (iOS/Safari), no-speech auto-ends recognition
+        // without firing onend, leaving the button stuck in "recording" state.
+        recognitionRef.current = null
+        setRecordingState("idle")
+        setInterimTranscript("")
         return
       }
       console.error("[VoiceNoteButton] Speech recognition error:", event.error)
