@@ -22,6 +22,8 @@ import { getSubcontractors } from "@/actions/projects-subcontractors"
 import type { SubcontractorRow } from "@/actions/projects-subcontractors"
 import { getTruckLoadTemplates } from "@/actions/truck-inventory"
 import { getChemicalProducts } from "@/actions/chemical-products"
+import { getAllVendors } from "@/actions/vendor-bills"
+import type { VendorRow } from "@/actions/vendor-bills"
 import type { ChemicalProduct } from "@/actions/chemical-products"
 
 export const metadata: Metadata = {
@@ -61,7 +63,7 @@ export default async function SettingsPage() {
   const isOwner = user.role === "owner"
 
   // Fetch owner data in parallel
-  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult] = isOwner
+  const [orgSettings, checklistTemplates, logoUrl, catalogItems, woTemplateList, stripeStatus, qboStatus, dunningConfig, notifTemplates, orgTemplateSettings, projectTemplatesResult, subcontractorsResult, truckTemplatesResult, chemicalProductCatalogResult, vendorsResult] = isOwner
     ? await Promise.all([
         getOrgSettings(),
         getChecklistTemplatesWithTasks(),
@@ -77,8 +79,9 @@ export default async function SettingsPage() {
         getSubcontractors(true),
         getTruckLoadTemplates(),
         getChemicalProducts(),
+        getAllVendors(true),
       ])
-    : [null, [], null, [], [], null, null, null, [], null, [], [], [], []]
+    : [null, [], null, [], [], null, null, null, [], null, [], [], [], [], null]
 
   const projectTemplateList: ProjectTemplate[] =
     isOwner && projectTemplatesResult && !("error" in projectTemplatesResult)
@@ -97,6 +100,11 @@ export default async function SettingsPage() {
   const chemicalProductCatalogList: ChemicalProduct[] = isOwner && Array.isArray(chemicalProductCatalogResult)
     ? (chemicalProductCatalogResult as ChemicalProduct[])
     : []
+
+  const vendorList: VendorRow[] =
+    isOwner && vendorsResult && typeof vendorsResult === "object" && "success" in vendorsResult && vendorsResult.success
+      ? vendorsResult.vendors
+      : []
 
   // Fetch team profiles for pay configuration and safety escalation (owner only)
   // adminDb bypasses RLS, so explicitly filter by org_id
@@ -237,6 +245,7 @@ export default async function SettingsPage() {
         inventoryTemplates={truckTemplateList}
         inventoryTechProfiles={techProfiles.map(t => ({ id: t.id, fullName: t.fullName }))}
         chemicalProductCatalog={chemicalProductCatalogList}
+        initialVendors={vendorList}
         signOutAction={async () => {
           "use server"
           await signOut()

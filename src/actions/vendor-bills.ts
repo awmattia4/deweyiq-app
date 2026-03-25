@@ -1006,3 +1006,208 @@ export async function createVendorQuick(
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Vendor full CRUD (Settings > Inventory > Vendors)
+// ---------------------------------------------------------------------------
+
+export interface VendorRow {
+  id: string
+  vendor_name: string
+  contact_email: string | null
+  contact_phone: string | null
+  address: string | null
+  notes: string | null
+  is_active: boolean
+}
+
+export interface CreateVendorInput {
+  vendor_name: string
+  contact_email: string | null
+  contact_phone: string | null
+  address: string | null
+  notes: string | null
+}
+
+/**
+ * getAllVendors — Returns all vendors for the org (including inactive when requested).
+ */
+export async function getAllVendors(
+  includeInactive = false
+): Promise<{ success: true; vendors: VendorRow[] } | { success: false; error: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    const conditions = [eq(vendors.org_id, orgId)]
+    if (!includeInactive) {
+      conditions.push(eq(vendors.is_active, true))
+    }
+
+    const vendorRows = await withRls(token, (db) =>
+      db
+        .select({
+          id: vendors.id,
+          vendor_name: vendors.vendor_name,
+          contact_email: vendors.contact_email,
+          contact_phone: vendors.contact_phone,
+          address: vendors.address,
+          notes: vendors.notes,
+          is_active: vendors.is_active,
+        })
+        .from(vendors)
+        .where(and(...conditions))
+        .orderBy(asc(vendors.vendor_name))
+    )
+
+    return { success: true, vendors: vendorRows }
+  } catch (err) {
+    console.error("[getAllVendors] Error:", err)
+    return { success: false, error: "Failed to load vendors" }
+  }
+}
+
+/**
+ * createVendor — Full vendor creation with all fields.
+ */
+export async function createVendor(
+  input: CreateVendorInput
+): Promise<{ success: true; vendor: VendorRow } | { success: false; error: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  if (!input.vendor_name?.trim()) {
+    return { success: false, error: "Vendor name is required" }
+  }
+
+  try {
+    const [created] = await withRls(token, (db) =>
+      db
+        .insert(vendors)
+        .values({
+          org_id: orgId,
+          vendor_name: input.vendor_name.trim(),
+          contact_email: input.contact_email?.trim() || null,
+          contact_phone: input.contact_phone?.trim() || null,
+          address: input.address?.trim() || null,
+          notes: input.notes?.trim() || null,
+          is_active: true,
+        })
+        .returning()
+    )
+
+    return {
+      success: true,
+      vendor: {
+        id: created.id,
+        vendor_name: created.vendor_name,
+        contact_email: created.contact_email,
+        contact_phone: created.contact_phone,
+        address: created.address,
+        notes: created.notes,
+        is_active: created.is_active,
+      },
+    }
+  } catch (err) {
+    console.error("[createVendor] Error:", err)
+    return { success: false, error: "Failed to create vendor" }
+  }
+}
+
+/**
+ * updateVendor — Updates an existing vendor's fields.
+ */
+export async function updateVendor(
+  vendorId: string,
+  input: CreateVendorInput
+): Promise<{ success: true; vendor: VendorRow } | { success: false; error: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  if (!input.vendor_name?.trim()) {
+    return { success: false, error: "Vendor name is required" }
+  }
+
+  try {
+    const [updated] = await withRls(token, (db) =>
+      db
+        .update(vendors)
+        .set({
+          vendor_name: input.vendor_name.trim(),
+          contact_email: input.contact_email?.trim() || null,
+          contact_phone: input.contact_phone?.trim() || null,
+          address: input.address?.trim() || null,
+          notes: input.notes?.trim() || null,
+          updated_at: new Date(),
+        })
+        .where(and(eq(vendors.id, vendorId), eq(vendors.org_id, orgId)))
+        .returning()
+    )
+
+    if (!updated) return { success: false, error: "Vendor not found" }
+
+    return {
+      success: true,
+      vendor: {
+        id: updated.id,
+        vendor_name: updated.vendor_name,
+        contact_email: updated.contact_email,
+        contact_phone: updated.contact_phone,
+        address: updated.address,
+        notes: updated.notes,
+        is_active: updated.is_active,
+      },
+    }
+  } catch (err) {
+    console.error("[updateVendor] Error:", err)
+    return { success: false, error: "Failed to update vendor" }
+  }
+}
+
+/**
+ * deactivateVendor — Soft-deletes a vendor by setting is_active = false.
+ */
+export async function deactivateVendor(
+  vendorId: string
+): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  const orgId = token.org_id as string
+  const userRole = token.user_role as string | undefined
+  if (!userRole || !["owner", "office"].includes(userRole)) {
+    return { success: false, error: "Insufficient permissions" }
+  }
+
+  try {
+    await withRls(token, (db) =>
+      db
+        .update(vendors)
+        .set({ is_active: false, updated_at: new Date() })
+        .where(and(eq(vendors.id, vendorId), eq(vendors.org_id, orgId)))
+    )
+
+    return { success: true }
+  } catch (err) {
+    console.error("[deactivateVendor] Error:", err)
+    return { success: false, error: "Failed to deactivate vendor" }
+  }
+}

@@ -930,6 +930,43 @@ export async function dismissAlert(alertId: string): Promise<{ success: boolean;
 }
 
 /**
+ * dismissAllAlerts — Permanently dismisses all active alerts (optionally filtered by type).
+ */
+export async function dismissAllAlerts(alertType?: AlertType): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+
+  try {
+    const now = new Date()
+    const conditions = [
+      isNull(alerts.dismissed_at),
+      or(
+        isNull(alerts.snoozed_until),
+        lt(alerts.snoozed_until, now)
+      ),
+    ]
+    if (alertType) {
+      conditions.push(eq(alerts.alert_type, alertType))
+    }
+
+    await withRls(token, (db) =>
+      db
+        .update(alerts)
+        .set({ dismissed_at: now })
+        .where(and(...conditions))
+    )
+
+    revalidatePath("/alerts")
+    revalidatePath("/dashboard")
+
+    return { success: true }
+  } catch (err) {
+    console.error("[dismissAllAlerts] Error:", err)
+    return { success: false, error: "Failed to dismiss alerts" }
+  }
+}
+
+/**
  * snoozeAlert — Hides an alert until the snooze period expires.
  */
 export async function snoozeAlert(

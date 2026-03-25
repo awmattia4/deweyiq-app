@@ -205,16 +205,10 @@ export function InventoryPageClient({
 
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab)
 
-  // Persist selected tech across refreshes
-  const getInitialTech = () => {
-    if (!isOffice) return currentUserId
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("inventory-selected-tech")
-      if (saved && allTechs.some((t) => t.id === saved)) return saved
-    }
-    return defaultTechId ?? currentUserId
-  }
-  const [selectedTechId, setSelectedTechId] = useState(getInitialTech)
+  // Always start with the server-default tech to ensure items match
+  const [selectedTechId, setSelectedTechId] = useState(
+    isOffice ? (defaultTechId ?? allTechs[0]?.id ?? currentUserId) : currentUserId
+  )
   const [inventoryItems, setInventoryItems] = useState<TruckInventoryItem[]>(initialInventoryItems)
   const [shoppingItems] = useState<ShoppingListItem[]>(initialShoppingItems)
   const [warehouseItems] = useState<TruckInventoryItem[]>(initialWarehouseItems)
@@ -225,17 +219,6 @@ export function InventoryPageClient({
     setActiveTab(tabId)
     window.history.replaceState(null, "", `#${tabId}`)
   }
-
-  // If persisted tech differs from server-loaded default, fetch their inventory on mount
-  // No startTransition — we need this to complete before user sees stale data
-  useEffect(() => {
-    if (isOffice && selectedTechId !== defaultTechId) {
-      getTruckInventory(selectedTechId)
-        .then((items) => setInventoryItems(items as TruckInventoryItem[]))
-        .catch((err) => console.error("Failed to fetch inventory for saved tech:", err))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Listen for popstate (browser back/forward) to update tab
   useEffect(() => {
@@ -251,7 +234,6 @@ export function InventoryPageClient({
 
   function handleTechChange(techId: string) {
     setSelectedTechId(techId)
-    localStorage.setItem("inventory-selected-tech", techId)
     startTransition(async () => {
       try {
         const items = await getTruckInventory(techId)

@@ -37,6 +37,8 @@ import { TimeTrackingSettings } from "@/components/settings/time-tracking-settin
 import { ProjectTemplates } from "@/components/settings/project-templates"
 import { SubcontractorSettings } from "@/components/settings/subcontractor-settings"
 import { TruckTemplatesSettings } from "@/components/inventory/truck-templates-settings"
+import { VendorsSettings } from "@/components/settings/vendors-settings"
+import type { VendorRow } from "@/actions/vendor-bills"
 import type { BroadcastHistoryEntry } from "@/actions/broadcast"
 import type { NotificationPreferenceRow } from "@/actions/user-notifications"
 import type { QboConnectionStatus } from "@/components/settings/qbo-connect-settings"
@@ -138,6 +140,8 @@ interface SettingsTabsProps {
   inventoryTemplates?: Array<{ id: string; name: string; target_role: string | null; is_active: boolean }>
   // Chemical products catalog (full CRUD, Inventory tab)
   chemicalProductCatalog?: ChemicalProduct[]
+  // Vendors/Suppliers (Inventory tab)
+  initialVendors?: VendorRow[]
   // Sign out form action
   signOutAction: () => Promise<void>
 }
@@ -179,6 +183,7 @@ export function SettingsTabs({
   inventoryTechProfiles = [],
   inventoryTemplates = [],
   chemicalProductCatalog = [],
+  initialVendors = [],
   signOutAction,
 }: SettingsTabsProps) {
   const isOwner = role === "owner"
@@ -636,6 +641,18 @@ export function SettingsTabs({
                 initialTemplates={inventoryTemplates}
                 allTechs={inventoryTechProfiles}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Vendors / Suppliers</CardTitle>
+              <CardDescription>
+                Manage your suppliers for purchase orders. Saved vendors can be selected when creating POs from the Purchasing tab.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VendorsSettings initialVendors={initialVendors} />
             </CardContent>
           </Card>
         </div>

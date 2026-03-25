@@ -12,6 +12,8 @@
  * - mapQboItemToCatalogItem: QBO Item -> DeweyIQ parts_catalog shape (Phase 13)
  */
 
+import { toLocalDateString } from "@/lib/date-utils"
+
 // ---------------------------------------------------------------------------
 // Types (minimal shapes, not full DB row types)
 // ---------------------------------------------------------------------------
@@ -125,7 +127,7 @@ export function mapInvoiceToQbo(
   }
 
   if (invoice.issued_at) {
-    qboInvoice.TxnDate = invoice.issued_at.toISOString().split("T")[0]
+    qboInvoice.TxnDate = toLocalDateString(invoice.issued_at)
   }
 
   if (invoice.due_date) {
@@ -182,7 +184,7 @@ export function mapPaymentToQbo(
   }
 
   if (payment.settled_at) {
-    qboPayment.TxnDate = payment.settled_at.toISOString().split("T")[0]
+    qboPayment.TxnDate = toLocalDateString(new Date(payment.settled_at))
   }
 
   // Map DeweyIQ payment method to QBO PaymentMethodRef

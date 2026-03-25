@@ -88,6 +88,21 @@ export interface DeductedItem {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Maps parts_catalog categories to truck inventory categories */
+function _mapCatalogCategory(cat: string): string {
+  const c = cat.toLowerCase()
+  if (c === "chemical" || c.includes("chlorine") || c.includes("pool")) return "chemical"
+  if (c === "tool") return "tool"
+  if (c === "equipment") return "equipment"
+  if (c === "pump" || c === "filter" || c === "plumbing" || c === "electrical") return "part"
+  if (c === "other" || c === "labor") return "other"
+  return "part"
+}
+
+// ---------------------------------------------------------------------------
 // getTruckInventory
 // ---------------------------------------------------------------------------
 
@@ -531,7 +546,7 @@ export async function applyTruckLoadTemplate(techId: string, templateId: string)
       catalog_item_id: templateItem.catalog_item_id ?? null,
       chemical_product_id: templateItem.chemical_product_id ?? null,
       item_name: templateItem.item_name,
-      category: templateItem.category,
+      category: _mapCatalogCategory(templateItem.category),
       quantity: String(templateItem.default_quantity),
       unit: templateItem.unit,
       min_threshold: String(templateItem.min_threshold),

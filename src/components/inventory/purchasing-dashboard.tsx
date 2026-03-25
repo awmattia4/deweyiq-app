@@ -15,7 +15,7 @@
  * - Top stats bar: total needed, total ordered
  */
 
-import { useState, useTransition } from "react"
+import { useState, useEffect, useTransition } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/card"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import { getPurchasingDashboard } from "@/actions/purchasing"
+import { getVendors } from "@/actions/vendor-bills"
 import type { PurchasingDashboardData, PurchasingGroup } from "@/actions/purchasing"
 import { PoBuilder } from "./po-builder"
 
@@ -148,6 +149,13 @@ export function PurchasingDashboard({ initialData }: PurchasingDashboardProps) {
   const [data, setData] = useState<PurchasingDashboardData>(initialData)
   const [isPending, startTransition] = useTransition()
   const [poBuilderGroup, setPoBuilderGroup] = useState<PurchasingGroup | null>(null)
+  const [vendorList, setVendorList] = useState<Array<{ id: string; vendor_name: string; contact_email: string | null; contact_phone: string | null }>>([])
+
+  useEffect(() => {
+    getVendors().then((result) => {
+      if (result.success) setVendorList(result.vendors)
+    })
+  }, [])
 
   function handleGroupByChange(newGroupBy: "supplier" | "urgency") {
     setGroupBy(newGroupBy)
@@ -249,6 +257,7 @@ export function PurchasingDashboard({ initialData }: PurchasingDashboardProps) {
           supplierName={poBuilderGroup.key !== "Unassigned" && poBuilderGroup.key !== "urgent-needed" && poBuilderGroup.key !== "needed" && poBuilderGroup.key !== "ordered"
             ? poBuilderGroup.key
             : undefined}
+          vendors={vendorList}
           onClose={() => {
             setPoBuilderGroup(null)
             handleRefresh()

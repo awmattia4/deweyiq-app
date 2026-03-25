@@ -72,8 +72,8 @@ export default async function InventoryPage() {
     console.error("[InventoryPage] Failed to fetch tech profiles:", err)
   }
 
-  // Default to current user if they're in the list (owner viewing their own truck), else first tech
-  const defaultTechId = allTechs.find((t) => t.id === user.id)?.id ?? allTechs[0]?.id ?? user.id
+  // Default to first tech in the list (alphabetical order)
+  const defaultTechId = allTechs[0]?.id ?? user.id
 
   const [
     inventoryItems,

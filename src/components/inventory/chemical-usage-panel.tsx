@@ -13,9 +13,35 @@
 import { useState, useTransition } from "react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { getChemicalUsageReport } from "@/actions/reporting"
 import type { ChemicalUsageReport, ChemicalUsageEntry } from "@/actions/reporting"
+
+// ---------------------------------------------------------------------------
+// Human-readable chemical labels
+// ---------------------------------------------------------------------------
+
+const CHEMICAL_LABELS: Record<string, string> = {
+  sodiumHypochlorite_12pct: "Sodium Hypochlorite (12%)",
+  calciumHypochlorite_67pct: "Calcium Hypochlorite (67%)",
+  sodiumBicarbonate: "Sodium Bicarbonate",
+  muriatic_31pct: "Muriatic Acid (31%)",
+  sodaAsh: "Soda Ash",
+  cyanuricAcid: "Cyanuric Acid",
+  calciumChloride: "Calcium Chloride",
+  diatomaceousEarth: "Diatomaceous Earth",
+  aluminumSulfate: "Aluminum Sulfate",
+  sodiumThiosulfate: "Sodium Thiosulfate",
+}
+
+function formatChemicalName(key: string): string {
+  if (CHEMICAL_LABELS[key]) return CHEMICAL_LABELS[key]
+  // Fallback: convert camelCase/snake_case to title case
+  return key
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/(\d+)pct/g, "$1%")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -157,27 +183,27 @@ export function ChemicalUsagePanel({ initialData }: ChemicalUsagePanelProps) {
 
       {/* Stats */}
       {data.entries.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Groups</p>
-              <p className="text-2xl font-bold">
+              <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">Groups</p>
+              <p className="text-xl sm:text-2xl font-bold">
                 {new Set(data.entries.map((e) => e.groupKey)).size}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Chemicals</p>
-              <p className="text-2xl font-bold">
+              <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">Chemicals</p>
+              <p className="text-xl sm:text-2xl font-bold">
                 {new Set(data.entries.map((e) => e.chemical)).size}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Visits</p>
-              <p className="text-2xl font-bold">
+              <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Visits</p>
+              <p className="text-xl sm:text-2xl font-bold">
                 {Math.max(...data.entries.map((e) => e.visitCount), 0)}
               </p>
             </CardContent>
@@ -198,64 +224,109 @@ export function ChemicalUsagePanel({ initialData }: ChemicalUsagePanelProps) {
               No chemical dosing data for this period.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th
-                      className="text-left px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort("groupLabel")}
-                    >
-                      {groupBys.find((g) => g.value === groupBy)?.label}
-                      <SortIndicator k="groupLabel" />
-                    </th>
-                    <th
-                      className="text-left px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort("chemical")}
-                    >
-                      Chemical
-                      <SortIndicator k="chemical" />
-                    </th>
-                    <th
-                      className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort("visitCount")}
-                    >
-                      Visits
-                      <SortIndicator k="visitCount" />
-                    </th>
-                    <th
-                      className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort("totalAmount")}
-                    >
-                      Total
-                      <SortIndicator k="totalAmount" />
-                    </th>
-                    <th
-                      className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                      onClick={() => handleSort("avgAmountPerVisit")}
-                    >
-                      Avg/Visit
-                      <SortIndicator k="avgAmountPerVisit" />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {sorted.map((entry, idx) => (
-                    <tr key={`${entry.groupKey}-${entry.chemical}-${idx}`} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-2.5 font-medium">{entry.groupLabel}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{entry.chemical}</td>
-                      <td className="px-4 py-2.5 text-right">{entry.visitCount}</td>
-                      <td className="px-4 py-2.5 text-right font-medium">
-                        {formatAmount(entry.totalAmount, entry.unit)}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground">
-                        {formatAmount(entry.avgAmountPerVisit, entry.unit)}
-                      </td>
+            <>
+              {/* Sort controls for mobile */}
+              <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-1 sm:hidden">
+                <span className="text-xs text-muted-foreground mr-1 self-center">Sort:</span>
+                {([
+                  { key: "groupLabel" as SortKey, label: groupBys.find((g) => g.value === groupBy)?.label ?? "Group" },
+                  { key: "chemical" as SortKey, label: "Chemical" },
+                  { key: "totalAmount" as SortKey, label: "Total" },
+                  { key: "visitCount" as SortKey, label: "Visits" },
+                ]).map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => handleSort(s.key)}
+                    className={cn(
+                      "px-2 py-0.5 text-xs rounded-full border transition-colors",
+                      sortKey === s.key
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/50 text-muted-foreground border-border hover:text-foreground"
+                    )}
+                  >
+                    {s.label}
+                    {sortKey === s.key && <span className="ml-0.5">{sortDir === "asc" ? "↑" : "↓"}</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Mobile: card layout */}
+              <div className="sm:hidden divide-y divide-border">
+                {sorted.map((entry, idx) => (
+                  <div key={`${entry.groupKey}-${entry.chemical}-${idx}`} className="px-4 py-3 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate">{entry.groupLabel}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{entry.visitCount} visits</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{formatChemicalName(entry.chemical)}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{formatAmount(entry.totalAmount, entry.unit)}</span>
+                      <span className="text-xs text-muted-foreground">{formatAmount(entry.avgAmountPerVisit, entry.unit)}/visit</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th
+                        className="text-left px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => handleSort("groupLabel")}
+                      >
+                        {groupBys.find((g) => g.value === groupBy)?.label}
+                        <SortIndicator k="groupLabel" />
+                      </th>
+                      <th
+                        className="text-left px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => handleSort("chemical")}
+                      >
+                        Chemical
+                        <SortIndicator k="chemical" />
+                      </th>
+                      <th
+                        className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => handleSort("visitCount")}
+                      >
+                        Visits
+                        <SortIndicator k="visitCount" />
+                      </th>
+                      <th
+                        className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => handleSort("totalAmount")}
+                      >
+                        Total
+                        <SortIndicator k="totalAmount" />
+                      </th>
+                      <th
+                        className="text-right px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => handleSort("avgAmountPerVisit")}
+                      >
+                        Avg/Visit
+                        <SortIndicator k="avgAmountPerVisit" />
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {sorted.map((entry, idx) => (
+                      <tr key={`${entry.groupKey}-${entry.chemical}-${idx}`} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium">{entry.groupLabel}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground">{formatChemicalName(entry.chemical)}</td>
+                        <td className="px-4 py-2.5 text-right">{entry.visitCount}</td>
+                        <td className="px-4 py-2.5 text-right font-medium">
+                          {formatAmount(entry.totalAmount, entry.unit)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground">
+                          {formatAmount(entry.avgAmountPerVisit, entry.unit)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

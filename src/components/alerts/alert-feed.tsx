@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { CheckCircle2Icon } from "lucide-react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { CheckCircle2Icon, Trash2Icon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AlertCard } from "@/components/alerts/alert-card"
+import { dismissAllAlerts } from "@/actions/alerts"
 import type { Alert, AlertType } from "@/lib/alerts/constants"
 
 // ─── Filter configuration ──────────────────────────────────────────────────────
@@ -34,6 +36,16 @@ interface AlertFeedProps {
  */
 export function AlertFeed({ alerts }: AlertFeedProps) {
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all")
+  const [isDismissing, startDismissTransition] = useTransition()
+  const router = useRouter()
+
+  function handleClearAll() {
+    startDismissTransition(async () => {
+      const alertType = activeFilter === "all" ? undefined : activeFilter
+      await dismissAllAlerts(alertType)
+      router.refresh()
+    })
+  }
 
   const filtered =
     activeFilter === "all"
@@ -54,39 +66,52 @@ export function AlertFeed({ alerts }: AlertFeedProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Filter chips ──────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        {FILTER_CHIPS.map((chip) => {
-          const isActive = activeFilter === chip.value
-          const chipCount = countByType[chip.value]
+      {/* ── Filter chips + Clear All ─────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {FILTER_CHIPS.map((chip) => {
+            const isActive = activeFilter === chip.value
+            const chipCount = countByType[chip.value]
 
-          return (
-            <button
-              key={chip.value}
-              onClick={() => setActiveFilter(chip.value)}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-              )}
-            >
-              {chip.label}
-              {chipCount > 0 && (
-                <span
-                  className={cn(
-                    "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs",
-                    isActive
-                      ? "bg-primary-foreground/20 text-primary-foreground"
-                      : "bg-background text-foreground"
-                  )}
-                >
-                  {chipCount}
-                </span>
-              )}
-            </button>
-          )
-        })}
+            return (
+              <button
+                key={chip.value}
+                onClick={() => setActiveFilter(chip.value)}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                )}
+              >
+                {chip.label}
+                {chipCount > 0 && (
+                  <span
+                    className={cn(
+                      "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs",
+                      isActive
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-background text-foreground"
+                    )}
+                  >
+                    {chipCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {filtered.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            disabled={isDismissing}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
+          >
+            <Trash2Icon className="h-3 w-3" />
+            {isDismissing ? "Clearing..." : `Clear ${activeFilter === "all" ? "All" : "Filtered"}`}
+          </button>
+        )}
       </div>
 
       {/* ── Alert list ────────────────────────────────────────────────── */}

@@ -1,4 +1,8 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
+import { XIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { ChurnPrediction, ChurnSummary } from "@/actions/ai-churn"
@@ -42,7 +46,7 @@ function RiskBadge({ level }: { level: ChurnPrediction["riskLevel"] }) {
 
 // ─── Customer row ──────────────────────────────────────────────────────────────
 
-function CustomerRow({ prediction }: { prediction: ChurnPrediction }) {
+function CustomerRow({ prediction, onDismiss }: { prediction: ChurnPrediction; onDismiss: (e: React.MouseEvent, id: string) => void }) {
   const {
     customerId,
     customerName,
@@ -62,7 +66,16 @@ function CustomerRow({ prediction }: { prediction: ChurnPrediction }) {
         <span className="text-sm font-medium text-foreground leading-tight truncate">
           {customerName}
         </span>
-        <RiskBadge level={riskLevel} />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <RiskBadge level={riskLevel} />
+          <button
+            onClick={(e) => onDismiss(e, customerId)}
+            className="p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Dismiss"
+          >
+            <XIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Risk factor chips */}
@@ -117,8 +130,34 @@ function CustomerRow({ prediction }: { prediction: ChurnPrediction }) {
  * - Clickable cards over buttons
  */
 export function ChurnPredictions({ predictions, summary }: ChurnPredictionsProps) {
-  const visiblePredictions = predictions.slice(0, 10)
-  const hasMore = predictions.length > 10
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set()
+    try {
+      const saved = localStorage.getItem("churn-dismissed")
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+
+  function dismissCustomer(e: React.MouseEvent, customerId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    const next = new Set(dismissedIds)
+    next.add(customerId)
+    setDismissedIds(next)
+    localStorage.setItem("churn-dismissed", JSON.stringify([...next]))
+  }
+
+  function clearAllPredictions() {
+    const allIds = new Set(predictions.map((p) => p.customerId))
+    setDismissedIds(allIds)
+    localStorage.setItem("churn-dismissed", JSON.stringify([...allIds]))
+  }
+
+  const activePredictions = predictions.filter((p) => !dismissedIds.has(p.customerId))
+  const visiblePredictions = activePredictions.slice(0, 10)
+  const hasMore = activePredictions.length > 10
 
   const atRiskTotal = summary.highRisk + summary.mediumRisk
 
@@ -129,17 +168,27 @@ export function ChurnPredictions({ predictions, summary }: ChurnPredictionsProps
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
           Customer Retention
         </h2>
-        {atRiskTotal > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {atRiskTotal === 1
-              ? "1 customer at risk"
-              : `${atRiskTotal} customers at risk`}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {atRiskTotal > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {atRiskTotal === 1
+                ? "1 customer at risk"
+                : `${atRiskTotal} customers at risk`}
+            </span>
+          )}
+          {activePredictions.length > 0 && (
+            <button
+              onClick={clearAllPredictions}
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Empty state */}
-      {predictions.length === 0 ? (
+      {activePredictions.length === 0 ? (
         <Card>
           <CardContent className="pt-5 pb-5">
             <p className="text-sm text-muted-foreground italic">
@@ -181,7 +230,7 @@ export function ChurnPredictions({ predictions, summary }: ChurnPredictionsProps
             {/* Customer list */}
             <div className="flex flex-col gap-2">
               {visiblePredictions.map((prediction) => (
-                <CustomerRow key={prediction.customerId} prediction={prediction} />
+                <CustomerRow key={prediction.customerId} prediction={prediction} onDismiss={dismissCustomer} />
               ))}
             </div>
 

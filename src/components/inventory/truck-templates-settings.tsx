@@ -141,6 +141,16 @@ function ItemCardEditor({ item, index, onChange, onRemove }: ItemCardEditorProps
     debounceRef.current = setTimeout(() => runSearch(val), 300)
   }
 
+  function mapCatalogCategory(cat: string): string {
+    const c = cat.toLowerCase()
+    if (c === "chemical" || c.includes("chlorine") || c.includes("pool")) return "chemical"
+    if (c === "tool") return "tool"
+    if (c === "equipment") return "equipment"
+    if (c === "pump" || c === "filter" || c === "plumbing" || c === "electrical") return "part"
+    if (c === "other" || c === "labor") return "other"
+    return "part"
+  }
+
   function handleSelectResult(result: CatalogSearchResult) {
     setNameInput(result.name)
     setShowDropdown(false)
@@ -148,7 +158,7 @@ function ItemCardEditor({ item, index, onChange, onRemove }: ItemCardEditorProps
     onChange(index, {
       ...item,
       item_name: result.name,
-      category: result.category,
+      category: mapCatalogCategory(result.category),
       unit: result.unit,
       catalog_item_id: result.catalogItemId ?? null,
       chemical_product_id: result.chemicalProductId ?? null,

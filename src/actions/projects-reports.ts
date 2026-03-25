@@ -259,7 +259,8 @@ export async function getProjectDashboardData(): Promise<
         .where(
           and(
             eq(invoices.org_id, sql`(select auth.jwt() ->> 'org_id')::uuid`),
-            not(eq(invoices.status, "void"))
+            not(eq(invoices.status, "void")),
+            sql`${invoices.project_id} IS NOT NULL`
           )
         )
     )

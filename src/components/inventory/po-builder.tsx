@@ -24,6 +24,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { createPurchaseOrder, sendPurchaseOrder } from "@/actions/purchasing"
 import type { CreatePoData } from "@/actions/purchasing"
 
@@ -40,6 +47,13 @@ interface PoLineItem {
   unitPrice: string
 }
 
+interface VendorOption {
+  id: string
+  vendor_name: string
+  contact_email: string | null
+  contact_phone: string | null
+}
+
 interface PoBuilderProps {
   open: boolean
   preselectedItems?: Array<{
@@ -50,6 +64,7 @@ interface PoBuilderProps {
     unitPrice: string
   }>
   supplierName?: string
+  vendors?: VendorOption[]
   onClose: () => void
 }
 
@@ -61,12 +76,31 @@ export function PoBuilder({
   open,
   preselectedItems = [],
   supplierName: initialSupplierName,
+  vendors = [],
   onClose,
 }: PoBuilderProps) {
   const [mode, setMode] = useState<"formal" | "checklist">("checklist")
   const [supplierName, setSupplierName] = useState(initialSupplierName ?? "")
   const [supplierContact, setSupplierContact] = useState("")
   const [supplierEmail, setSupplierEmail] = useState("")
+  const [selectedVendorId, setSelectedVendorId] = useState<string>("")
+
+  function handleVendorSelect(vendorId: string) {
+    if (vendorId === "__manual__") {
+      setSelectedVendorId("")
+      setSupplierName("")
+      setSupplierEmail("")
+      setSupplierContact("")
+      return
+    }
+    setSelectedVendorId(vendorId)
+    const vendor = vendors.find((v) => v.id === vendorId)
+    if (vendor) {
+      setSupplierName(vendor.vendor_name)
+      setSupplierEmail(vendor.contact_email ?? "")
+      setSupplierContact("")
+    }
+  }
   const [notes, setNotes] = useState("")
   const [lineItems, setLineItems] = useState<PoLineItem[]>(() =>
     preselectedItems.map((item, i) => ({
@@ -210,16 +244,38 @@ export function PoBuilder({
         <div className="flex flex-col gap-4 mt-2">
           {/* Supplier info */}
           <div className="flex flex-col gap-3">
-            <div>
-              <Label htmlFor="supplier-name">Supplier Name</Label>
-              <Input
-                id="supplier-name"
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                placeholder="e.g. Pool Supply World"
-                className="mt-1"
-              />
-            </div>
+            {vendors.length > 0 && (
+              <div>
+                <Label>Select Vendor</Label>
+                <Select value={selectedVendorId || "__manual__"} onValueChange={handleVendorSelect}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose a saved vendor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__manual__">Enter manually</SelectItem>
+                    {vendors.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.vendor_name}
+                        {v.contact_email ? ` — ${v.contact_email}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {!selectedVendorId && (
+              <div>
+                <Label htmlFor="supplier-name">Supplier Name</Label>
+                <Input
+                  id="supplier-name"
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  placeholder="e.g. Pool Supply World"
+                  className="mt-1"
+                />
+              </div>
+            )}
 
             {mode === "formal" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
