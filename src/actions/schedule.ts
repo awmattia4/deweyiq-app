@@ -1028,11 +1028,12 @@ export interface UnassignedCustomer {
 }
 
 /**
- * getUnassignedCustomers — fetch customers without a route_stop for tech+date.
+ * getUnassignedCustomers — fetch customers without a route_stop for ANY tech on this date.
  *
  * Uses LEFT JOIN approach per RLS pitfall (no correlated subqueries on RLS tables).
- * Fetches all org customers, fetches assigned customer_ids for tech+date, filters in JS.
- * Returns customers with their pool count and pool list.
+ * Fetches all org customers, fetches assigned customer_ids across ALL techs for this date,
+ * then filters in JS. This prevents double-booking: if Truck 1 already has a customer
+ * assigned, that customer won't appear as "unassigned" for Truck 2 either.
  * Owner/office only.
  */
 export async function getUnassignedCustomers(
@@ -1058,15 +1059,16 @@ export async function getUnassignedCustomers(
 
       if (allCustomers.length === 0) return []
 
-      // Fetch assigned stops for this tech+date — track both customer_id AND pool_id
-      // so we can identify which specific pools are already assigned
+      // Fetch assigned stops for ALL techs on this date — track both customer_id AND pool_id
+      // so we can identify which specific pools are already assigned by ANY tech/truck.
+      // This prevents double-booking: a customer scheduled on one truck won't appear
+      // as "unassigned" when viewing another tech's route.
       const assignedStops = await db
         .select({ customer_id: routeStops.customer_id, pool_id: routeStops.pool_id })
         .from(routeStops)
         .where(
           and(
             eq(routeStops.org_id, orgId),
-            eq(routeStops.tech_id, techId),
             eq(routeStops.scheduled_date, date)
           )
         )
