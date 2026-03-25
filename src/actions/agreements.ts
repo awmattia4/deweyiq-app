@@ -22,8 +22,18 @@ import {
   agreementTemplates,
   orgSettings,
   customers,
+  orgs,
+  pools,
 } from "@/lib/db/schema"
 import { eq, and, desc, inArray, sql, count } from "drizzle-orm"
+import { createElement } from "react"
+import { renderToBuffer } from "@react-pdf/renderer"
+import { render as renderEmail } from "@react-email/render"
+import { Resend } from "resend"
+import { signAgreementToken } from "@/lib/agreements/agreement-token"
+import { AgreementDocument } from "@/lib/pdf/agreement-pdf"
+import type { AgreementDocumentProps, AgreementPoolEntryPdfData } from "@/lib/pdf/agreement-pdf"
+import { AgreementEmail } from "@/lib/emails/agreement-email"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -739,5 +749,61 @@ export async function deleteAgreementTemplate(
   } catch (err) {
     console.error("[deleteAgreementTemplate]", err)
     return { success: false, error: "Failed to delete template" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getCustomersForAgreement
+// ---------------------------------------------------------------------------
+
+export interface CustomerForAgreement {
+  id: string
+  full_name: string
+  pools: Array<{ id: string; name: string; type: string }>
+}
+
+/**
+ * Returns all customers with their pools for the agreement builder.
+ * Two separate queries to avoid RLS correlated subquery pitfall (MEMORY.md).
+ */
+export async function getCustomersForAgreement(): Promise<CustomerForAgreement[]> {
+  const token = await getRlsToken()
+  if (!token) return []
+
+  try {
+    return await withRls(token, async (db) => {
+      const customerRows = await db
+        .select({ id: customers.id, full_name: customers.full_name })
+        .from(customers)
+        .orderBy(customers.full_name)
+
+      if (customerRows.length === 0) return []
+
+      const customerIds = customerRows.map((c) => c.id)
+      const poolRows = await db
+        .select({
+          id: pools.id,
+          customer_id: pools.customer_id,
+          name: pools.name,
+          type: pools.type,
+        })
+        .from(pools)
+        .where(inArray(pools.customer_id, customerIds))
+
+      const poolsByCustomer: Record<string, Array<{ id: string; name: string; type: string }>> = {}
+      for (const p of poolRows) {
+        if (!poolsByCustomer[p.customer_id]) poolsByCustomer[p.customer_id] = []
+        poolsByCustomer[p.customer_id].push({ id: p.id, name: p.name, type: p.type })
+      }
+
+      return customerRows.map((c) => ({
+        id: c.id,
+        full_name: c.full_name,
+        pools: poolsByCustomer[c.id] ?? [],
+      }))
+    })
+  } catch (err) {
+    console.error("[getCustomersForAgreement]", err)
+    return []
   }
 }
