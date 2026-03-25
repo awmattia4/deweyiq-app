@@ -131,10 +131,27 @@ function generateDatesForRule(
   return dates
 }
 
-// ─── Internal stop generation helper ─────────────────────────────────────────
+// ─── Stop generation helper ──────────────────────────────────────────────────
 
 /**
- * generateStopsForRule — internal helper (not exported as server action).
+ * regenerateStopsForRule — public wrapper for stop regeneration.
+ * Called after schedule rule frequency/day changes (e.g. agreement amendments).
+ * Deletes future unstarted stops then regenerates from the updated rule.
+ */
+export async function regenerateStopsForRule(ruleId: string): Promise<{ success: boolean; error?: string }> {
+  const token = await getRlsToken()
+  if (!token) return { success: false, error: "Not authenticated" }
+  try {
+    await generateStopsForRule(token, ruleId)
+    return { success: true }
+  } catch (err) {
+    console.error("[regenerateStopsForRule]", err)
+    return { success: false, error: "Failed to regenerate stops" }
+  }
+}
+
+/**
+ * generateStopsForRule — internal helper.
  *
  * Reads the schedule rule, computes dates for the next 28 days from today,
  * checks org holidays, and upserts route_stops rows.

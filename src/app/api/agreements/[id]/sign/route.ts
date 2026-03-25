@@ -249,16 +249,26 @@ async function _handleAccept(
     .where(eq(agreementPoolEntries.agreement_id, agreement.id))
 
   // ── c) Auto-provision schedule rules ─────────────────────────────────────
-  // Compute anchor_date: use today's date in local time (never toISOString())
   const today = new Date()
-  const anchor =
-    today.getFullYear() +
-    "-" +
-    String(today.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(today.getDate()).padStart(2, "0")
 
   for (const entry of entries) {
+    // Compute anchor_date: snap to preferred day of week if set,
+    // otherwise use today. This ensures weekly/biweekly stops land on
+    // the customer's preferred day, not the day they happened to sign.
+    let anchorDate = today
+    if (entry.preferred_day_of_week != null) {
+      const todayDow = today.getDay() // 0=Sun...6=Sat
+      let daysUntil = entry.preferred_day_of_week - todayDow
+      if (daysUntil <= 0) daysUntil += 7 // next occurrence (not today — give office time to prepare)
+      anchorDate = new Date(today.getTime() + daysUntil * 86400000)
+    }
+    const anchor =
+      anchorDate.getFullYear() +
+      "-" +
+      String(anchorDate.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(anchorDate.getDate()).padStart(2, "0")
+
     // Insert schedule rule
     const [insertedRule] = await adminDb
       .insert(scheduleRules)
@@ -309,7 +319,7 @@ async function _handleAccept(
       await adminDb
         .update(customers)
         .set({
-          billing_model: "per_visit",
+          billing_model: "per_stop",
           updated_at: now,
         })
         .where(eq(customers.id, agreement.customer_id))

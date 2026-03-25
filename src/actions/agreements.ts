@@ -2648,6 +2648,7 @@ export async function amendAgreement(
         }
       }
 
+      let rulesToRegenerate: string[] | undefined
       if (changes.frequencyChanges) {
         for (const [entryId, freqChange] of Object.entries(changes.frequencyChanges)) {
           const updateFields: Record<string, unknown> = {}
@@ -2671,6 +2672,10 @@ export async function amendAgreement(
                 .update(scheduleRules)
                 .set(ruleUpdate)
                 .where(eq(scheduleRules.id, entry.schedule_rule_id))
+
+              // Track rule IDs that need stop regeneration
+              if (!rulesToRegenerate) rulesToRegenerate = []
+              rulesToRegenerate.push(entry.schedule_rule_id)
             }
           }
         }
@@ -2847,10 +2852,20 @@ export async function amendAgreement(
       revalidatePath(`/agreements/${id}`)
       revalidatePath(`/customers/${existing.customer_id}`)
 
-      return { success: true, data: updated }
+      return { success: true, data: updated, rulesToRegenerate }
     })
 
-    return result
+    // Regenerate stops for any rules that had frequency changes (outside transaction)
+    if (result.success && result.rulesToRegenerate?.length) {
+      const { regenerateStopsForRule } = await import("@/actions/schedule")
+      for (const ruleId of result.rulesToRegenerate) {
+        await regenerateStopsForRule(ruleId).catch((err: unknown) =>
+          console.error(`[amendAgreement] Failed to regenerate stops for rule ${ruleId}:`, err)
+        )
+      }
+    }
+
+    return { success: result.success, data: result.data, error: result.success ? undefined : "Amendment failed" }
   } catch (err) {
     console.error("[amendAgreement]", err)
     return { success: false, error: "Failed to amend agreement" }

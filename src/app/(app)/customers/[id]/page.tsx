@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { withRls } from "@/lib/db"
-import { customers, profiles } from "@/lib/db/schema"
+import { customers, profiles, serviceAgreements } from "@/lib/db/schema"
 import { createClient } from "@/lib/supabase/server"
-import { eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CustomerHeader } from "@/components/customers/customer-header"
 import { CustomerInlineEdit } from "@/components/customers/customer-inline-edit"
@@ -57,13 +58,33 @@ export default async function CustomerProfilePage({
     templateTasks: [],
     customTasks: [],
   }
+  let customerAgreements: Array<{
+    id: string; agreement_number: string; status: string;
+    term_type: string; start_date: string | null; end_date: string | null;
+    auto_renew: boolean; created_at: Date;
+  }> = []
 
   try {
-    ;[customer, techs, orgSettings, checklistView] = await Promise.all([
+    ;[customer, techs, orgSettings, checklistView, customerAgreements] = await Promise.all([
       fetchCustomer(token, id),
       fetchTechs(token),
       getOrgSettings(),
       getCustomerChecklistView(id),
+      withRls(token, (db) =>
+        db.select({
+          id: serviceAgreements.id,
+          agreement_number: serviceAgreements.agreement_number,
+          status: serviceAgreements.status,
+          term_type: serviceAgreements.term_type,
+          start_date: serviceAgreements.start_date,
+          end_date: serviceAgreements.end_date,
+          auto_renew: serviceAgreements.auto_renew,
+          created_at: serviceAgreements.created_at,
+        })
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.customer_id, id))
+        .orderBy(desc(serviceAgreements.created_at))
+      ),
     ])
   } catch (err) {
     console.error("[CustomerProfilePage] DB error:", err)
@@ -119,12 +140,13 @@ export default async function CustomerProfilePage({
 
       {/* ── Tabbed sections ───────────────────────────────────────────────── */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="pools">Pools</TabsTrigger>
           <TabsTrigger value="equipment">Equipment</TabsTrigger>
           <TabsTrigger value="checklist">Checklist</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="agreements">Agreements</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
@@ -162,6 +184,46 @@ export default async function CustomerProfilePage({
         {/* History — vertical timeline of service visits (Phase 3 populates with real data) */}
         <TabsContent value="history" className="mt-6">
           <ServiceHistoryTimeline visits={allVisits} userRole={user.role} />
+        </TabsContent>
+
+        {/* Agreements — customer's service agreements */}
+        <TabsContent value="agreements" className="mt-6">
+          {customerAgreements.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No agreements for this customer</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {customerAgreements.map((a) => {
+                const statusClass: Record<string, string> = {
+                  draft: "bg-muted text-muted-foreground",
+                  sent: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+                  active: "bg-green-500/15 text-green-700 dark:text-green-400",
+                  paused: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+                  expired: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+                  cancelled: "bg-destructive/15 text-destructive",
+                  declined: "bg-destructive/15 text-destructive",
+                }
+                const termLabel = a.term_type === "month_to_month" ? "Month-to-Month"
+                  : a.term_type.match(/^(\d+)_month/) ? `${a.term_type.match(/^(\d+)_month/)![1]}-Month`
+                  : a.term_type
+                return (
+                  <Link
+                    key={a.id}
+                    href={`/agreements/${a.id}`}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
+                  >
+                    <span className="text-sm font-medium tabular-nums">{a.agreement_number}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusClass[a.status] ?? "bg-muted text-muted-foreground"}`}>
+                      {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{termLabel}{a.auto_renew ? " · Auto-renew" : ""}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {a.created_at.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
 
         {/* Messages — office-to-customer thread for this customer */}

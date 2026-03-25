@@ -59,6 +59,7 @@ interface PoolEntry {
   tiered_overage_amount: string | null
   checklist_task_ids: string[] | null
   notes: string | null
+  schedule_rule_id: string | null
 }
 
 interface Amendment {
@@ -551,9 +552,16 @@ export function AgreementDetail({ agreement, isOwner, noticePeriodDays = 30, com
                         </p>
                         <p className="text-sm font-medium">{formatPricing(entry)}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {formatFrequency(entry.frequency, entry.preferred_day_of_week)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {formatFrequency(entry.frequency, entry.preferred_day_of_week)}
+                        </p>
+                        {entry.schedule_rule_id ? (
+                          <span className="text-xs text-green-600 dark:text-green-400">· Scheduled</span>
+                        ) : status === "active" ? (
+                          <span className="text-xs text-yellow-600 dark:text-yellow-400">· Not linked to schedule</span>
+                        ) : null}
+                      </div>
                       {entry.notes && (
                         <p className="text-xs text-muted-foreground italic">{entry.notes}</p>
                       )}

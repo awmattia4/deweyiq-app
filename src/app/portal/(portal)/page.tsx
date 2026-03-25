@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/actions/auth"
 import { getOrgBranding } from "@/actions/portal-data"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon, HammerIcon } from "lucide-react"
+import { HistoryIcon, FileTextIcon, MessageCircleIcon, WrenchIcon, MapPinIcon, HammerIcon, ScrollTextIcon } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "My Portal",
@@ -37,7 +37,7 @@ export default async function PortalHomePage() {
       </div>
 
       {/* ── Quick-link cards ──────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         <Link href="/portal/history" className="block">
           <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
             <CardHeader className="pb-3">
@@ -69,6 +69,24 @@ export default async function PortalHomePage() {
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 Access and pay invoices, view payment history.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/portal/agreements" className="block">
+          <Card className="h-full cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/10">
+                  <ScrollTextIcon className="h-4 w-4 text-indigo-400" aria-hidden="true" />
+                </div>
+                <CardTitle className="text-sm">Agreements</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                View your service agreements, pricing, and contract terms.
               </p>
             </CardContent>
           </Card>
