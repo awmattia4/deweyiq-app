@@ -262,6 +262,7 @@ export function RouteBuilder({
   }, [])
 
   // Get the effective truck for the selected tech on the current date
+  const currentTech = techs.find((t) => t.id === selectedTechId)
   const selectedTechOverride = dailyOverrides.get(selectedTechId)
   const selectedTechTruck = selectedTechOverride !== undefined
     ? (selectedTechOverride.truckName ?? "Solo")
@@ -302,7 +303,6 @@ export function RouteBuilder({
   // ── Current date string ──────────────────────────────────────────────────────
 
   const currentDate = dayIndexToDate(selectedDay, weekOffset)
-  const currentTech = techs.find((t) => t.id === selectedTechId)
 
   // ── Container detection ──────────────────────────────────────────────────────
 
