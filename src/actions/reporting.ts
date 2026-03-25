@@ -19,7 +19,7 @@ import { createClient } from "@/lib/supabase/server"
 import { toLocalDateString } from "@/lib/date-utils"
 import { withRls, getRlsToken, adminDb } from "@/lib/db"
 import type { SupabaseToken } from "@/lib/db"
-import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings, chemicalProducts, pools } from "@/lib/db/schema"
+import { invoices, customers, profiles, routeStops, serviceVisits, workOrders, orgSettings, chemicalProducts, pools, trucks, techTruckAssignments } from "@/lib/db/schema"
 import { and, eq, sql, isNull, inArray } from "drizzle-orm"
 import { classifyReading } from "@/lib/chemistry/targets"
 import type { SanitizerType } from "@/lib/chemistry/targets"
@@ -2127,7 +2127,7 @@ export interface ChemicalUsageEntry {
 export interface ChemicalUsageReport {
   entries: ChemicalUsageEntry[]
   period: string
-  groupBy: "tech" | "route" | "customer" | "pool"
+  groupBy: "tech" | "route" | "customer" | "pool" | "truck"
 }
 
 /**
@@ -2139,7 +2139,7 @@ export interface ChemicalUsageReport {
  */
 export async function getChemicalUsageReport(
   period: "week" | "month" | "quarter" = "month",
-  groupBy: "tech" | "route" | "customer" | "pool" = "tech"
+  groupBy: "tech" | "route" | "customer" | "pool" | "truck" = "tech"
 ): Promise<ChemicalUsageReport> {
   const token = await getRlsToken()
   if (!token) throw new Error("Not authenticated")
@@ -2156,6 +2156,7 @@ export async function getChemicalUsageReport(
     }
 
     // Fetch service visits with dosing_amounts in the period
+    // LEFT JOIN trucks via tech_truck_assignments for truck-level grouping
     const visitRows = await db
       .select({
         id: serviceVisits.id,
@@ -2165,10 +2166,14 @@ export async function getChemicalUsageReport(
         dosing_amounts: serviceVisits.dosing_amounts,
         tech_name: profiles.full_name,
         customer_name: customers.full_name,
+        truck_id: techTruckAssignments.truck_id,
+        truck_name: trucks.name,
       })
       .from(serviceVisits)
       .leftJoin(profiles, eq(serviceVisits.tech_id, profiles.id))
       .leftJoin(customers, eq(serviceVisits.customer_id, customers.id))
+      .leftJoin(techTruckAssignments, eq(serviceVisits.tech_id, techTruckAssignments.tech_id))
+      .leftJoin(trucks, eq(techTruckAssignments.truck_id, trucks.id))
       .where(
         and(
           sql`${serviceVisits.dosing_amounts} IS NOT NULL`,
@@ -2189,7 +2194,10 @@ export async function getChemicalUsageReport(
 
       let groupKey: string
       let groupLabel: string
-      if (groupBy === "tech") {
+      if (groupBy === "truck") {
+        groupKey = visit.truck_id ?? "unassigned"
+        groupLabel = visit.truck_name ?? "Unassigned Truck"
+      } else if (groupBy === "tech") {
         groupKey = visit.tech_id ?? "unassigned"
         groupLabel = visit.tech_name ?? "Unassigned"
       } else if (groupBy === "customer") {

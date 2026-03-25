@@ -65,14 +65,14 @@ type SortDir = "asc" | "desc"
 export function ChemicalUsagePanel({ initialData }: ChemicalUsagePanelProps) {
   const [data, setData] = useState<ChemicalUsageReport>(initialData)
   const [period, setPeriod] = useState<"week" | "month" | "quarter">("month")
-  const [groupBy, setGroupBy] = useState<"tech" | "route" | "customer" | "pool">("tech")
+  const [groupBy, setGroupBy] = useState<"tech" | "route" | "customer" | "pool" | "truck">("tech")
   const [sortKey, setSortKey] = useState<SortKey>("totalAmount")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [isPending, startTransition] = useTransition()
 
   function handleChange(
     newPeriod: "week" | "month" | "quarter",
-    newGroupBy: "tech" | "route" | "customer" | "pool"
+    newGroupBy: "tech" | "route" | "customer" | "pool" | "truck"
   ) {
     startTransition(async () => {
       const fresh = await getChemicalUsageReport(newPeriod, newGroupBy)
@@ -106,8 +106,9 @@ export function ChemicalUsagePanel({ initialData }: ChemicalUsagePanelProps) {
     { value: "quarter", label: "90 Days" },
   ]
 
-  const groupBys: Array<{ value: "tech" | "route" | "customer" | "pool"; label: string }> = [
+  const groupBys: Array<{ value: "tech" | "route" | "customer" | "pool" | "truck"; label: string }> = [
     { value: "tech", label: "Tech" },
+    { value: "truck", label: "Truck" },
     { value: "route", label: "Route" },
     { value: "customer", label: "Customer" },
     { value: "pool", label: "Pool" },
