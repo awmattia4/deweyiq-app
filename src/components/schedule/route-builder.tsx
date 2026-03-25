@@ -263,10 +263,18 @@ export function RouteBuilder({
 
   // Get the effective truck for the selected tech on the current date
   const currentTech = techs.find((t) => t.id === selectedTechId)
+  const defaultTruckName = currentTech?.name.includes("·") ? currentTech.name.split("·")[1]?.trim() : null
   const selectedTechOverride = dailyOverrides.get(selectedTechId)
+
+  // Only consider it an "override" if the truck actually differs from their default
+  const hasRealOverride = selectedTechOverride !== undefined && (() => {
+    const overrideName = selectedTechOverride.truckId === null ? "Solo" : selectedTechOverride.truckName
+    return overrideName !== defaultTruckName
+  })()
+
   const selectedTechTruck = selectedTechOverride !== undefined
-    ? (selectedTechOverride.truckName ?? "Solo")
-    : (currentTech?.name.includes("·") ? currentTech.name.split("·")[1]?.trim() : null)
+    ? (selectedTechOverride.truckId === null ? "Solo" : (selectedTechOverride.truckName ?? "Unknown"))
+    : defaultTruckName
 
   async function handleTruckOverride(truckId: string | null) {
     const dateStr = dayIndexToDate(selectedDay, weekOffset)
@@ -723,11 +731,9 @@ export function RouteBuilder({
               <span className="text-xs text-muted-foreground">
                 Truck today:{" "}
                 <span className="font-medium text-foreground">
-                  {selectedTechOverride !== undefined
-                    ? (selectedTechOverride.truckId === null ? "Solo" : selectedTechOverride.truckName ?? "Unknown")
-                    : (selectedTechTruck ?? "Not assigned")}
+                  {selectedTechTruck ?? "Not assigned"}
                 </span>
-                {selectedTechOverride !== undefined && (
+                {hasRealOverride && (
                   <span className="text-amber-400 ml-1 text-[10px]">override</span>
                 )}
               </span>
@@ -760,7 +766,7 @@ export function RouteBuilder({
                       )}
                     </button>
                   ))}
-                  {selectedTechOverride !== undefined && (
+                  {hasRealOverride && (
                     <>
                       <div className="border-t border-border my-1" />
                       <button
