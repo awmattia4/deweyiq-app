@@ -513,15 +513,28 @@ export async function deleteAgreement(id: string): Promise<{ success: boolean; e
 // ---------------------------------------------------------------------------
 
 /**
- * Transitions agreement from draft to sent status.
+ * Sends a service agreement to the customer via email with PDF attachment.
  *
- * Sets status='sent' and sent_at. Called by Plan 03 (email delivery) after
- * building the email — this action handles the status transition + activity log.
+ * Full delivery pipeline:
+ * 1. Fetch agreement with all relations (customer, pool entries with pool data)
+ * 2. Validate sendability (draft or declined status only)
+ * 3. Generate PDF buffer via renderToBuffer(<AgreementDocument />)
+ * 4. Sign 180-day JWT via signAgreementToken
+ * 5. Generate approval URL: /agreement/{token}
+ * 6. Render email HTML via @react-email/render
+ * 7. Send via Resend SDK with PDF attachment
+ * 8. Update agreement: status='sent', sent_at=now, append activity_log
+ * 9. Return success
  */
-export async function sendAgreement(id: string): Promise<{ success: boolean; error?: string }> {
+export async function sendAgreement(id: string): Promise<{
+  success: boolean
+  data?: { agreementId: string; status: string }
+  error?: string
+}> {
   const token = await getRlsToken()
   if (!token) return { success: false, error: "Not authenticated" }
 
+  const orgId = token.org_id as string
   const userId = token.sub
   const userRole = token.user_role as string | undefined
 
@@ -530,19 +543,259 @@ export async function sendAgreement(id: string): Promise<{ success: boolean; err
   }
 
   try {
-    const result = await withRls(token, async (db) => {
-      const existing = await db.query.serviceAgreements.findFirst({
-        where: eq(serviceAgreements.id, id),
-        columns: { id: true, status: true, customer_id: true, activity_log: true },
+    // ── 1. Fetch agreement + customer + pool entries via adminDb ─────────
+    const agreementRows = await adminDb
+      .select()
+      .from(serviceAgreements)
+      .where(and(eq(serviceAgreements.id, id), eq(serviceAgreements.org_id, orgId)))
+      .limit(1)
+
+    const agreement = agreementRows[0]
+    if (!agreement) return { success: false, error: "Agreement not found" }
+
+    if (!["draft", "declined"].includes(agreement.status)) {
+      return {
+        success: false,
+        error: `Agreement cannot be sent from status: ${agreement.status}`,
+      }
+    }
+
+    const customerRows = await adminDb
+      .select({
+        id: customers.id,
+        full_name: customers.full_name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.id, agreement.customer_id))
+      .limit(1)
+
+    const customer = customerRows[0]
+    if (!customer) return { success: false, error: "Customer not found" }
+    if (!customer.email) {
+      return { success: false, error: "Customer has no email address on file" }
+    }
+
+    // ── Fetch org branding ───────────────────────────────────────────────
+    const orgRows = await adminDb
+      .select({ name: orgs.name, logo_url: orgs.logo_url })
+      .from(orgs)
+      .where(eq(orgs.id, orgId))
+      .limit(1)
+
+    const org = orgRows[0]
+    const companyName = org?.name ?? "Pool Company"
+    const companyLogoUrl = org?.logo_url ?? null
+
+    // ── Fetch pool entries with pool data ─────────────────────────────────
+    const entryRows = await adminDb
+      .select({
+        pool_id: agreementPoolEntries.pool_id,
+        frequency: agreementPoolEntries.frequency,
+        preferred_day_of_week: agreementPoolEntries.preferred_day_of_week,
+        pricing_model: agreementPoolEntries.pricing_model,
+        monthly_amount: agreementPoolEntries.monthly_amount,
+        per_visit_amount: agreementPoolEntries.per_visit_amount,
+        tiered_threshold_visits: agreementPoolEntries.tiered_threshold_visits,
+        tiered_base_amount: agreementPoolEntries.tiered_base_amount,
+        tiered_overage_amount: agreementPoolEntries.tiered_overage_amount,
+        notes: agreementPoolEntries.notes,
+        pool_name: pools.name,
+        pool_type: pools.type,
+      })
+      .from(agreementPoolEntries)
+      .innerJoin(pools, eq(pools.id, agreementPoolEntries.pool_id))
+      .where(eq(agreementPoolEntries.agreement_id, id))
+
+    const pdfPoolEntries: AgreementPoolEntryPdfData[] = entryRows.map((row) => ({
+      poolId: row.pool_id,
+      poolName: row.pool_name,
+      poolType: row.pool_type ?? "pool",
+      frequency: row.frequency,
+      preferredDayOfWeek: row.preferred_day_of_week,
+      pricingModel: row.pricing_model,
+      monthlyAmount: row.monthly_amount,
+      perVisitAmount: row.per_visit_amount,
+      tieredThresholdVisits: row.tiered_threshold_visits,
+      tieredBaseAmount: row.tiered_base_amount,
+      tieredOverageAmount: row.tiered_overage_amount,
+      notes: row.notes,
+    }))
+
+    // ── 3. Generate PDF buffer ─────────────────────────────────────────────
+    const createdDate = (agreement.created_at ?? new Date()).toLocaleDateString(
+      "en-US",
+      { year: "numeric", month: "long", day: "numeric" }
+    )
+
+    const documentProps: AgreementDocumentProps = {
+      agreementNumber: agreement.agreement_number,
+      createdDate,
+      termType: agreement.term_type,
+      startDate: agreement.start_date,
+      endDate: agreement.end_date,
+      autoRenew: agreement.auto_renew,
+      companyName,
+      companyLogoUrl,
+      customerName: customer.full_name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+      serviceAddress: customer.address ?? null,
+      poolEntries: pdfPoolEntries,
+      termsAndConditions: agreement.terms_and_conditions ?? null,
+      cancellationPolicy: agreement.cancellation_policy ?? null,
+      liabilityWaiver: agreement.liability_waiver ?? null,
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfBuffer = await renderToBuffer(
+      createElement(AgreementDocument, documentProps) as any
+    )
+
+    // ── 4. Sign approval token + build URLs ───────────────────────────────
+    const approvalToken = await signAgreementToken(id)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.poolco.app"
+    const approvalUrl = `${appUrl}/agreement/${approvalToken}`
+    // PDF link uses the same token — the public agreement page can proxy the PDF
+    // For now link to the authenticated route (customer will be on the page anyway)
+    const pdfUrl = `${appUrl}/api/agreements/${id}/pdf`
+
+    // ── 5. Calculate total monthly cost for email summary ─────────────────
+    function calcMonthlyCost(entry: AgreementPoolEntryPdfData): number {
+      switch (entry.pricingModel) {
+        case "monthly_flat":
+          return parseFloat(entry.monthlyAmount ?? "0")
+        case "per_visit": {
+          const rate = parseFloat(entry.perVisitAmount ?? "0")
+          const visitsPerMonth =
+            entry.frequency === "weekly"
+              ? 4
+              : entry.frequency === "biweekly"
+                ? 2
+                : 1
+          return rate * visitsPerMonth
+        }
+        case "tiered": {
+          const threshold = entry.tieredThresholdVisits ?? 4
+          const base = parseFloat(entry.tieredBaseAmount ?? "0")
+          return base * threshold
+        }
+        default:
+          return 0
+      }
+    }
+
+    const totalMonthly = pdfPoolEntries.reduce(
+      (sum, entry) => sum + calcMonthlyCost(entry),
+      0
+    )
+    const totalMonthlyCost =
+      totalMonthly > 0
+        ? new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+          }).format(totalMonthly) + "/mo"
+        : ""
+
+    function formatTermType(termType: string): string {
+      switch (termType) {
+        case "month_to_month":
+          return "Month-to-Month"
+        case "6_month":
+          return "6 Months"
+        case "12_month":
+          return "12 Months"
+        default:
+          return termType
+      }
+    }
+
+    // ── 6. Render email HTML ──────────────────────────────────────────────
+    const emailHtml = await renderEmail(
+      createElement(AgreementEmail, {
+        companyName,
+        customerName: customer.full_name,
+        agreementNumber: agreement.agreement_number,
+        termType: formatTermType(agreement.term_type),
+        startDate: agreement.start_date ?? "Upon signing",
+        totalMonthlyCost,
+        poolCount: pdfPoolEntries.length,
+        approvalUrl,
+        pdfUrl,
+      })
+    )
+
+    // ── 7. Send via Resend SDK ────────────────────────────────────────────
+    const resendApiKey = process.env.RESEND_API_KEY
+    const isDev = process.env.NODE_ENV === "development"
+
+    if (!resendApiKey) {
+      if (isDev) {
+        console.log("\n--- [DEV] Agreement Email ------------------------------------")
+        console.log(`To: ${customer.email}`)
+        console.log(`Subject: Service Agreement ${agreement.agreement_number} from ${companyName}`)
+        console.log(`Approval URL: ${approvalUrl}`)
+        console.log(`PDF: ${pdfBuffer.byteLength} bytes`)
+        console.log("--------------------------------------------------------------\n")
+      } else {
+        return { success: false, error: "RESEND_API_KEY not configured" }
+      }
+    } else {
+      const resend = new Resend(resendApiKey)
+
+      const fromAddress = isDev
+        ? "DeweyIQ Dev <onboarding@resend.dev>"
+        : `${companyName} <agreements@poolco.app>`
+
+      const { error: resendError } = await resend.emails.send({
+        from: fromAddress,
+        to: isDev ? ["delivered@resend.dev"] : [customer.email],
+        subject: `Service Agreement ${agreement.agreement_number} from ${companyName}`,
+        html: emailHtml,
+        attachments: [
+          {
+            filename: `Agreement-${agreement.agreement_number}.pdf`,
+            content: Buffer.from(pdfBuffer).toString("base64"),
+          },
+        ],
       })
 
-      if (!existing) return { success: false, error: "Agreement not found" }
-      if (!["draft", "declined"].includes(existing.status)) {
-        return { success: false, error: `Agreement cannot be sent from status: ${existing.status}` }
+      if (resendError) {
+        console.error("[sendAgreement] Resend error:", resendError)
+        return {
+          success: false,
+          error: `Email delivery failed: ${resendError.message}`,
+        }
       }
+    }
 
-      const existingLog = (existing.activity_log as Array<{ action: string; actor: string; at: string; note?: string }>) ?? []
-      const newLog = [...existingLog, logEntry(userId, "sent")]
+    // ── 8. Update agreement status + activity log ─────────────────────────
+    const updated = await withRls(token, async (db) => {
+      const existing = await db.query.serviceAgreements.findFirst({
+        where: eq(serviceAgreements.id, id),
+        columns: { activity_log: true, customer_id: true },
+      })
+
+      if (!existing) return null
+
+      const existingLog =
+        (existing.activity_log as Array<{
+          action: string
+          actor: string
+          at: string
+          note?: string
+        }>) ?? []
+
+      const newLog = [
+        ...existingLog,
+        logEntry(
+          userId,
+          "agreement_sent",
+          `Agreement sent to ${customer.email}`
+        ),
+      ]
 
       await db
         .update(serviceAgreements)
@@ -555,14 +808,22 @@ export async function sendAgreement(id: string): Promise<{ success: boolean; err
         .where(eq(serviceAgreements.id, id))
 
       revalidatePath(`/customers/${existing.customer_id}`)
+      revalidatePath("/settings")
 
-      return { success: true }
+      return existing.customer_id
     })
 
-    return result
+    if (!updated) {
+      return { success: false, error: "Failed to update agreement status" }
+    }
+
+    return { success: true, data: { agreementId: id, status: "sent" } }
   } catch (err) {
     console.error("[sendAgreement]", err)
-    return { success: false, error: "Failed to send agreement" }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to send agreement",
+    }
   }
 }
 
