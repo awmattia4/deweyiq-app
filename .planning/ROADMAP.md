@@ -425,6 +425,7 @@ Plans:
       - `src/lib/db/schema/expenses.ts` — remove Plaid reference in comment
       - `src/components/accounting/financial-dashboard.tsx` — remove unused `bankAccounts` prop from interface
       - Drop `bank_accounts` and `bank_transactions` tables via Drizzle migration
+  12. Tiered billing model support — agreement pool entries with `pricing_model: "tiered"` (base amount up to N visits/month, per-visit overage above threshold) must generate correct invoice line items. Currently, tiered agreements are silently collapsed to flat_rate on sign, losing the overage tier. Add `tiered` to the `BillingModel` type, implement tiered line item calculation in `generateInvoiceForCustomer` (base charge + overage lines), and update the sign route to map `tiered` → `tiered` instead of falling back to `flat_rate`
 **Plans**: TBD
 
 Plans:
